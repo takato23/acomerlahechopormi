@@ -1,0 +1,855 @@
+keyword,category_id,priority
+acelga,vegetables,15
+aceite,pantry,10
+aceituna,pantry,15
+aceto,pantry,15
+achicoria,vegetables,15
+acondicionador,personal_care,10
+adobo,pantry,10
+afeitadora,personal_care,15
+after shave,personal_care,15
+agua,beverages,10
+agua con gas,beverages,15
+agua mineral,beverages,15
+agua oxigenada,personal_care,15
+agua saborizada,beverages,15
+agua sin gas,beverages,15
+agua micelar,personal_care,15
+aguacate,vegetables,15 # Palta es más común, pero incluir por si acaso
+aji,vegetables,10
+aji molido,pantry,15
+ajo,vegetables,10
+albahaca,vegetables,15
+albondiga,meat,10
+alcaucil,vegetables,15
+alcohol,personal_care,10
+alfajor,pantry,15
+alimento mascota,other,15
+algodon,personal_care,10
+alita,meat,15
+almeja,meat,15
+almendra,pantry,15
+alpiste,other,10
+amaranto,pantry,10
+amargo,beverages,10
+ambientador,cleaning,10
+anana,vegetables,10
+anana lata,pantry,10
+anis,pantry,10
+antiseptico,personal_care,15
+antipolilla,cleaning,15
+aperitivo,beverages,15
+apio,vegetables,10
+aposito,personal_care,10
+arandano,vegetables,10
+arena gato,other,15
+aromatica,vegetables,10
+arroz,pantry,10
+articulo,other,5
+arveja,pantry,10
+arveja congelada,frozen,10
+asado,meat,15
+atun,pantry,15
+avellana,pantry,15
+avena,pantry,10
+azucar,pantry,10
+azul,dairy,15 # Queso azul
+baguette,pantry,15
+balde,cleaning,10
+balsamico,pantry,15
+banana,vegetables,10
+baño,cleaning,15 # Limpiador baño
+banda depilatoria,personal_care,15
+bandeja,other,5
+barbacoa,pantry,10 # Salsa
+barra cereal,pantry,15
+baston pescado,frozen,15
+batata,vegetables,10
+bay biscuit,pantry,10
+bebida,beverages,5
+berberecho,meat,15
+berenjena,vegetables,15
+berro,vegetables,15
+bicarbonato,pantry,10
+bife,meat,15
+birome,other,10
+bizcochuelo,pantry,10 # Premix
+bizcocho,pantry,10
+blanco,beverages,15 # Vino blanco
+blanqueador,cleaning,15
+bocadito,frozen,15
+boldo,pantry,15
+bolsa freezer,pantry,15
+bolsa horno,pantry,15
+bolsa residuo,cleaning,10
+bombilla,other,10 # Para mate
+bombon,pantry,10
+bondiola,meat,15
+boniato,vegetables,10 # Sinónimo batata
+borraja,vegetables,15
+brocoli,vegetables,15
+brocoli congelado,frozen,10
+bronceador,personal_care,15
+bruselita,vegetables,15 # Col de bruselas
+bucal,personal_care,15 # Enjuague bucal
+buclera,personal_care,10
+budin,pantry,10
+buñuelo,frozen,10
+caballa,pantry,15
+caballa fresca,meat,15
+cabernet,beverages,20
+cable,other,10
+cacao,pantry,10
+cafe,pantry,10
+caja,other,5
+calabaza,vegetables,15
+calamar,meat,15
+caldo,pantry,10
+calefactor,other,10
+camaron,meat,15
+camisa,other,10
+camote,vegetables,10 # Sinónimo batata
+canasta,other,5
+canela,pantry,15
+canelon,frozen,15
+cangrejo,meat,15
+caqui,vegetables,10
+capilar,personal_care,15 # Mascarilla capilar
+capsula,pantry,15 # Cafe
+capuchino,pantry,10
+caramelo,pantry,10
+carbon,other,10
+carne,meat,10
+carne picada,meat,15
+carnaza,meat,15
+carozo,vegetables,10 # Zapallo
+castaña,pantry,15
+cedron,pantry,15
+cebolla,vegetables,10
+cepillo,cleaning,10 # Limpieza
+cepillo dientes,personal_care,15
+cepillo pelo,personal_care,10
+cera,cleaning,10 # Piso
+cera depilatoria,personal_care,15
+cereal,pantry,10
+cereza,vegetables,10
+cerdo,meat,15
+cerveza,beverages,10
+champagne,beverages,15
+champinon,vegetables,15
+champinon lata,pantry,15
+shampoo,personal_care,10
+chardonnay,beverages,20
+chaucha,vegetables,10
+cheddar,dairy,15 # Queso
+chia,pantry,15
+chicle,pantry,10
+chinchulin,meat,15
+chip,pantry,15 # Snack
+chipa,frozen,15
+chivito,meat,15
+choclo,vegetables,10
+choclo congelado,frozen,10
+choclo lata,pantry,10
+chocolate,pantry,10
+chocolatada,beverages,15
+chorizo,meat,10
+chuleta,meat,15
+churrasco,meat,15
+ciboulette,vegetables,15
+sidra,beverages,10
+cilantro,vegetables,15
+cinta,other,10 # Adhesiva
+ciruela,vegetables,10
+clavo olor,pantry,15
+cloro,cleaning,10 # Sinónimo lavandina
+club soda,beverages,10 # Sinónimo soda
+cobertura,pantry,15 # Chocolate
+cocido,meat,15 # Jamón cocido
+cocina rollo,cleaning,15
+coco rallado,pantry,10
+cognac,beverages,15
+cola,beverages,15 # Gaseosa
+colador,other,10
+coliflor,vegetables,15
+colonia,personal_care,10
+comino,pantry,15
+concentrado,beverages,15 # Jugo
+condimento,pantry,10
+conejo,meat,15
+congelado,frozen,5
+conserva,pantry,10
+copa,other,10
+copetin,pantry,10 # Mani, palitos, etc
+cordero,meat,15
+corvina,meat,15
+cosa,other,5
+cosmetico,personal_care,10
+costilla,meat,15
+cotonete,personal_care,10
+cracker,pantry,10
+crema,dairy,10
+crema afeitar,personal_care,15
+crema corporal,personal_care,15
+crema depilatoria,personal_care,15
+crema facial,personal_care,15
+crema mano,personal_care,15
+crema peinar,personal_care,15
+cremoso,dairy,15 # Queso
+croqueta,frozen,10
+crudo,meat,15 # Jamón crudo
+cuaderno,other,10
+cuadrada,meat,15 # Nalga
+cuadril,meat,15
+cubierto,other,10
+cubito,frozen,10 # Hielo
+cuchara,other,10
+cuchillo,other,10
+curcuma,pantry,15
+curita,personal_care,10
+curry,pantry,15
+cuscus,pantry,10
+damasco,vegetables,10
+dambo,dairy,15 # Queso
+datil,vegetables,10
+dentadura,personal_care,15 # Adhesivo/limpiador
+dental,personal_care,15 # Hilo dental
+dentifrico,personal_care,10
+desayuno,pantry,10 # Cereal
+descartable,other,10 # Vaso, plato
+descongestivo,personal_care,10
+desengrasante,cleaning,10
+desinfectante,cleaning,10
+desmaquillante,personal_care,15
+desodorante,personal_care,10
+desodorante ambiente,cleaning,10
+detergente,cleaning,10
+diario,other,10
+diente,personal_care,15 # Cepillo
+dorado,meat,15 # Pescado
+dulce,pantry,10 # Genérico mermelada/batata/membrillo
+dulce de leche,dairy,15
+durazno,vegetables,10
+durazno lata,pantry,10
+edulcorante,pantry,15
+elegi,other,5 # Placeholder común en listas
+embarazo,personal_care,15 # Test
+empanada,frozen,10
+empanada masa,frozen,15
+eneldo,vegetables,15
+energetica,beverages,15
+enjuague bucal,personal_care,15
+ensalada,vegetables,10
+entraña,meat,15
+escoba,cleaning,10
+escobillon,cleaning,10
+escarola,vegetables,15
+esencia vainilla,pantry,10
+esmalte,personal_care,10
+esparrago,vegetables,10
+espe Gía,pantry,10
+espejo,other,10
+espinaca,vegetables,15
+espinaca congelada,frozen,10
+esponja,cleaning,10
+espuma afeitar,personal_care,15
+espumante,beverages,15
+estevia,pantry,15 # Sinónimo stevia
+estropajo,cleaning,10 # Sinónimo esponja
+eucalipto,personal_care,10 # Aceite/caramelo
+exfoliante,personal_care,15
+extracto,pantry,10 # Tomate
+facial,personal_care,15 # Crema/mascarilla
+factura,pantry,10
+faja,personal_care,10
+fecula,pantry,10
+femenina,personal_care,15 # Toallita
+fernet,beverages,15
+fertilizante,other,10
+feta,dairy,15 # Queso
+fiambre,meat,10
+fideo,pantry,10
+fijador,personal_care,10
+filete,meat,15
+film,pantry,15 # Adherente
+filtro,pantry,10 # Cafe
+flan,dairy,10
+flan polvo,pantry,10
+flor,other,10
+fluor,personal_care,15 # Pasta dental
+folico,personal_care,15 # Acido
+formita,frozen,15
+fosforo,other,10
+frambuesa,vegetables,10
+franela,cleaning,10
+frazada,other,10
+freezer,pantry,15 # Bolsa
+fresa,vegetables,10 # Sinónimo frutilla
+fresco,dairy,15 # Queso fresco
+frita,frozen,15 # Papa
+frita snack,pantry,15 # Papa
+frito,pantry,10 # Tomate frito
+frutilla,vegetables,10
+fruta,vegetables,10
+fruta abrillantada,pantry,10
+fruta congelada,frozen,10
+fruta seca,pantry,10
+fuego,other,10 # Encendedor/fosforo
+fuente,other,10
+galleta,pantry,10
+galleta arroz,pantry,15
+galleta marinera,pantry,10
+galleta vainilla,pantry,15
+galletita,pantry,10
+garbanzo,pantry,10
+garganta,personal_care,10 # Pastilla
+garrapiñada,pantry,10
+gasa,personal_care,10
+gaseosa,beverages,10
+gato,other,15 # Arena/alimento
+gel,personal_care,10
+gelatina,pantry,10
+gelatina sin sabor,pantry,10
+gin,beverages,15
+girasol,pantry,15 # Aceite/semilla
+girasol semilla,pantry,15
+glas,pantry,15 # Azucar
+glucosa,pantry,10
+golosina,pantry,10
+goma,other,10 # Borrar/pelo
+gouda,dairy,15 # Queso
+granada,vegetables,10
+granola,pantry,10
+grapa,beverages,15
+grasa,cleaning,10 # Desengrasante/antigrasa
+grisines,pantry,10
+gruyere,dairy,15 # Queso
+guante,cleaning,10
+guayaba,vegetables,10
+guinda,vegetables,10
+guiso,pantry,10 # Lentejas/arroz
+haba,vegetables,10
+hamburguesa,meat,10
+harina,pantry,10
+harina leudante,pantry,15
+harina maiz,pantry,15 # Polenta/maicena
+helado,frozen,10
+heno,other,15 # Para mascotas
+herramienta,other,10
+hielo,frozen,10
+hierba,vegetables,10
+higado,meat,15
+higiene,personal_care,10
+higienico,personal_care,15 # Papel
+higo,vegetables,10
+hilo dental,personal_care,15
+hinojo,vegetables,10
+hisopo,personal_care,10
+hoja,pantry,10 # Laurel/Masa
+hongo,vegetables,15
+horno,pantry,15 # Bolsa
+huevo,dairy,10
+humeda,personal_care,15 # Toallita
+hummus,pantry,10
+infusion,pantry,10
+insecticida,cleaning,10
+integral,pantry,15 # Arroz/Fideo/Harina/Pan
+inodoro,cleaning,15 # Limpiador/Pastilla
+isotonica,beverages,15
+item,other,5
+jabali,meat,15
+jabon,personal_care,5
+jabon liquido,cleaning,15
+jabon polvo,cleaning,15
+jabon ropa,cleaning,15
+jabon tocador,personal_care,15
+jamon,meat,15
+jardinera,pantry,10 # Lata
+jarra,other,10
+jengibre,vegetables,15
+jeringa,personal_care,10
+juego,other,10
+juguete,other,10
+jugo,beverages,10
+jugo concentrado,beverages,15
+jugo exprimido,beverages,15
+jugo limon,pantry,15 # Botella
+jugo naranja,beverages,15
+jugo polvo,beverages,15
+kaki,vegetables,10 # Sinónimo caqui
+ketchup,pantry,10
+kilo,other,5
+kinoto,vegetables,10
+kiwi,vegetables,10
+kumquat,vegetables,10 # Sinónimo kinoto
+labial,personal_care,10
+lactal,pantry,15 # Pan
+lacteo,dairy,5
+lacre,other,10
+lamparita,other,10
+langostino,meat,15
+lata,other,5
+lavandina,cleaning,10
+lavarropa,cleaning,15 # Jabon
+lavavajilla,cleaning,15 # Detergente
+lazo,other,10
+leberwurst,meat,15
+leche,dairy,10
+leche almendra,beverages,15
+leche avena,beverages,15
+leche chocolatada,dairy,15
+leche coco,beverages,15
+leche condensada,dairy,15
+leche cultivada,dairy,15
+leche descremada,dairy,15
+leche deslactosada,dairy,15
+leche entera,dairy,15
+leche polvo,dairy,15
+leche soja,beverages,15
+lechuga,vegetables,10
+leña,other,10
+lenteja,pantry,10
+lengua,meat,15
+lenguado,meat,15
+levadura,pantry,10
+libro,other,10
+licor,beverages,10
+lima,vegetables,10 # Fruta
+lima uña,personal_care,10
+limon,vegetables,10
+limonada,beverages,10
+limpiador,cleaning,10
+limpiador baño,cleaning,15
+limpiador piso,cleaning,15
+limpiahorno,cleaning,15
+limpiamuebles,cleaning,15 # Sinónimo lustramuebles
+limpiavidrio,cleaning,15
+limpieza,cleaning,5
+lino,pantry,15 # Semilla
+linterna,other,10
+lomo,meat,15
+lubricante,personal_care,15
+lustramuebles,cleaning,15
+luz,other,10 # Lamparita
+macarron,pantry,10 # Fideo
+maceta,other,10
+madalena,pantry,10
+maicena,pantry,10
+maiz,pantry,10 # Para pochoclo/pisado
+malbec,beverages,20
+mamao,vegetables,10 # Sinónimo papaya
+mandarina,vegetables,10
+mani,pantry,10
+mano,personal_care,15 # Crema
+manteca,dairy,10
+mantel,other,10
+manzana,vegetables,10
+manzanilla,pantry,15 # Infusion
+mapa,other,10
+maquillaje,personal_care,10
+maquina afeitar,personal_care,15
+maracuya,vegetables,10
+marcador,other,10
+margarina,pantry,10
+marinera,pantry,10 # Galleta
+marisco,meat,10
+mascarilla,personal_care,15
+masa,frozen,15 # Tarta/Empanada/Pizza
+mascota,other,15 # Alimento/Accesorio
+mate,pantry,10 # Yerba
+mate cocido,pantry,10
+matambre,meat,15
+mayonesa,pantry,10
+media,other,10 # Ropa
+medialuna,pantry,15
+medialuna congelada,frozen,15
+medicamento,personal_care,10 # Generico si se vende en super
+medidor,other,10
+mejillon,meat,15
+melon,vegetables,10
+membrillo,vegetables,10
+membrillo dulce,pantry,15
+menta,vegetables,15
+merluza,meat,15
+merlot,beverages,20
+mermelada,pantry,10
+mertiolate,personal_care,10 # Marca genérica para antiséptico
+mesa,other,10
+miel,pantry,10
+mila,meat,10 # Milanesa
+milanesa,meat,10
+milanesa soja,frozen,15
+mineral,beverages,15 # Agua
+mix cereal,pantry,10
+mix fruta seca,pantry,10
+mix semilla,pantry,10
+mix verdura,frozen,10
+moledor,other,10
+molde,pantry,15 # Pan
+molleja,meat,15
+mopa,cleaning,10
+mora,vegetables,10
+morcilla,meat,10
+morron,vegetables,10
+morron congelado,frozen,10
+mortadela,meat,15
+moscada,pantry,15 # Nuez
+mostaza,pantry,10
+mosto,beverages,10
+mozzarella,dairy,15
+mueble,cleaning,15 # Lustramuebles
+muzzarella,dairy,15 # Variante mozzarella
+nabo,vegetables,10
+nalga,meat,15
+naranja,vegetables,10
+naranja bebida,beverages,10
+nata,dairy,10 # Sinónimo crema
+negro,pantry,15 # Te/Poroto
+nesquik,beverages,15 # Marca genérica chocolatada polvo
+niño,personal_care,15 # Pañal/shampoo
+ñoqui,frozen,15
+noodle,pantry,10 # Fideo instantáneo
+nuez,pantry,15
+nuez moscada,pantry,15
+nugget,frozen,15
+uña,personal_care,10 # Esmalte/Lima/Cortaunia
+oferta,other,5
+oficina,other,10 # Articulos
+oido,personal_care,10 # Hisopo
+ojo,personal_care,10 # Desmaquillante/Gotas
+oleo calcareo,personal_care,15
+oliva,pantry,15 # Aceite/Aceituna
+olla,other,10
+oregano,pantry,10
+organico,other,5 # Puede aplicar a varias categorias
+osobuco,meat,15
+pack,other,5
+pañal,personal_care,15
+pan,pantry,10
+pan dulce,pantry,15
+pan lactal,pantry,15
+pan molde,pantry,15
+pan rallado,pantry,10
+panceta,meat,15
+paño,cleaning,10
+pantufla,other,10
+papa,vegetables,10
+papa frita,frozen,15
+papa frita snack,pantry,15
+papaya,vegetables,10
+papel,other,10 # Generico
+papel aluminio,pantry,15
+papel film,pantry,15 # Sinónimo film
+papel higienico,personal_care,15
+papel manteca,pantry,15
+papel secante,cleaning,15 # Sinónimo rollo cocina
+paprika,pantry,10 # Sinónimo pimentón
+paraguas,other,10
+parmesano,dairy,15 # Queso
+parrilla,other,10
+pascualina,frozen,15 # Masa o tarta
+pasta,pantry,10 # Fideos
+pasta dental,personal_care,10
+pasta mani,pantry,15
+pastilla,cleaning,15 # Inodoro/Lavavajilla
+pastilla,personal_care,10 # Garganta/Etc.
+pata muslo,meat,15
+patata,vegetables,10 # Sinónimo papa
+pate,pantry,10
+pato,meat,15
+pavo,meat,15
+peceto,meat,15
+pechito cerdo,meat,15
+pechuga,meat,15
+pegamento,other,10
+peine,personal_care,10
+pejerrey,meat,15
+pelapapa,other,10
+pelo,personal_care,10 # Shampoo/Acond/Gel/Etc.
+pepino,vegetables,10
+pepinillo,pantry,10
+pera,vegetables,10
+perejil,vegetables,15
+perfume,personal_care,10
+perro,other,15 # Alimento/Accesorio
+persiana,cleaning,10 # Limpiador
+pescado,meat,15
+pescado congelado,frozen,10
+pesto,pantry,10
+picada,meat,15 # Carne
+picadillo,pantry,10
+pickles,pantry,10
+piedra sanitaria,other,15
+pila,other,10
+pimenton,pantry,10
+pimienta,pantry,10
+pimiento,vegetables,10 # Sinónimo morrón
+pincel,other,10
+pinot,beverages,20
+pinza,personal_care,10 # Depilar
+piñon,pantry,15
+piso,cleaning,15 # Limpiador/Cera
+pisco,beverages,15
+pistacho,pantry,15
+pizza,frozen,10
+pizza masa,frozen,15
+plancha,other,10
+planchita,personal_care,10 # Pelo
+planta,other,10
+plantilla,personal_care,10
+plato,other,10
+plumero,cleaning,10
+pochoclo,pantry,10
+polenta,pantry,10
+polilla,cleaning,15 # Anti
+pollo,meat,15
+pollo congelado,frozen,10
+polvo,cleaning,15 # Jabon
+polvo hornear,pantry,10
+pomelo,vegetables,10
+pomelo bebida,beverages,15
+poroto,pantry,10
+port salut,dairy,15 # Queso
+postre,dairy,10
+potasio,personal_care,10 # Suplemento
+pote,other,5
+povidona,personal_care,15
+preservativo,personal_care,15
+primer,personal_care,10
+producto,other,5
+promo,other,5
+protector diario,personal_care,15
+protector solar,personal_care,15
+proteina,personal_care,15 # Suplemento/Barra
+provoleta,dairy,15 # Queso
+provenzal,pantry,15
+puerro,vegetables,10
+pulguicida,other,15 # Mascota
+pulmon,meat,15 # Corte carne
+pulpa,pantry,10 # Tomate
+pulpo,meat,15
+pure,pantry,10 # Tomate/Papa/Fruta
+quesillo,dairy,15
+queso,dairy,10
+queso azul,dairy,15
+queso crema,dairy,15
+queso cremoso,dairy,15
+queso dambo,dairy,15
+queso feta,dairy,15
+queso gouda,dairy,15
+queso gruyere,dairy,15
+queso magro,dairy,15
+queso mozzarella,dairy,15
+queso parmesano,dairy,15
+queso port salut,dairy,15
+queso provoleta,dairy,15
+queso rallado,dairy,15
+queso reggianito,dairy,15
+queso roquefort,dairy,15
+queso sardo,dairy,15
+queso tybo,dairy,15
+queso untable,dairy,15
+quinoa,pantry,10
+quitaesmalte,personal_care,10
+quitamanchas,cleaning,15
+rabanito,vegetables,10
+radicheta,vegetables,15
+rallador,other,10
+rallado,dairy,15 # Queso
+rama,pantry,15 # Canela en
+ravioles,frozen,15
+rebozador,pantry,10
+recarga,other,10
+redondo,meat,15 # Pescado/Corte
+reductor,personal_care,10 # Crema
+refresco,beverages,10 # Sinónimo gaseosa/jugo
+regalo,other,10
+reggianito,dairy,15 # Queso
+regilla,cleaning,10
+relleno,pantry,10 # Empanada/Tarta
+remolacha,vegetables,10
+repasador,cleaning,10
+repollo,vegetables,10
+repuesto,other,10
+residuo,cleaning,10 # Bolsa
+revista,other,10
+ricota,dairy,15
+rimel,personal_care,10
+riñon,meat,15
+rollo cocina,cleaning,15
+romero,vegetables,15
+ron,beverages,15
+ropa,cleaning,15 # Jabon/Suavizante
+ropa interior,other,10
+roquefort,dairy,15 # Queso
+rosado,beverages,15 # Vino
+rostro,personal_care,15 # Crema/Limpiador
+rucula,vegetables,15
+sabañon,personal_care,10 # Crema
+sabana,other,10
+saborizada,beverages,15 # Agua
+sacacorcho,other,10
+sacapunta,other,10
+sal,pantry,10
+sal gruesa,pantry,15
+sal light,pantry,15
+salame,meat,15
+sales baño,personal_care,10
+salmon,meat,15
+salmon rosado,meat,15
+salsa,pantry,10
+salsa blanca,pantry,10 # Premix
+salsa golf,pantry,10
+salsa inglesa,pantry,10
+salsa lista,pantry,10
+salsa soja,pantry,10
+salsa tomate,pantry,10
+salchicha,meat,10
+salchichon,meat,15
+sandia,vegetables,10
+sandwich,pantry,15 # Pan de
+sanitaria,other,15 # Piedra
+sardina,pantry,15
+sardo,dairy,15 # Queso
+sarten,other,10
+sauvignon,beverages,20
+secador,cleaning,10 # Piso
+secador pelo,personal_care,10
+semilla,pantry,15
+semola,pantry,10
+semolin,pantry,10 # Sinónimo semola
+serum,personal_care,15
+servilleta,cleaning,10
+sesamo,pantry,15
+seso,meat,15
+shampoo,personal_care,10
+sidra,beverages,10
+sifon,beverages,10 # Soda
+silla,other,10
+silicona,other,10
+snack,pantry,10
+sobre,other,10
+soda,beverages,10
+soja,pantry,15 # Salsa/Texturizada/Poroto
+soja leche,beverages,15
+soja texturizada,pantry,15
+solar,personal_care,15 # Protector
+solomillo,meat,15
+sombra,personal_care,10 # Ojos
+sopa,pantry,10
+soporte,other,10
+sorbete,other,10
+sorrentinos,frozen,15
+stevia,pantry,15
+suavizante,cleaning,10
+suplemento,personal_care,15
+suprema,meat,15
+syrah,beverages,20
+tabla,other,10
+tabaco,other,10
+taco,pantry,10 # Masa/Relleno
+talco,personal_care,10
+tampon,personal_care,15
+tapa empanada,frozen,15
+tapa pascualina,frozen,15
+tapa tarta,frozen,15
+taper,other,10
+tapita,pantry,10 # Alfajor
+tapon,personal_care,10 # Oido
+tarjeta,other,10
+tarro,other,5
+tarta,frozen,10
+taza,other,10
+te,pantry,10
+te blanco,pantry,15
+te negro,pantry,15
+te rojo,pantry,15
+te verde,pantry,15
+tela adhesiva,personal_care,10
+tele,other,10
+telefono,other,10
+tempero,pantry,10 # Sinónimo condimento
+tender,cleaning,10
+tenedor,other,10
+tequila,beverages,15
+terma,beverages,10
+termometro,personal_care,10
+ternera,meat,15
+test,personal_care,15 # Embarazo
+tierra,other,10 # Planta
+tijera,other,10
+tilo,pantry,15 # Infusion
+tinta,other,10
+tinto,beverages,15 # Vino
+tintura,personal_care,10
+toalla,personal_care,10
+toallita femenina,personal_care,15
+toallita humeda,personal_care,15
+tocador,personal_care,15 # Jabon
+tocino,meat,15
+toffee,pantry,10 # Caramelo
+tomate,vegetables,10
+tomate lata,pantry,10
+tomate perita,vegetables,15
+tomate redondo,vegetables,15
+tomate triturado,pantry,10
+tomillo,vegetables,15
+tonica,beverages,10 # Agua
+tonico,personal_care,15 # Facial
+tornillo,other,10
+torrontes,beverages,20
+torta,pantry,10 # Bizcochuelo/etc
+tortilla,pantry,10 # Trigo/Maiz
+tortuguita,meat,15 # Corte carne
+tostada,pantry,10
+trabajo,other,10 # Articulos
+trapo,cleaning,10
+tratamiento,personal_care,15 # Capilar/Facial
+trigo,pantry,10
+tripa,meat,15 # Chinchulin
+trucha,meat,15
+tuco,pantry,10 # Salsa
+turron,pantry,10
+tybo,dairy,15 # Queso
+uña,personal_care,10
+untable,dairy,15 # Queso
+uva,vegetables,10
+vaca,meat,15 # Carne
+vacio,meat,15
+vainilla,pantry,10 # Esencia/Galletita
+vainilla esencia,pantry,10
+vainilla galleta,pantry,15
+vaselina,personal_care,10
+vaso,other,10
+vela,other,10
+venda,personal_care,10
+ventilador,other,10
+verdeo,vegetables,10 # Cebolla
+verdura,vegetables,10
+verdura congelada,frozen,10
+vermut,beverages,15
+vestido,other,10
+vieira,meat,15
+vinagre,pantry,10
+vinagre alcohol,pantry,15
+vinagre manzana,pantry,15
+vinagre vino,pantry,15
+vino,beverages,10
+vino blanco,beverages,15
+vino rosado,beverages,15
+vino tinto,beverages,15
+virulana,cleaning,10
+visera,other,10
+vitamina,personal_care,15
+vodka,beverages,15
+waffle,frozen,15
+whisky,beverages,15
+yerba,pantry,15
+yodo,personal_care,15 # Povidona
+yogur,dairy,10
+zanahoria,vegetables,10
+zapallito,vegetables,10
+zapallo,vegetables,15
+zapallo semilla,pantry,15
+zapatilla,other,10
+zucchini,vegetables,10 # Sinónimo zapallito

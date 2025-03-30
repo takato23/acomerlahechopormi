@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Scroll Suave */
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  /* Nueva Paleta Pastel - Modo Claro */
+  --background: 210 50% 99%;    /* Casi blanco, toque azulado */
+  --foreground: 210 15% 35%;    /* Gris oscuro suave */
+
+  --muted: 210 30% 97%;       /* Gris muy claro */
+  --muted-foreground: 210 10% 65%; /* Gris medio suave */
+
+  --popover: 180 50% 97%;    /* Cian muy pálido */
+  --popover-foreground: 180 15% 35%; /* Gris oscuro con tinte cyan */
+
+  --card: 180 50% 97%;       /* Cian muy pálido */
+  --card-foreground: 180 15% 35%; /* Gris oscuro con tinte cyan */
+
+  --border: 210 30% 94%;     /* Gris muy claro */
+  --input: 210 30% 94%;      /* Gris muy claro */
+
+  --primary: 150 50% 75%;    /* Verde menta suave */
+  --primary-foreground: 150 20% 20%; /* Verde oscuro desaturado */
+
+  --secondary: 210 30% 96%;  /* Gris claro */
+  --secondary-foreground: 210 15% 35%; /* Gris oscuro suave */
+
+  --accent: 50 100% 85%;     /* Amarillo pastel suave */
+  --accent-foreground: 50 20% 30%; /* Gris oscuro amarillento */
+
+  --destructive: 0 70% 80%;  /* Rojo pastel suave */
+  --destructive-foreground: 0 30% 30%; /* Rojo oscuro desaturado */
+
+  --ring: 150 50% 65%;       /* Verde menta medio para focus */
+
+  --radius: 0.5rem;          /* Mantener rounded-lg */
+}
+
+.dark {
+  /* Nueva Paleta Pastel - Modo Oscuro */
+  --background: 210 20% 12%;    /* Azul-gris muy oscuro */
+  --foreground: 210 20% 85%;    /* Gris claro */
+
+  --muted: 210 15% 22%;       /* Gris más oscuro */
+  --muted-foreground: 210 10% 55%; /* Gris medio */
+
+  --popover: 210 20% 18%;     /* Ligeramente más claro que fondo */
+  --popover-foreground: 210 20% 85%; /* Gris claro */
+
+  --card: 210 20% 18%;        /* Ligeramente más claro que fondo */
+  --card-foreground: 210 20% 85%; /* Gris claro */
+
+  --border: 210 15% 25%;      /* Gris oscuro */
+  --input: 210 15% 25%;       /* Gris oscuro */
+
+  --primary: 150 40% 55%;     /* Verde menta apagado */
+  --primary-foreground: 150 20% 90%; /* Gris muy claro verdoso */
+
+  --secondary: 210 15% 25%;   /* Gris oscuro */
+  --secondary-foreground: 210 20% 85%; /* Gris claro */
+
+  --accent: 50 70% 60%;       /* Amarillo apagado */
+  --accent-foreground: 50 15% 15%; /* Casi negro amarillento */
+
+  --destructive: 0 60% 50%;   /* Rojo apagado */
+  --destructive-foreground: 0 20% 90%; /* Gris muy claro rojizo */
+
+  --ring: 150 40% 45%;        /* Verde menta más oscuro para focus */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
