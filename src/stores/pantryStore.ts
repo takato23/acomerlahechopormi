@@ -3,9 +3,9 @@ import {
   getPantryItems as getItemsService,
   addPantryItem as addItemService,
   updatePantryItem as updateItemService,
-  deletePantryItem as deleteItemService,
-  getLowStockItems as getLowStockService 
-} from '@/features/pantry/pantryService';
+  deletePantryItem as deleteItemService
+  // getLowStockItems no existe en pantryService
+} from '../features/pantry/pantryService'; // Ruta relativa
 // Usar any temporalmente
 // import type { PantryItem, NewPantryItem, UpdatePantryItem } from '@/features/pantry/types';
 type PantryItem = any;
@@ -28,13 +28,13 @@ type UpdatePantryItem = any;
  */
 interface PantryState {
   items: PantryItem[];
-  lowStockItems: PantryItem[]; 
+  lowStockItems: PantryItem[]; // Estado para items bajos de stock (funcionalidad pendiente)
   isLoading: boolean;
-  isLoadingLowStock: boolean; 
+  isLoadingLowStock: boolean; // (funcionalidad pendiente)
   error: string | null;
-  errorLowStock: string | null; 
+  errorLowStock: string | null; // (funcionalidad pendiente)
   fetchItems: () => Promise<void>;
-  fetchLowStockItems: (threshold?: number) => Promise<void>; 
+  fetchLowStockItems: (threshold?: number) => Promise<void>; // Acción (funcionalidad pendiente)
   addItem: (itemData: NewPantryItem) => Promise<PantryItem | null>;
   updateItem: (itemId: string, updates: UpdatePantryItem) => Promise<PantryItem | null>;
   deleteItem: (itemId: string) => Promise<boolean>;
@@ -45,11 +45,11 @@ interface PantryState {
  */
 export const usePantryStore = create<PantryState>((set, get) => ({
   items: [],
-  lowStockItems: [],
+  lowStockItems: [], // Estado inicial (funcionalidad pendiente)
   isLoading: false,
-  isLoadingLowStock: false,
+  isLoadingLowStock: false, // Estado inicial (funcionalidad pendiente)
   error: null,
-  errorLowStock: null,
+  errorLowStock: null, // Estado inicial (funcionalidad pendiente)
 
   /**
    * Carga todos los ítems de la despensa del usuario desde el servicio.
@@ -76,18 +76,27 @@ export const usePantryStore = create<PantryState>((set, get) => ({
    * @async
    * @param {number} [threshold=1] - Umbral de cantidad para considerar bajo stock.
    */
-  fetchLowStockItems: async (threshold = 1) => {
-     // Evitar carga múltiple
-    if (get().isLoadingLowStock) return;
-    set({ isLoadingLowStock: true, errorLowStock: null });
-    try {
-      const lowStockItems = await getLowStockService(threshold);
-      set({ lowStockItems, isLoadingLowStock: false });
-    } catch (error) {
-      console.error("Error fetching low stock items for store:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al cargar items bajos.';
-      set({ errorLowStock: errorMessage, isLoadingLowStock: false });
-    }
+  // --- Funcionalidad Low Stock Pendiente ---
+  // fetchLowStockItems: async (threshold = 1) => {
+  //    // Evitar carga múltiple
+  //   if (get().isLoadingLowStock) return;
+  //   set({ isLoadingLowStock: true, errorLowStock: null });
+  //   try {
+  //     // const lowStockItems = await getLowStockService(threshold); // getLowStockService no existe
+  //     console.warn("fetchLowStockItems no implementado en pantryService");
+  //     const lowStockItems: PantryItem[] = []; // Placeholder
+  //     set({ lowStockItems, isLoadingLowStock: false });
+  //   } catch (error) {
+  //     console.error("Error fetching low stock items for store:", error);
+  //     const errorMessage = error instanceof Error ? error.message : 'Error desconocido al cargar items bajos.';
+  //     set({ errorLowStock: errorMessage, isLoadingLowStock: false });
+  //   }
+  // },
+  // Placeholder para evitar errores si se llama accidentalmente
+  fetchLowStockItems: async (_threshold = 1) => {
+      console.warn("fetchLowStockItems llamado pero no implementado en pantryService.");
+      set({ lowStockItems: [], isLoadingLowStock: false, errorLowStock: 'Funcionalidad no implementada' });
+      return Promise.resolve();
   },
 
   /**
@@ -104,10 +113,10 @@ export const usePantryStore = create<PantryState>((set, get) => ({
            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         ) 
       }));
-      // Refrescar low stock si el nuevo item podría calificar
-      if (newItem.quantity !== null && newItem.quantity <= (get().lowStockItems.length > 0 ? 1 : 1)) { // Asumiendo umbral 1 por defecto
-         get().fetchLowStockItems(); 
-      }
+      // TODO: Refrescar low stock si el nuevo item podría calificar (cuando se implemente)
+      // if (newItem.quantity !== null && newItem.quantity <= 1) { // Asumiendo umbral 1 por defecto
+      //    get().fetchLowStockItems();
+      // }
       return newItem;
     } catch (error) {
       console.error("Error adding pantry item via store:", error);
@@ -136,10 +145,10 @@ export const usePantryStore = create<PantryState>((set, get) => ({
       set((state) => ({
         items: state.items.map(i => i.id === itemId ? updatedItem : i)
       }));
-       // Refrescar low stock si la cantidad cambió
-       if (updates.quantity !== undefined) {
-          get().fetchLowStockItems(); 
-       }
+       // TODO: Refrescar low stock si la cantidad cambió (cuando se implemente)
+       // if (updates.quantity !== undefined) {
+       //    get().fetchLowStockItems();
+       // }
       return updatedItem;
     } catch (error) {
       console.error("Error updating pantry item via store:", error);
@@ -163,8 +172,8 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }));
     try {
       await deleteItemService(itemId);
-       // Refrescar low stock después de eliminar
-       get().fetchLowStockItems();
+      // TODO: Refrescar low stock después de eliminar (cuando se implemente)
+      // get().fetchLowStockItems();
       return true;
     } catch (error) {
       console.error("Error deleting pantry item via store:", error);

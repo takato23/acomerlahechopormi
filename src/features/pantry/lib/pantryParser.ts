@@ -8,7 +8,7 @@
  * - "Sal" (sin cantidad ni unidad)
  */
 
-// Mapeo de números en texto a valores numéricos
+// Mapeo expandido de números en texto a valores numéricos
 const TEXT_NUMBERS: Record<string, number> = {
   'un': 1, 'una': 1,
   'dos': 2,
@@ -21,38 +21,62 @@ const TEXT_NUMBERS: Record<string, number> = {
   'nueve': 9,
   'diez': 10,
   'once': 11,
-  'doce': 12,
-  'medio': 0.5, 'media': 0.5,
+  'doce': 12, // docena
+  'trece': 13,
+  'catorce': 14,
+  'quince': 15,
+  'veinte': 20,
+  'treinta': 30,
+  'cuarenta': 40,
+  'cincuenta': 50,
+  'medio': 0.5, 'media': 0.5, // medio/media
+  // Podrían añadirse más si es necesario (ej: dieciseis, veintiuno, etc.)
 };
 
 // Lista simple de unidades comunes
+// Lista expandida y refinada de unidades comunes y sus variantes
 const COMMON_UNITS = [
-  // Unidades de peso/masa
-  'kg', 'kilo', 'kilos', 'gr', 'gramo', 'gramos',
-  // Unidades de volumen
-  'lt', 'lts', 'litro', 'litros', 'ml', 'cc',
-  // Unidades de conteo
-  'unidad', 'unidades', 'u', 'un',
-  'docena', 'docenas',
+  // Peso/Masa
+  'kg', 'kilo', 'kilos', 'g', 'gr', 'gramo', 'gramos', 'libra', 'libras', 'lb', 'lbs', 'onza', 'onzas', 'oz',
+  // Volumen
+  'l', 'lt', 'lts', 'litro', 'litros', 'ml', 'cc', 'galon', 'galones', 'gal',
+  // Conteo
+  'u', 'un', 'unidad', 'unidades',
+  'doc', 'docena', 'docenas',
   'par', 'pares',
-  // Contenedores
-  'paquete', 'paquetes', 'caja', 'cajas',
-  'lata', 'latas', 'botella', 'botellas',
+  // Contenedores/Formatos
+  'paq', 'paquete', 'paquetes', 'caja', 'cajas',
+  'lata', 'latas', 'bot', 'botella', 'botellas',
   'sachet', 'sachets',
   'atado', 'atados',
+  'bandeja', 'bandejas',
+  'rollo', 'rollos',
+  'tableta', 'tabletas',
+  'barra', 'barras',
+  'bolsa', 'bolsas',
+  'frasco', 'frascos',
+  'tarro', 'tarros',
 ];
 
 // Palabras que pueden ignorarse en el procesamiento
 const IGNORE_WORDS = ['de', 'del', 'la', 'el', 'los', 'las'];
 
 // Regex para unidades comunes (case-insensitive, palabra completa)
-const UNITS_REGEX = new RegExp(`\\b(${COMMON_UNITS.join('|')})s?\\b`, 'i');
+// Regex mejorada para unidades comunes (case-insensitive, palabra completa o abreviatura seguida de espacio/fin)
+// Incluye 's' opcional al final para plurales simples
+const UNITS_REGEX = new RegExp(`\\b(${COMMON_UNITS.join('|')})(s?)\\b`, 'i');
 
+// Tipo de resultado del parseo, indicando éxito o tipo de fallo
+export type ParseResult =
+  | { success: true; data: ParsedPantryInput; usedFallback?: boolean }
+  | { success: false; error: 'empty_input' | 'unparseable'; originalText: string };
+
+// Datos parseados de un ítem
 export interface ParsedPantryInput {
   quantity: number | null;
   unit: string | null;
   ingredientName: string;
-  suggestedCategoryId?: string | null;
+  suggestedCategoryId?: string | null; // Se mantiene para compatibilidad, se asignará después
 }
 
 function parseTextNumber(text: string): number | null {
@@ -69,10 +93,11 @@ function cleanIngredientName(name: string): string {
     .trim();
 }
 
-export function parsePantryInput(text: string): ParsedPantryInput | null {
+export function parsePantryInput(text: string): ParseResult {
+  const originalText = text;
   const inputText = text.trim();
   if (!inputText) {
-    return null;
+    return { success: false, error: 'empty_input', originalText };
   }
 
   let quantity: number | null = null;
@@ -94,7 +119,7 @@ export function parsePantryInput(text: string): ParsedPantryInput | null {
         quantity = textNumber;
         unit = normalizeUnit(potentialUnit);
         ingredientName = cleanIngredientName(restOfText);
-        return { quantity, unit, ingredientName };
+        return { success: true, data: { quantity, unit, ingredientName } };
       }
     }
   }
@@ -110,11 +135,35 @@ export function parsePantryInput(text: string): ParsedPantryInput | null {
     if (UNITS_REGEX.test(potentialUnit)) {
       quantity = potentialQty;
       unit = normalizeUnit(potentialUnit);
-      ingredientName = cleanIngredientName(potentialName);
-      return { quantity, unit, ingredientName };
+      ingredientName = potentialName.trim(); // No limpiar aún con cleanIngredientName
+
+      // Revisar si el nombre empieza con "y medio" o "y media"
+      if (ingredientName.toLowerCase().startsWith('y medio') || ingredientName.toLowerCase().startsWith('y media')) {
+          quantity += 0.5;
+          // Eliminar "y medio/a" del inicio del nombre (considerando posible espacio extra)
+          ingredientName = ingredientName.replace(/^y\s+(medio|media)\s*/i, '').trim();
+      }
+
+      ingredientName = cleanIngredientName(ingredientName); // Limpiar el nombre restante
+      return { success: true, data: { quantity, unit, ingredientName } };
     }
   }
-
+  
+    // --- Nueva Estrategia 3.5: Buscar "NumeroTexto Nombre" ---
+    // Ej: "Doce huevos", "Medio pollo"
+    const matchTextNumberName = inputText.match(
+        new RegExp(`^(${Object.keys(TEXT_NUMBERS).join('|')})\\s+(.+)$`, 'i')
+    );
+    if (matchTextNumberName) {
+        const textNumber = parseTextNumber(matchTextNumberName[1]);
+        if (textNumber !== null) {
+            quantity = textNumber;
+            unit = normalizeUnit('u'); // Asumir unidad 'u' para este patrón
+            ingredientName = cleanIngredientName(matchTextNumberName[2]);
+            return { success: true, data: { quantity, unit, ingredientName } };
+        }
+    }
+  
   // --- Estrategia 3: Buscar "Nombre Cantidad Unidad" ---
   // Ej: "Harina 1 kg", "Leche 1.5 lt"
   const matchNameQtyUnit = inputText.match(/^(.+?)\s+(\d*\.?\d+)\s*([a-zA-Záéíóúñ]*)$/i);
@@ -127,18 +176,18 @@ export function parsePantryInput(text: string): ParsedPantryInput | null {
       quantity = potentialQty;
       unit = normalizeUnit(potentialUnit);
       ingredientName = cleanIngredientName(potentialName);
-      return { quantity, unit, ingredientName };
+      return { success: true, data: { quantity, unit, ingredientName } };
     }
   }
 
   // --- Estrategia 4: Buscar "Cantidad Nombre" (sin unidad) ---
-  // Ej: "5 Manzanas", "1 Pan"
+  // Ej: "5 Manzanas", "1 Pan", "15 huevos"
   const matchQtyName = inputText.match(/^(\d*\.?\d+)\s+(.+)$/i);
   if (matchQtyName) {
     quantity = parseFloat(matchQtyName[1]);
     unit = normalizeUnit('unidad');
     ingredientName = cleanIngredientName(matchQtyName[2]);
-    return { quantity, unit, ingredientName };
+    return { success: true, data: { quantity, unit, ingredientName } };
   }
 
   // --- Estrategia 5: Buscar "Unidad de Nombre" ---
@@ -148,27 +197,54 @@ export function parsePantryInput(text: string): ParsedPantryInput | null {
     quantity = 1; // Asumir cantidad 1 para este patrón
     unit = normalizeUnit(matchUnitDeName[1]);
     ingredientName = cleanIngredientName(matchUnitDeName[2]);
-    return { quantity, unit, ingredientName };
+    return { success: true, data: { quantity, unit, ingredientName } };
   }
 
   // --- Estrategia 6: Solo Nombre (Fallback) ---
-  // Si ninguna de las anteriores funcionó, asumir que todo es el nombre
+  // Si ninguna de las anteriores funcionó, intentar asumir que todo es el nombre
+  // Devolvemos un flag para que la UI sepa que se usó el fallback
   quantity = 1;
-  unit = normalizeUnit('unidad'); // Unidad por defecto 'u'
+  unit = normalizeUnit('u'); // Unidad por defecto 'u'
   ingredientName = cleanIngredientName(inputText);
-  return { quantity, unit, ingredientName };
+
+  // Podríamos añadir una validación extra aquí: si el nombre resultante es muy corto o parece una unidad/número, marcar como no parseable.
+  // Por ahora, lo dejamos como fallback.
+  if (ingredientName) {
+      return { success: true, data: { quantity, unit, ingredientName }, usedFallback: true };
+  }
+
+  // Si incluso el fallback falla (ej: input era solo "de"), marcar como no parseable
+  return { success: false, error: 'unparseable', originalText };
 }
 
 const UNIT_NORMALIZATION_MAP: Record<string, string> = {
-  // Peso/masa
+  // Peso/Masa
   'kilo': 'kg', 'kilos': 'kg',
-  'gramo': 'gr', 'gramos': 'gr',
+  'g': 'g', 'gr': 'g', 'gramo': 'g', 'gramos': 'g',
+  'libra': 'lb', 'libras': 'lb', 'lbs': 'lb',
+  'onza': 'oz', 'onzas': 'oz',
   // Volumen
-  'litro': 'lt', 'litros': 'lt',
+  'l': 'l', 'lt': 'l', 'lts': 'l', 'litro': 'l', 'litros': 'l',
+  'ml': 'ml', 'cc': 'ml',
+  'galon': 'gal', 'galones': 'gal',
   // Conteo
-  'unidades': 'u', 'un': 'u', 'unidad': 'u',
-  'docena': 'doc', 'docenas': 'doc',
+  'u': 'u', 'un': 'u', 'unidad': 'u', 'unidades': 'u',
+  'doc': 'doc', 'docena': 'doc', 'docenas': 'doc',
   'par': 'par', 'pares': 'par',
+  // Contenedores/Formatos
+  'paq': 'paq', 'paquete': 'paq', 'paquetes': 'paq',
+  'caja': 'caja', 'cajas': 'caja',
+  'lata': 'lata', 'latas': 'lata',
+  'bot': 'bot', 'botella': 'bot', 'botellas': 'bot',
+  'sachet': 'sachet', 'sachets': 'sachet',
+  'atado': 'atado', 'atados': 'atado',
+  'bandeja': 'bandeja', 'bandejas': 'bandeja',
+  'rollo': 'rollo', 'rollos': 'rollo',
+  'tableta': 'tableta', 'tabletas': 'tableta',
+  'barra': 'barra', 'barras': 'barra',
+  'bolsa': 'bolsa', 'bolsas': 'bolsa',
+  'frasco': 'frasco', 'frascos': 'frasco',
+  'tarro': 'tarro', 'tarros': 'tarro',
 };
 
 export function normalizeUnit(unit: string | null): string | null {

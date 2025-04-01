@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom'; // Importar useLocation
 import { Sidebar } from './Sidebar';
 import { AnimatePresence, motion } from 'framer-motion'; // Importar Framer Motion
 import { cn } from '@/lib/utils'; // Importar cn
+import useBreakpoint from '../../hooks/useBreakpoint'; // Importar hook de breakpoint
 // Podríamos importar una Navbar superior reducida aquí si quisiéramos
 // import Navbar from '@/components/sections/Navbar';
 
@@ -11,18 +12,24 @@ export function AppLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const location = useLocation(); // Obtener location
 
+  const currentBreakpoint = useBreakpoint();
+  const isDesktop = currentBreakpoint === 'desktop';
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className={cn(
+      "flex bg-background text-foreground",
+      isDesktop && "h-screen" // Aplicar h-screen solo en desktop
+    )}>
       <Sidebar isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} /> {/* Pasar props */}
       {/* Ajustar margen izquierdo y añadir transición */}
       <main className={cn(
-          "flex-1 overflow-y-auto transition-all duration-300 ease-in-out",
+          "flex-1 transition-all duration-300 ease-in-out", // Quitado overflow-y-auto de aquí
           // Sin margen en móvil, margen condicional desde md:
-          isCollapsed ? "ml-0 md:ml-16" : "ml-0 md:ml-28" // Reducido aún más para centrar mejor
+          isCollapsed ? "ml-0 md:ml-16" : "ml-0 md:ml-28", // Reducido aún más para centrar mejor
+          isDesktop && "overflow-y-auto" // Aplicar overflow solo en desktop
       )}>
         {/* Si quisiéramos mantener una Navbar superior reducida: */}
         {/* <Navbar /> */}

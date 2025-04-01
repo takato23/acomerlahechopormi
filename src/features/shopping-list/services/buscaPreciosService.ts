@@ -1,3 +1,6 @@
+import { localSuggestionManager, SearchTermRecord } from '@/lib/suggestions/LocalSuggestionManager'; // Asumiendo alias @
+// import { toast } from 'sonner'; // Asumimos que toast está disponible globalmente o inyectado
+
 // Define the product interface
 export interface BuscaPreciosProduct {
   id: string;
@@ -8,53 +11,115 @@ export interface BuscaPreciosProduct {
   url: string;
 }
 
-// Function to search for products
-export const searchProducts = async (query: string): Promise<BuscaPreciosProduct[]> => {
-  try {
-    console.log('🔍 Iniciando búsqueda con consulta:', query);
+// Define los tipos de resultado posibles
+export type SearchProductsSuccess = { error: false; products: BuscaPreciosProduct[] };
+export type SearchProductsError = { error: true; fallbackSuggestions: SearchTermRecord[]; originalError: Error };
+export type SearchProductsResult = SearchProductsSuccess | SearchProductsError;
 
-    const apiUrl = `https://buscaprecios.onrender.com/?q=${encodeURIComponent(query)}`;
-    console.log('📡 URL de la API:', apiUrl);
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        // 'Origin': window.location.origin // Origin header might cause CORS issues if not needed
-      }
-    });
-    
-    if (!response.ok) {
-      console.error('🚫 Error HTTP:', response.status, response.statusText);
-      throw new Error(`Error en la API: ${response.status}`);
-    }
+// Sugerencias por defecto (podrían venir de config)
+const DEFAULT_SUGGESTIONS: SearchTermRecord[] = [
+    { term: "Leche", frequency: 0, lastUsed: 0 },
+    { term: "Pan", frequency: 0, lastUsed: 0 },
+    { term: "Huevos", frequency: 0, lastUsed: 0 },
+    { term: "Arroz", frequency: 0, lastUsed: 0 },
+    { term: "Fideos", frequency: 0, lastUsed: 0 },
+];
 
-    const data = await response.json();
-    console.log('✅ Respuesta de la API:', {
-      failedScrapers: data.failedScrapers,
-      productCount: data.products?.length || 0,
-      timestamp: data.timestamp
-    });
+// Function to search for products with retries and fallback
+export const searchProducts = async (query: string, isRetryAttempt = false): Promise<SearchProductsResult> => {
+  console.log(`🔍 Iniciando búsqueda con consulta: "${query}" ${isRetryAttempt ? '(Reintento)' : ''}`);
 
-    if (!data.products || !Array.isArray(data.products)) {
-      console.error('❌ Formato de respuesta inválido:', data);
-      throw new Error('Formato de respuesta inválido');
-    }
-
-    console.log('📦 Muestra de productos:', data.products.slice(0, 2));
-
-    const formattedProducts = formatProducts(data);
-    console.log('✨ Productos formateados:', formattedProducts.length);
-
-    return formattedProducts;
-  } catch (error) {
-    console.error('❌ Error al buscar productos:', error);
-    if (error instanceof Error) {
-      console.error('Detalles del error:', error.message);
-      if (error.stack) console.error('Stack:', error.stack);
-    }
-    throw error; // Re-throw the error so the caller can handle it
+  // Registrar término de búsqueda si no es un reintento manual explícito
+  if (!isRetryAttempt) {
+      localSuggestionManager.addSearchTerm(query);
   }
+
+  const maxAttempts = 3;
+  let attempts = 0;
+  const apiUrl = `https://buscaprecios.onrender.com/?q=${encodeURIComponent(query)}`;
+  console.log('📡 URL de la API:', apiUrl);
+
+  while (attempts < maxAttempts) {
+    try {
+      // Backoff exponencial simple
+      if (attempts > 0) {
+        const delay = Math.pow(2, attempts - 1) * 1000; // 1s, 2s
+        console.log(`⏳ Reintento ${attempts}/${maxAttempts-1} esperando ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(15000) // Timeout de 15 segundos por intento
+      });
+
+      if (!response.ok) {
+        // Errores 5xx son candidatos a reintento, 4xx usualmente no
+        if (response.status >= 500 && attempts < maxAttempts - 1) {
+            console.warn(`⚠️ Error HTTP ${response.status} (Intento ${attempts + 1}). Reintentando...`);
+            attempts++;
+            continue; // Saltar al siguiente intento del while
+        } else {
+            console.error(`🚫 Error HTTP ${response.status} definitivo:`, response.statusText);
+            throw new Error(`Error en la API: ${response.status}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('✅ Respuesta de la API recibida (Intento ${attempts + 1})');
+
+      if (!data.products || !Array.isArray(data.products)) {
+        console.error('❌ Formato de respuesta inválido:', data);
+        throw new Error('Formato de respuesta inválido');
+      }
+
+      const formattedProducts = formatProducts(data);
+      console.log('✨ Productos formateados:', formattedProducts.length);
+
+      // Éxito!
+      return { error: false, products: formattedProducts };
+
+    } catch (error) {
+      attempts++;
+      console.error(`❌ Error en intento ${attempts}/${maxAttempts} para "${query}":`, error);
+
+      // Si se alcanzan los reintentos o es un error no recuperable (ej. timeout, red)
+      if (attempts >= maxAttempts || (error instanceof Error && (error.name === 'AbortError' || error.message.includes('NetworkError')))) {
+        console.error(`❌ Fallo definitivo al buscar "${query}" después de ${attempts} intentos.`);
+        // toast.error(`Error al buscar "${query}". Mostrando sugerencias locales.`); // Notificar al usuario
+
+        // --- Lógica de Fallback ---
+        const recentSearches = localSuggestionManager.getSuggestions(3);
+        const combinedSuggestions = [...recentSearches];
+        const recentTerms = new Set(recentSearches.map(s => s.term.toLowerCase()));
+
+        DEFAULT_SUGGESTIONS.forEach(def => {
+            if (combinedSuggestions.length < 5 && !recentTerms.has(def.term.toLowerCase())) {
+                combinedSuggestions.push(def);
+            }
+        });
+
+        console.log('💡 Sugerencias de fallback:', combinedSuggestions);
+        return {
+            error: true,
+            fallbackSuggestions: combinedSuggestions,
+            originalError: error instanceof Error ? error : new Error(String(error))
+        };
+      }
+      // Si no, el loop while continuará para el siguiente reintento
+    }
+  }
+
+  // Este punto no debería alcanzarse si la lógica es correcta, pero por si acaso:
+  console.error(`❌ Fallo inesperado al buscar "${query}" fuera del loop.`);
+  return {
+      error: true,
+      fallbackSuggestions: DEFAULT_SUGGESTIONS.slice(0, 5), // Fallback mínimo
+      originalError: new Error("Fallo inesperado en la lógica de búsqueda")
+  };
 };
 
 // Helper function to format products

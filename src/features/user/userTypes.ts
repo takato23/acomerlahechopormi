@@ -12,5 +12,6 @@ export interface UserProfile {
   difficulty_preference?: DifficultyPreference | null; 
   max_prep_time?: number | null; // Tiempo máximo en minutos
   allergies_restrictions?: string | null; // Campo de texto para alergias/restricciones
+  gemini_api_key?: string | null; // Clave API de Gemini opcional
   // Otros campos futuros: budget, etc.
 }

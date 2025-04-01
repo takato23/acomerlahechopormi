@@ -6,9 +6,11 @@ import { AvatarUpload } from './components/AvatarUpload';
 import { DifficultyPreference as DifficultyPreferenceComponent } from './components/DifficultyPreference'; 
 import { TimePreference } from './components/TimePreference'; 
 import { AllergiesInput } from './components/AllergiesInput'; 
+import { useAuth } from '../auth/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
-import { Terminal, Save } from 'lucide-react'; 
+import { Terminal, Save, Key, Trash2, Eye, EyeOff } from 'lucide-react';
+
 import { Label } from '@/components/ui/label'; 
 import { Input } from '@/components/ui/input'; 
 import { Button } from '@/components/ui/button'; 
@@ -20,6 +22,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
  * @component
  */
 export function UserProfilePage() {
+  const { user } = useAuth();
   /** @state {UserProfile | null} profile - Datos del perfil del usuario cargados. */
   const [profile, setProfile] = useState<UserProfile | null>(null);
   /** @state {boolean} isLoading - Indica si se están cargando los datos iniciales del perfil. */
@@ -39,6 +42,18 @@ export function UserProfilePage() {
   /** @state {string | null | undefined} avatarUrl - URL actual del avatar del usuario. */
   const [avatarUrl, setAvatarUrl] = useState<string | null | undefined>(undefined);
 
+  /** @state {string | null} geminiApiKey - Clave API de Gemini actual del usuario. */
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+  /** @state {string} newGeminiApiKey - Valor del input para la nueva clave API de Gemini. */
+  const [newGeminiApiKey, setNewGeminiApiKey] = useState('');
+  /** @state {boolean} showApiKey - Controla si la clave API actual se muestra completa. */
+  const [showApiKey, setShowApiKey] = useState(false);
+  /** @state {boolean} isSavingApiKey - Indica si se está guardando/eliminando la clave API. */
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  /** @state {string | null} apiKeyError - Mensaje de error específico para la gestión de la API Key. */
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  /** @state {string | null} apiKeySuccess - Mensaje de éxito específico para la gestión de la API Key. */
+  const [apiKeySuccess, setApiKeySuccess] = useState<string | null>(null);
   /**
    * Carga el perfil del usuario al montar el componente.
    * @function loadProfile
@@ -50,11 +65,18 @@ export function UserProfilePage() {
     setUsernameError(null); 
     setUsernameSuccess(false);
     try {
-      const userProfile = await getUserProfile();
+      if (!user?.id) {
+        setError("No se pudo identificar al usuario para cargar el perfil.");
+        setIsLoading(false);
+        return;
+      }
+
+      const userProfile = await getUserProfile(user.id);
       if (userProfile) {
         setProfile(userProfile);
         setUsernameInput(userProfile.username || ''); 
         setAvatarUrl(userProfile.avatar_url); 
+        setGeminiApiKey(userProfile.gemini_api_key || null); // Cargar la API Key de Gemini
       } else {
         setError("No se pudo cargar el perfil."); 
       }
@@ -91,7 +113,12 @@ export function UserProfilePage() {
          return;
       }
 
-      const success = await updateUserProfile({ username: trimmedUsername || null }); 
+      if (!user?.id) {
+        setUsernameError("No se pudo identificar al usuario para guardar.");
+        setIsSavingUsername(false);
+        return;
+      }
+      const success = await updateUserProfile(user.id, { username: trimmedUsername || null }); 
       if (success) {
         setProfile({ ...profile, username: trimmedUsername || null });
         setUsernameSuccess(true);
@@ -130,7 +157,11 @@ export function UserProfilePage() {
             updateData.allergies_restrictions = null;
         }
 
-        const success = await updateUserProfile(updateData);
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar la preferencia.");
+          return false; // Indicate failure
+        }
+        const success = await updateUserProfile(user.id, updateData);
         if (success && profile) {
           setProfile({ ...profile, ...updateData }); 
           return true;
@@ -157,6 +188,99 @@ export function UserProfilePage() {
       setProfile({ ...profile, avatar_url: newUrl }); 
     }
   };
+
+  /**
+   * Ofusca una API key mostrando solo los últimos 4 caracteres.
+   * @function obfuscateApiKey
+   * @param {string | null} key - La clave a ofuscar.
+   * @returns {string} La clave ofuscada o un string vacío.
+   */
+  const obfuscateApiKey = (key: string | null): string => {
+    if (!key || key.length <= 4) {
+      return '****'; // O un placeholder si es muy corta o no existe
+    }
+    return `****...${key.slice(-4)}`;
+  };
+
+  /**
+   * Maneja la actualización de la API Key de Gemini.
+   * @function handleUpdateApiKey
+   * @async
+   */
+  const handleUpdateApiKey = async () => {
+    if (!user?.id) {
+      setApiKeyError("No se pudo identificar al usuario para guardar la clave.");
+      return;
+    }
+    if (!newGeminiApiKey.trim()) {
+      setApiKeyError("La clave API no puede estar vacía.");
+      return;
+    }
+
+    setIsSavingApiKey(true);
+    setApiKeyError(null);
+    setApiKeySuccess(null);
+    setError(null); // Limpiar error general
+
+    try {
+      const success = await updateUserProfile(user.id, { gemini_api_key: newGeminiApiKey.trim() });
+      if (success) {
+        setGeminiApiKey(newGeminiApiKey.trim());
+        setNewGeminiApiKey(''); // Limpiar input
+        setApiKeySuccess("Clave API de Gemini guardada correctamente.");
+        setShowApiKey(false); // Ocultar la clave después de guardar
+        setTimeout(() => setApiKeySuccess(null), 4000); // Ocultar mensaje de éxito
+      } else {
+        setApiKeyError("No se pudo guardar la clave API.");
+      }
+    } catch (err) {
+      console.error("Error updating Gemini API Key:", err);
+      setApiKeyError("Ocurrió un error al guardar la clave API.");
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  };
+
+  /**
+   * Maneja la eliminación de la API Key de Gemini.
+   * @function handleDeleteApiKey
+   * @async
+   */
+  const handleDeleteApiKey = async () => {
+    // TODO: Añadir confirmación real (ej. un modal)
+    if (!window.confirm("¿Estás seguro de que quieres eliminar tu clave API de Gemini?")) {
+      return;
+    }
+
+    if (!user?.id) {
+      setApiKeyError("No se pudo identificar al usuario para eliminar la clave.");
+      return;
+    }
+
+    setIsSavingApiKey(true);
+    setApiKeyError(null);
+    setApiKeySuccess(null);
+    setError(null); // Limpiar error general
+
+    try {
+      const success = await updateUserProfile(user.id, { gemini_api_key: null });
+      if (success) {
+        setGeminiApiKey(null);
+        setNewGeminiApiKey(''); // Limpiar input por si acaso
+        setApiKeySuccess("Clave API de Gemini eliminada.");
+        setShowApiKey(false);
+        setTimeout(() => setApiKeySuccess(null), 4000);
+      } else {
+        setApiKeyError("No se pudo eliminar la clave API.");
+      }
+    } catch (err) {
+      console.error("Error deleting Gemini API Key:", err);
+      setApiKeyError("Ocurrió un error al eliminar la clave API.");
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  };
+
 
   // Renderizado condicional de carga y error inicial
   if (isLoading) {
@@ -278,6 +402,103 @@ export function UserProfilePage() {
             currentValue={profile.allergies_restrictions}
             onUpdateValue={(value) => handleUpdateSimplePreference({ allergies_restrictions: value })}
          />
+
+         {/* Card para API Key de Gemini */}
+         <Card>
+           <CardHeader>
+             <CardTitle>API Key de Gemini (Opcional)</CardTitle>
+           </CardHeader>
+           <CardContent className="space-y-4">
+             <p className="text-sm text-muted-foreground">
+               Opcionalmente, puedes guardar tu propia API Key de Google AI Studio (Gemini) 
+               para habilitar funcionalidades avanzadas de IA en la aplicación. 
+               Tu clave se almacena de forma segura y solo se usa para interactuar con la API de Gemini en tu nombre.
+               {/* TODO: Reemplazar con enlace real a la guía */}
+               <a href="#" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
+                 ¿Cómo obtener una clave?
+               </a>
+             </p>
+
+             {apiKeySuccess && (
+               <Alert>
+                 <Terminal className="h-4 w-4" />
+                 <AlertTitle>Éxito</AlertTitle>
+                 <AlertDescription>{apiKeySuccess}</AlertDescription>
+               </Alert>
+             )}
+             {apiKeyError && (
+               <Alert variant="destructive">
+                 <Terminal className="h-4 w-4" />
+                 <AlertTitle>Error</AlertTitle>
+                 <AlertDescription>{apiKeyError}</AlertDescription>
+               </Alert>
+             )}
+
+             {/* Mostrar Clave Actual (Ofuscada) */}
+             {geminiApiKey && (
+               <div className="space-y-1">
+                 <Label htmlFor="currentApiKey">Clave API Actual</Label>
+                 <div className="flex items-center space-x-2">
+                   <Input 
+                     id="currentApiKey"
+                     type={showApiKey ? 'text' : 'password'}
+                     readOnly
+                     value={showApiKey ? geminiApiKey : obfuscateApiKey(geminiApiKey)}
+                     className="flex-grow bg-muted/50"
+                   />
+                   <Button 
+                     variant="outline"
+                     size="icon"
+                     onClick={() => setShowApiKey(!showApiKey)}
+                     aria-label={showApiKey ? "Ocultar clave" : "Mostrar clave"}
+                   >
+                     {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                   </Button>
+                 </div>
+               </div>
+             )}
+
+             {/* Input para Nueva Clave */}
+             <div className="space-y-1">
+               <Label htmlFor="newApiKey">{geminiApiKey ? 'Reemplazar Clave API' : 'Ingresar Nueva Clave API'}</Label>
+               <Input 
+                 id="newApiKey"
+                 type="password" 
+                 value={newGeminiApiKey}
+                 onChange={(e) => {
+                   setNewGeminiApiKey(e.target.value);
+                   setApiKeyError(null);
+                   setApiKeySuccess(null);
+                 }}
+                 placeholder="Pega tu clave API de Gemini aquí"
+                 disabled={isSavingApiKey}
+               />
+             </div>
+
+           </CardContent>
+           <CardFooter className="flex justify-end space-x-2">
+             {geminiApiKey && (
+                <Button 
+                  variant="destructive"
+                  onClick={handleDeleteApiKey}
+                  disabled={isSavingApiKey}
+                  size="sm"
+                >
+                  {isSavingApiKey ? <Spinner size="sm" className="mr-2" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Eliminar Clave
+                </Button>
+             )}
+             <Button 
+               onClick={handleUpdateApiKey}
+               disabled={!newGeminiApiKey.trim() || isSavingApiKey}
+               size="sm"
+             >
+               {isSavingApiKey ? <Spinner size="sm" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+               Guardar Clave
+             </Button>
+           </CardFooter>
+         </Card>
+
         
       </div>
     </div>

@@ -1,142 +1,179 @@
+import React, { useState } from 'react'; // Añadir useState
 import { PantryItem } from '../types';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/Spinner';
-import { Trash2, Plus, Minus, Pencil, CalendarClock, Tag } from 'lucide-react';
-import { format, differenceInDays, parseISO, isValid } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion'; // Para animaciones si se aplica aquí
+// import { TableCell, TableRow } from '../../../components/ui/table'; // Componente no encontrado
+import { Button } from '../../../components/ui/button'; // Ruta relativa
+import { Pencil, Trash2, Info, MapPin, Tag, Package, MessageSquare, Tags } from 'lucide-react'; // Añadir icono Tags
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip";
+// Importar Checkbox
+import { Checkbox } from '../../../components/ui/checkbox';
+import { cn } from '@/lib/utils'; // Importar cn
 
 interface PantryListItemRowProps {
-  item: PantryItem;
-  onUpdateQuantity: (item: PantryItem, delta: number) => Promise<void>;
-  onDelete: (itemId: string) => Promise<void>;
-  onEdit: (item: PantryItem) => void;
-  isUpdating?: boolean;
-  isDeleting?: boolean;
+ item: PantryItem;
+ onEdit: (item: PantryItem) => void;
+ onDelete: (itemId: string) => void;
+ // Nuevas props para selección
+ isSelectionMode: boolean;
+ isSelected: boolean;
+ onSelectItem: (itemId: string) => void;
 }
 
 export function PantryListItemRow({
-  item,
-  onUpdateQuantity,
-  onDelete,
-  onEdit,
-  isUpdating,
-  isDeleting,
+ item,
+ onEdit,
+ onDelete,
+ isSelectionMode,
+ isSelected,
+ onSelectItem
 }: PantryListItemRowProps) {
+  const [showNotes, setShowNotes] = useState(false); // Estado para mostrar/ocultar notas
+  const isExpired = item.expiry_date && new Date(item.expiry_date) < new Date();
+  // TODO: Lógica para "próximo a caducar"
 
-  const handleUpdate = async (delta: number) => {
-    await onUpdateQuantity(item, delta);
-  };
+  // Reemplazado TableRow/TableCell con divs debido a componente faltante
+ // Handler para el click en la fila (si no es en un botón o checkbox)
+ const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
+   // Si estamos en modo selección y el click no fue en un botón o el checkbox,
+   // entonces activamos la selección/deselección.
+   if (isSelectionMode && !(e.target instanceof Element && (e.target.closest('button') || e.target.closest('[role="checkbox"]')))) {
+     onSelectItem(item.id);
+   }
+ };
 
-  const handleDelete = async () => {
-    await onDelete(item.id);
-  };
-
-  // Calcular estado de vencimiento (lógica similar a PantryItemCard)
-  let expiryStatus: 'ok' | 'soon' | 'expired' = 'ok';
-  let daysRemaining: number | null = null;
-  let formattedExpiryDate: string | null = null;
-
-  if (item.expiry_date) {
-    const expiryDateObj = parseISO(item.expiry_date);
-    if (isValid(expiryDateObj)) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        daysRemaining = differenceInDays(expiryDateObj, today);
-        formattedExpiryDate = format(expiryDateObj, 'dd/MM/yy', { locale: es }); // Formato más corto
-
-        if (daysRemaining < 0) {
-            expiryStatus = 'expired';
-        } else if (daysRemaining <= 7) {
-            expiryStatus = 'soon';
-        }
-    }
-  }
-
-  // Placeholder para icono de categoría
-  const CategoryIcon = item.categories?.icon ? Tag : null; // Reemplazar Tag
-
-  return (
-    // Usar flexbox para alinear elementos en la fila
-    <div className={cn(
-        "flex items-center gap-3 px-3 py-2 border-b last:border-b-0", // Estilo de fila
-        expiryStatus === 'expired' && 'opacity-60',
-        isUpdating || isDeleting ? 'opacity-50 pointer-events-none' : '' // Feedback visual durante acción
-    )}>
-        {/* Icono Categoría */}
-        {CategoryIcon && (
-           <span
-             className="p-1 bg-muted/40 rounded-full flex-shrink-0 hidden sm:inline-flex" // Ocultar en móvil?
-             style={{ color: item.categories?.color ?? 'hsl(var(--muted-foreground))' }}
-             title={item.categories?.name ?? 'Sin Categoría'}
-            >
-             <CategoryIcon className="h-4 w-4" />
-           </span>
+ return (
+   <div
+     className={cn(
+       "flex items-start p-2 border-b hover:bg-muted/50",
+       isSelectionMode && "cursor-pointer", // Cursor pointer en modo selección
+       isSelected && "bg-primary/10 hover:bg-primary/15" // Resaltar si está seleccionado
+     )}
+     onClick={handleRowClick} // Añadir onClick a la fila
+   >
+     {/* Checkbox condicional */}
+     {isSelectionMode && (
+       <div className="flex items-center justify-center px-3 py-2 w-10 flex-shrink-0"> {/* Contenedor para centrar y alinear */}
+         <Checkbox
+           id={`select-row-${item.id}`}
+           checked={isSelected}
+           onCheckedChange={() => onSelectItem(item.id)}
+           aria-label={`Seleccionar ${item.ingredient?.name || 'item'}`}
+           // Detener propagación para que el click en el checkbox no active el click de la fila
+           onClick={(e) => e.stopPropagation()}
+         />
+       </div>
+     )}
+      {/* Simula TableCell - Nombre, Ubicación, Precio, Notas */}
+      {/* Quitar ancho fijo, añadir padding */}
+     {/* Nombre, Ubicación, Precio, Notas */}
+     <div className="flex-1 font-medium pr-3 py-2">
+        <div>{item.ingredient?.name || 'Ingrediente Desconocido'}</div>
+        {(item.location || item.price != null) && (
+            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                {item.location && (
+                    <span className="flex items-center"><MapPin size={10} className="mr-1"/> {item.location}</span>
+                )}
+                {item.price != null && (
+                     <span className="flex items-center"><Tag size={10} className="mr-1"/> ${item.price.toFixed(2)}</span>
+                )}
+            </div>
         )}
-
-        {/* Nombre */}
-        <span className="flex-grow font-medium text-sm truncate" title={item.ingredients?.name ?? 'Ingrediente desconocido'}>
-            {item.ingredients?.name ?? 'Ingrediente desconocido'}
-        </span>
-
-        {/* Fecha Vencimiento (Compacta) */}
-        {formattedExpiryDate && (
-            <span className={cn(
-                "text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap",
-                expiryStatus === 'expired' && 'text-red-600 font-medium',
-                expiryStatus === 'soon' && 'text-yellow-600'
-            )} title={`Vence: ${formattedExpiryDate}`}>
-              <CalendarClock className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{formattedExpiryDate}</span> {/* Ocultar texto en móvil? */}
+        {/* Mostrar icono de notas si existen */}
+        {item.notes && (
+             <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                       <Button variant="ghost" size="icon" className="h-5 w-5 mt-1 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setShowNotes(!showNotes); }}> {/* Detener propagación */}
+                            <MessageSquare size={12} />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p className="text-xs">{showNotes ? 'Ocultar' : 'Mostrar'} notas</p>
+                    </TooltipContent>
+                </Tooltip>
+             </TooltipProvider>
+        )}
+        {/* Mostrar Tags si existen */}
+        {item.tags && item.tags.length > 0 && (
+             <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
+                 <Tags size={10} className="flex-shrink-0"/>
+                 {/* Badge de tags eliminado por componente faltante */}
+                 {item.tags.map(tag => (
+                     <span key={tag} className="text-[10px] px-1 py-0 bg-secondary text-secondary-foreground rounded">{tag}</span>
+                 ))}
+             </div>
+        )}
+        {/* Bloque duplicado de notas eliminado */}
+      </div>
+      {/* Simula TableCell - Cantidad y Stock */}
+      {/* Quitar ancho fijo, añadir padding */}
+      <div className="px-3 py-2">
+          <div>{item.quantity ?? '-'}</div>
+          {(item.min_stock != null || item.target_stock != null) && (
+              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1" title={`Stock: Min ${item.min_stock ?? 'N/A'} / Obj ${item.target_stock ?? 'N/A'}`}>
+                 <Package size={10}/>
+                 ({item.min_stock ?? '_'} - {item.target_stock ?? '_'})
+              </div>
+          )}
+      </div>
+      {/* Simula TableCell - Unidad */}
+      {/* Quitar ancho fijo, añadir padding y evitar que se encoja */}
+      <div className="px-3 py-2 flex-shrink-0">{item.unit || '-'}</div>
+      {/* Simula TableCell - Categoría */}
+      {/* Quitar ancho fijo, añadir padding */}
+      <div className="px-3 py-2">
+        {/* Badge de categoría eliminado por componente faltante */}
+        {item.category?.name ? ( // Añadir paréntesis alrededor del JSX
+          (<> {/* Mostrar como texto simple, quitar estilos de badge */}
+            <span className="text-xs">
+                {/* {item.category.icon && <span className="mr-1">{item.category.icon}</span>} Icono opcional */}
+                {item.category.name}
             </span>
-         )}
-
-        {/* Controles Cantidad */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-             <Button
-                variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={() => handleUpdate(-1)}
-                disabled={isUpdating || isDeleting || (item.quantity ?? 0) <= 0}
-                aria-label="Disminuir cantidad"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="min-w-[2ch] text-center font-medium text-sm">
-                {isUpdating ? <Spinner size="sm"/> : (item.quantity ?? 0)}
-              </span>
-              <Button
-                variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={() => handleUpdate(1)}
-                disabled={isUpdating || isDeleting}
-                aria-label="Aumentar cantidad"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <span className="ml-1 text-xs text-muted-foreground w-8 truncate" title={item.unit ?? 'un.'}>{item.unit ?? 'un.'}</span> {/* Ancho fijo opcional */}
-        </div>
-
-        {/* Botones Acción */}
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-             <Button
-                variant="ghost" size="icon"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-7 w-7"
-                onClick={() => onEdit(item)}
-                disabled={isDeleting || isUpdating}
-                aria-label="Editar item"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost" size="icon"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7"
-                onClick={handleDelete}
-                disabled={isDeleting || isUpdating}
-                aria-label="Eliminar item"
-              >
-                {isDeleting ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
-        </div>
-    </div>
-  );
+          </>)
+        ) : (
+          <span className="text-xs text-muted-foreground">Sin cat.</span>
+        )}
+      </div>
+      {/* Simula TableCell - Caducidad */}
+      {/* Quitar ancho fijo, añadir padding y evitar que se encoja */}
+      <div className={`px-3 py-2 text-xs flex-shrink-0 ${isExpired ? 'text-destructive font-medium' : ''}`}>
+        {item.expiry_date || '-'}
+        {/* Badge de vencido eliminado por componente faltante */}
+        {isExpired && <span className="ml-1 text-[9px] px-1 py-0 leading-none text-destructive-foreground bg-destructive rounded">(V)</span>}
+      </div>
+      {/* Simula TableCell - Acciones */}
+      {/* Quitar ancho fijo, añadir padding y evitar que se encoja */}
+     {/* Acciones (solo si no estamos en modo selección) */}
+     {!isSelectionMode && (
+       <div className="text-right space-x-1 pl-3 py-2 flex-shrink-0">
+         <TooltipProvider delayDuration={100}>
+             <Tooltip>
+                 <TooltipTrigger asChild>
+                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(item); }}> {/* Detener propagación */}
+                       <Pencil className="h-3 w-3" />
+                       <span className="sr-only">Editar</span>
+                     </Button>
+                 </TooltipTrigger>
+                 <TooltipContent><p className="text-xs">Editar</p></TooltipContent>
+             </Tooltip>
+             <Tooltip>
+                  <TooltipTrigger asChild>
+                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}> {/* Detener propagación */}
+                       <Trash2 className="h-3 w-3" />
+                        <span className="sr-only">Eliminar</span>
+                     </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p className="text-xs">Eliminar</p></TooltipContent>
+             </Tooltip>
+         </TooltipProvider>
+       </div>
+     )}
+     {/* Espacio reservado para acciones si estamos en modo selección para mantener alineación */}
+     {isSelectionMode && (
+         <div className="pl-3 py-2 flex-shrink-0 w-[76px]"> {/* Ancho aproximado de los botones de acción */}
+             &nbsp; {/* Espacio no rompible para mantener altura */}
+         </div>
+     )}
+   </div>
+   // TODO: Reintegrar la lógica de mostrar notas si es necesario
+ );
 }

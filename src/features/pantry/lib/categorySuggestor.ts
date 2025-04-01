@@ -1,118 +1,62 @@
-import { CategoryKeywords } from '../types'; // Asumiendo que CategoryKeywords está en pantry/types
+import { Category, CategoryKeywords } from '../types'; // Asumiendo que CategoryKeywords está definido aquí
 
-// Mover categoryKeywords aquí (o importarlo de un lugar común si se usa en más sitios)
-export const categoryKeywords: CategoryKeywords = {
-  'vegetables': {
-    exactMatch: ["manzana", "banana", "tomate", "lechuga", "zanahoria", "cebolla", "papa", "pera", "naranja", "limón", "uva", "frutilla", "kiwi", "palta", "ajo", "zapallo", "calabaza", "berenjena", "pepino", "pimiento", "morron", "brocoli", "espinaca", "acelga", "rucula", "mandarina", "pomelo", "durazno", "ciruela", "sandia", "melon", "anana", "mango", "batata", "choclo", "apio", "puerro", "champinon", "champignon"],
-    partialMatch: ["fruta", "verdura", "hortaliza", "vegetal"],
-    fuzzyMatch: ["verde", "fresco", "organico"],
-    priority: 1,
-  },
-  'dairy': {
-    exactMatch: ["leche", "yogur", "yogurt", "queso", "manteca", "crema", "ricota", "huevo", "huevos", "danonino", "casancrem", "finlandia", "mendicrim", "leche cultivada", "leche chocolatada", "dulce de leche"],
-    partialMatch: ["lacteo", "descremado", "light", "untable", "rallado", "cremoso"],
-    fuzzyMatch: ["sachet", "carton", "potecito"],
-    priority: 2,
-  },
-  'meat': {
-    exactMatch: ["carne", "pollo", "pescado", "cerdo", "bife", "milanesa", "hamburguesa", "chorizo", "jamon", "salchicha", "panceta", "bondiola", "lomo", "nalga", "peceto", "cuadril", "vacio", "asado", "matambre", "merluza", "atun", "salmon", "pollo entero", "pata muslo"],
-    partialMatch: ["pechuga", "molida", "picada", "feteado", "trozado"],
-    fuzzyMatch: ["fresco", "congelado", "kg", "kilo"],
-    priority: 3,
-  },
-   'pantry': {
-    exactMatch: ["arroz", "fideos", "polenta", "harina", "azucar", "sal", "aceite", "vinagre", "yerba", "mate cocido", "te", "cafe", "cacao", "galletitas", "pan", "pan lactal", "tostadas", "mermelada", "miel", "cereales", "avena", "legumbres", "lentejas", "garbanzos", "porotos", "arvejas", "choclo en lata", "atun en lata", "sardinas", "pate", "mayonesa", "ketchup", "mostaza", "salsa de tomate", "pure de tomate", "caldo", "sopas", "gelatina", "flan", "polvo para hornear", "levadura", "edulcorante", "stevia", "snacks", "papas fritas", "mani", "pasas de uva", "frutos secos"],
-    partialMatch: ["lata", "paquete", "caja", "frasco", "integral", "diet"],
-    fuzzyMatch: ["conserva", "seco", "instantaneo"],
-    priority: 4,
-  },
-  'cleaning': {
-    exactMatch: ["detergente", "jabon", "lavandina", "desodorante de ambiente", "limpiador", "papel higienico", "rollo de cocina", "servilletas", "esponja", "trapo", "bolsas de residuo", "insecticida", "lustramuebles", "limpiavidrios", "jabon liquido", "jabon en polvo", "suavizante", "quitamanchas", "cif", "ayudin"],
-    partialMatch: ["limpia", "desinfectante", "multiuso", "ropa", "pisos", "baño", "cocina"],
-    fuzzyMatch: ["anti", "aroma", "perfume", "repuesto"],
-    priority: 5,
-  },
-  'beverages': {
-    exactMatch: ["agua", "agua saborizada", "gaseosa", "cerveza", "vino", "jugo", "coca", "sprite", "fanta", "paso de los toros", "seven up", "7up", "fernet", "aperitivo", "speed", "red bull", "monster", "gatorade", "powerade"],
-    partialMatch: ["bebida", "refresco", "botella", "lata", "pack", "tetra"],
-    fuzzyMatch: ["lt", "litro", "ml", "cc", "sin azucar", "zero", "light"],
-    priority: 6,
-  },
-  'frozen': {
-    exactMatch: ["helado", "papas congeladas", "vegetales congelados", "frutas congeladas", "milanesas de soja", "medallones de pollo", "nuggets", "pizza congelada"],
-    partialMatch: ["congelado", "frizado"],
-    fuzzyMatch: ["listo", "rapido"],
-    priority: 7,
-  },
-  'personal_care': {
-    exactMatch: ["shampoo", "acondicionador", "jabon de tocador", "pasta dental", "cepillo de dientes", "desodorante", "talco", "crema corporal", "crema de manos", "protector solar", "repelente", "curitas", "algodon", "gasas", "alcohol", "agua oxigenada", "maquinita de afeitar", "espuma de afeitar", "toallitas femeninas", "tampones", "pañales"],
-    partialMatch: ["cuidado", "higiene", "personal", "cabello", "piel", "bucal"],
-    fuzzyMatch: ["anti", "pro", "sensitive"],
-    priority: 8,
-  },
-  'other': {
-    exactMatch: [],
-    partialMatch: [],
-    fuzzyMatch: [],
-    priority: 99,
-  },
+// TODO: Cargar o definir las palabras clave reales para cada categoría
+// TODO: Cargar o definir las palabras clave reales para cada categoría. Usar los IDs reales de la migración.
+const MOCK_CATEGORY_KEYWORDS: CategoryKeywords = {
+  'vegetables': { exactMatch: ['manzana', 'pera', 'banana', 'lechuga', 'tomate', 'zanahoria', 'cebolla', 'papa', 'naranja', 'limon', 'uva', 'frutilla'], partialMatch: ['fruta', 'verdura', 'hortaliza'], priority: 1 }, // Verduras y Frutas
+  'dairy': { exactMatch: ['leche', 'queso', 'yogur', 'huevo', 'huevos', 'manteca', 'crema'], partialMatch: ['lácteo'], priority: 1 }, // Lácteos y Huevos
+  'meat': { exactMatch: ['pollo', 'carne', 'pescado', 'cerdo', 'jamon', 'milanesa', 'milanesas', 'salchicha', 'atun', 'bife'], partialMatch: ['proteína', 'fiambre', 'embutido'], priority: 1 }, // Carnes y Pescados
+  'pantry': { exactMatch: ['arroz', 'fideos', 'pan', 'harina', 'azucar', 'sal', 'aceite', 'lata', 'conserva', 'galletitas', 'cafe', 'te', 'yerba', 'mermelada', 'pure'], partialMatch: ['cereal', 'pasta', 'almacen', 'seco', 'enlatado'], priority: 1 }, // Almacén
+  'cleaning': { exactMatch: ['lavandina', 'detergente', 'jabon', 'limpiador', 'papel higienico', 'servilleta', 'escoba', 'trapo'], partialMatch: ['limpieza', 'hogar'], priority: 1 }, // Limpieza
+  'beverages': { exactMatch: ['agua', 'gaseosa', 'jugo', 'vino', 'cerveza', 'soda'], partialMatch: ['bebida', 'liquido'], priority: 1 }, // Bebidas
+  'frozen': { exactMatch: ['helado', 'congelado', 'pizza congelada', 'verdura congelada'], partialMatch: ['congelado', 'freezer'], priority: 1 }, // Congelados
+  'personal_care': { exactMatch: ['shampoo', 'acondicionador', 'desodorante', 'perfume', 'crema corporal', 'protector solar'], partialMatch: ['cuidado personal', 'higiene', 'cosmetico'], priority: 1 }, // Cuidado Personal
+  'other': { exactMatch: ['mascota', 'pilas'], partialMatch: [], priority: 99 }, // Otros (sin keywords específicas por ahora)
 };
 
 /**
- * Normaliza el texto para comparación: minúsculas, sin acentos, sin espacios extra.
+ * Sugiere una ID de categoría basada en el nombre de un item y un conjunto de palabras clave.
+ * @param itemName Nombre del item ingresado por el usuario.
+ * @param keywords Diccionario de palabras clave por categoryId.
+ * @returns La ID de la categoría sugerida o null si no hay coincidencia.
  */
-export function normalizeText(text: string): string {
-  if (!text) return '';
-  return text
-    .toLowerCase()
-    .normalize('NFD') // Separa acentos de letras base
-    .replace(/[\u0300-\u036f]/g, '') // Elimina los acentos
-    .replace(/\s+/g, ' ') // Reemplaza múltiples espacios por uno solo
-    .trim();
-}
-
-/**
- * Función simple para sugerir una categoría basada en palabras clave.
- * Devuelve el ID de la categoría sugerida o null si no hay coincidencia.
- */
-export function suggestCategoryByKeywords(itemName: string): string | null {
-  const normalizedItem = normalizeText(itemName);
-  if (!normalizedItem) return null;
-
-  let bestMatch: { categoryId: string; priority: number; matchType: 'exact' | 'partial' | 'fuzzy' } | null = null;
-
-  for (const categoryId in categoryKeywords) {
-    const keywords = categoryKeywords[categoryId];
-    let currentMatch: { categoryId: string; priority: number; matchType: 'exact' | 'partial' | 'fuzzy' } | null = null;
-
-    // 1. Exact Match
-    if (keywords.exactMatch.some((kw: string) => normalizedItem === normalizeText(kw))) {
-      currentMatch = { categoryId, priority: keywords.priority, matchType: 'exact' };
+export const suggestCategory = (
+    itemName: string,
+    keywords: CategoryKeywords = MOCK_CATEGORY_KEYWORDS
+): string | null => {
+    if (!itemName || itemName.trim().length === 0) {
+        return null;
     }
 
-    // 2. Partial Match (solo si no hubo exact match)
-    if (!currentMatch && keywords.partialMatch.some((kw: string) => normalizedItem.includes(normalizeText(kw)))) {
-      currentMatch = { categoryId, priority: keywords.priority, matchType: 'partial' };
-    }
+    const lowerItemName = itemName.trim().toLowerCase();
+    let bestMatch: { categoryId: string; priority: number } | null = null;
 
-    // 3. Fuzzy Match (opcional, solo si no hubo otros matches)
-    // Implementación simple: buscar palabras sueltas
-    if (!currentMatch && keywords.fuzzyMatch && keywords.fuzzyMatch.length > 0) {
-       const itemWords = normalizedItem.split(' ');
-       if (keywords.fuzzyMatch.some((kw: string) => itemWords.includes(normalizeText(kw)))) {
-          currentMatch = { categoryId, priority: keywords.priority, matchType: 'fuzzy' };
-       }
-    }
+    // Iterar sobre las categorías y sus keywords
+    for (const categoryId in keywords) {
+        const keywordSet = keywords[categoryId];
+        let matchFound = false;
+        let currentPriority = keywordSet.priority;
 
-    // Comparar con el mejor match encontrado hasta ahora
-    if (currentMatch) {
-        if (!bestMatch || currentMatch.priority < bestMatch.priority) {
-            bestMatch = currentMatch;
+        // 1. Búsqueda por coincidencia exacta (palabra por palabra)
+        const inputWords = lowerItemName.split(/\s+/); // Dividir por espacios
+        if (keywordSet.exactMatch.some(kw => inputWords.includes(kw.toLowerCase()))) {
+            matchFound = true;
         }
-        // Podríamos añadir lógica para desempatar si la prioridad es la misma
-        // (ej: preferir exact sobre partial, partial sobre fuzzy)
-    }
-  }
+        // 2. Búsqueda por coincidencia parcial (si no hubo exacta)
+        else if (keywordSet.partialMatch.some(kw => lowerItemName.includes(kw.toLowerCase()))) {
+            matchFound = true;
+            currentPriority += 10; // Dar menos prioridad a parcial vs exacta
+        }
+        // TODO: Añadir lógica fuzzyMatch si es necesario
 
-  return bestMatch ? bestMatch.categoryId : null;
-}
+        // Actualizar mejor coincidencia basada en prioridad (menor es mejor)
+        if (matchFound) {
+            if (!bestMatch || currentPriority < bestMatch.priority) {
+                bestMatch = { categoryId, priority: currentPriority };
+            }
+        }
+    }
+
+    console.log(`Suggestion for "${itemName}": ${bestMatch ? bestMatch.categoryId : 'None'}`);
+    return bestMatch ? bestMatch.categoryId : null;
+};

@@ -13,7 +13,7 @@ html {
   --foreground: 210 15% 35%;    /* Gris oscuro suave */
 
   --muted: 210 30% 97%;       /* Gris muy claro */
-  --muted-foreground: 210 10% 65%; /* Gris medio suave */
+  --muted-foreground: 210 10% 50%; /* Gris medio (más oscuro para contraste AA) */
 
   --popover: 180 50% 97%;    /* Cian muy pálido */
   --popover-foreground: 180 15% 35%; /* Gris oscuro con tinte cyan */
@@ -33,7 +33,7 @@ html {
   --accent: 50 100% 85%;     /* Amarillo pastel suave */
   --accent-foreground: 50 20% 30%; /* Gris oscuro amarillento */
 
-  --destructive: 0 70% 80%;  /* Rojo pastel suave */
+  --destructive: 0 70% 60%;  /* Rojo (más oscuro para contraste AA) */
   --destructive-foreground: 0 30% 30%; /* Rojo oscuro desaturado */
 
   --ring: 150 50% 65%;       /* Verde menta medio para focus */

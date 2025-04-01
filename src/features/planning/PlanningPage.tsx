@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
 import { getPlannedMeals, upsertPlannedMeal, deletePlannedMeal } from './planningService';
 import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
-import { getRecipes } from '../recipes/recipeService';
-import type { Recipe } from '../recipes/recipeTypes';
+// import { getRecipes } from '../recipes/recipeService'; // Comentado - Funcionalidad de recetas eliminada temporalmente
+// import type { Recipe } from '../recipes/recipeTypes'; // Comentado - Funcionalidad de recetas eliminada temporalmente
 import { getMealAlternatives } from '../suggestions/suggestionService';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getUserProfile } from '@/features/user/userService';
@@ -49,7 +49,8 @@ export function PlanningPage() {
   /** @state {string | null} error - Mensaje de error general de la página. */
   const [error, setError] = useState<string | null>(null);
   /** @state {Recipe[]} userRecipes - Lista de todas las recetas del usuario (para el modal). */
-  const [userRecipes, setUserRecipes] = useState<Recipe[]>([]);
+  // const [userRecipes, setUserRecipes] = useState<Recipe[]>([]); // Comentado - Funcionalidad de recetas eliminada temporalmente
+  const userRecipes: any[] = []; // Placeholder para evitar errores en el prop del modal
   /** @state {UserProfile | null} userProfile - Perfil del usuario (para sugerencias futuras). */
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   /** @state {boolean} showModal - Controla la visibilidad del modal de añadir/editar comida. */
@@ -100,12 +101,14 @@ export function PlanningPage() {
     try {
       const startDateStr = format(start, 'yyyy-MM-dd');
       const endDateStr = format(end, 'yyyy-MM-dd');
-      const [meals, recipes] = await Promise.all([
+      // Modificado para no llamar a getRecipes
+      const [meals /*, recipes */] = await Promise.all([
         getPlannedMeals(startDateStr, endDateStr),
-        getRecipes()
+        // getRecipes() // LLAMADA COMENTADA
+        Promise.resolve([]) // Devolver array vacío para mantener estructura de Promise.all
       ]);
       setPlannedMeals(meals);
-      setUserRecipes(recipes);
+      // setUserRecipes(recipes); // LLAMADA COMENTADA
     } catch (err: any) {
       setError('Error al cargar datos de planificación o recetas.');
       console.error('[PlanningPage] Error loading data:', err);
@@ -386,7 +389,7 @@ export function PlanningPage() {
         date={selectedDate}
         mealType={selectedMealType}
         mealToEdit={editingMeal}
-        userRecipes={userRecipes}
+        userRecipes={userRecipes} // userRecipes es ahora un array vacío constante
         onSave={handleSaveMeal}
         onRequestAlternatives={handleRequestAlternatives}
       />

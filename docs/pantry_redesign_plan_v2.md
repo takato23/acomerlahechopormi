@@ -126,6 +126,45 @@
 
 ---
 
+## Estrategias Técnicas Transversales: Caché, Sugerencias y Fallbacks
+
+Para mejorar la resiliencia, performance y experiencia de usuario en escenarios de conectividad limitada o fallos de API, se implementarán las siguientes estrategias técnicas:
+
+### 1. Gestión de Caché Local Optimizada (LRU)
+
+*   **Objetivo:** Gestionar eficientemente el caché local (`localStorage`) para sugerencias y otros datos temporales, evitando el crecimiento desmedido y priorizando la información más relevante.
+*   **Implementación:** Se utilizará un `CacheManager` con las siguientes características:
+    *   **Lógica LRU (Least Recently Used):** Las entradas menos usadas recientemente serán las primeras candidatas a ser eliminadas cuando se alcance el límite. Se mantendrá un registro del orden de uso.
+    *   **Límite de Entradas (`maxEntries`):** Número máximo configurable de elementos en el caché.
+    *   **Tiempo de Vida (`ttl`):** Tiempo máximo configurable que una entrada permanece válida.
+    *   **Limpieza Automática:** Proceso periódico (`cleanupInterval`) para eliminar entradas expiradas y aplicar la política LRU si se supera `maxEntries`.
+    *   **Persistencia:** El estado del caché (datos y orden LRU) se guardará en `localStorage`.
+*   **Beneficios:** Acceso rápido a datos frecuentes, reducción de llamadas a API, funcionamiento offline básico para ciertas consultas, control del uso de `localStorage`.
+
+### 2. Sugerencias Locales y Fallback
+
+*   **Objetivo:** Proveer sugerencias útiles (ej. en campos de búsqueda o adición rápida) incluso cuando la API no responde, basándose en la actividad previa del usuario.
+*   **Implementación:** Se creará un `LocalSuggestionManager`:
+    *   **Historial de Búsqueda:** Registrará los términos que el usuario busca o los ítems que añade frecuentemente.
+    *   **Almacenamiento Local:** Guardará este historial en `localStorage`, incluyendo frecuencia y fecha de último uso.
+    *   **Recuperación:** Permitirá obtener una lista de los términos/ítems más frecuentes o recientes.
+    *   **Límite:** Tendrá un número máximo de entradas para evitar ocupar demasiado espacio.
+*   **Uso como Fallback:** Si una consulta a la API para obtener sugerencias falla, el sistema recurrirá a `LocalSuggestionManager` para mostrar términos del historial del usuario.
+
+### 3. Manejo Inteligente de Fallos de API (Fallback UX)
+
+*   **Objetivo:** Ofrecer una experiencia de usuario controlada y útil cuando las llamadas a la API fallan de forma persistente (tras reintentos).
+*   **Implementación (Ej. en búsqueda de productos/ítems):**
+    *   **Reintentos con Backoff:** Implementar una estrategia de reintentos (ej. 3 intentos) con un tiempo de espera creciente entre ellos antes de considerar el fallo como definitivo.
+    *   **Notificación Clara:** Mostrar un mensaje de error no intrusivo pero claro (ej. `toast`) indicando el problema y la acción de fallback.
+    *   **Mostrar Sugerencias Locales:** Utilizar `LocalSuggestionManager` para mostrar el historial de búsqueda/ítems recientes del usuario.
+    *   **Mostrar Sugerencias por Defecto:** Complementar las sugerencias locales con una lista predefinida de ítems comunes (ej. "Leche", "Pan", "Huevos") si las locales no son suficientes.
+    *   **Botón "Reintentar":** Ofrecer una opción clara para que el usuario pueda volver a intentar la última operación fallida manualmente.
+*   **Beneficios:** Reduce la frustración del usuario, mantiene la aplicación parcialmente funcional, guía al usuario hacia acciones alternativas.
+
+---
+
+
 **Metodología Propuesta:**
 
 *   **Agile (Scrum/Kanban):** Sprints de 2 semanas, con planificación, revisión y retrospectiva. Kanban podría ser adecuado para la Fase 3, más continua e iterativa.

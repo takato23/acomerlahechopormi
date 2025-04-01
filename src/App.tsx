@@ -1,27 +1,31 @@
+import { useEffect } from 'react';
+
 import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
-import Navbar from '@/components/sections/Navbar'
-import Hero from '@/components/sections/Hero'
-import HowItWorks from '@/components/sections/HowItWorks'
-import Benefits from '@/components/sections/Benefits'
-import AppPreview from '@/components/sections/AppPreview'
-import FAQ from '@/components/sections/FAQ'
-import Footer from '@/components/sections/Footer'
-import FadeInWhenVisible from '@/components/FadeInWhenVisible'
-import Login from '@/features/auth/Login'
-import Signup from '@/features/auth/Signup'
-import { useAuth } from '@/features/auth/AuthContext'
-import ProtectedRoute from '@/components/ProtectedRoute'
-import { UserProfilePage } from '@/features/user/UserProfilePage'
-import { RecipeListPage } from '@/features/recipes/RecipeListPage'
-import { RecipeDetailPage } from '@/features/recipes/RecipeDetailPage'
-import { AddEditRecipePage } from '@/features/recipes/AddEditRecipePage'
-import { PantryPage } from '@/features/pantry/PantryPage'
-import { PlanningPage } from '@/features/planning/PlanningPage'
-import { AppLayout } from '@/components/layout/AppLayout'
-import { ShoppingListPage } from '@/features/shopping-list/ShoppingListPage';
-import { Spinner } from '@/components/ui/Spinner';
-import { DashboardPage } from '@/features/dashboard/DashboardPage'; // Importar DashboardPage
+import Navbar from './components/sections/Navbar' // Ruta relativa
+import Hero from './components/sections/Hero' // Ruta relativa
+import HowItWorks from './components/sections/HowItWorks' // Ruta relativa
+import Benefits from './components/sections/Benefits' // Ruta relativa
+import AppPreview from './components/sections/AppPreview' // Ruta relativa
+import FAQ from './components/sections/FAQ' // Ruta relativa
+import Footer from './components/sections/Footer' // Ruta relativa
+import FadeInWhenVisible from './components/FadeInWhenVisible' // Ruta relativa
+import Login from './features/auth/Login' // Ruta relativa
+import Signup from './features/auth/Signup' // Ruta relativa
+import { useAuth } from './features/auth/AuthContext' // Ruta relativa
+import ProtectedRoute from './components/ProtectedRoute' // Ruta relativa
+import { UserProfilePage } from './features/user/UserProfilePage' // Ruta relativa
+import { PantryPage } from './features/pantry/PantryPage' // Ruta relativa
+import { PlanningPage } from './features/planning/PlanningPage' // Ruta relativa
+import { AppLayout } from './components/layout/AppLayout' // Ruta relativa
+import { ShoppingListPage } from './features/shopping-list/ShoppingListPage'; // Ruta relativa
+import { Spinner } from './components/ui/Spinner'; // Ruta relativa
+import { DashboardPage } from './features/dashboard/DashboardPage'; // Ruta relativa
+import { useSettings } from './context/SettingsContext'; // Ruta relativa
+import { RecipeListPage } from './features/recipes/pages/RecipeListPage';
+import AddEditRecipePage from './features/recipes/pages/AddEditRecipePage';
+import RecipeDetailPage from './features/recipes/pages/RecipeDetailPage';
+
 
 // Componente para la Landing Page
 const LandingPage = () => (
@@ -60,6 +64,39 @@ const LandingPage = () => (
 
 function App() {
   const { loading } = useAuth()
+  const { settings } = useSettings();
+  const { fontSize } = settings; // Acceder a fontSize desde settings
+
+  useEffect(() => {
+    const rootElement = document.documentElement;
+    const fontSizeClasses = ['text-base', 'text-lg', 'text-xl']; // Clases posibles
+
+    // Limpiar clases previas
+    rootElement.classList.remove(...fontSizeClasses);
+
+    // Añadir clase actual
+    let newClass = '';
+    switch (fontSize) {
+      case 'large':
+        newClass = 'text-lg';
+        break;
+      case 'extra-large':
+        newClass = 'text-xl';
+        break;
+      case 'normal':
+      default:
+        // Asumimos que 'text-base' es el default o no se necesita clase explícita.
+        // Si 'text-base' es necesario, descomentar la siguiente línea:
+        // newClass = 'text-base'; 
+        break; 
+    }
+
+    if (newClass) {
+      rootElement.classList.add(newClass);
+    }
+
+  }, [settings.fontSize]); // Ejecutar cuando settings.fontSize cambie
+
 
   if (loading) {
     return (
@@ -96,11 +133,10 @@ function App() {
           <Route path="planning" element={<PlanningPage />} />
           <Route path="pantry" element={<PantryPage />} />
           <Route path="shopping-list" element={<ShoppingListPage />} />
-          {/* Rutas de Recetas */}
           <Route path="recipes" element={<RecipeListPage />} />
           <Route path="recipes/new" element={<AddEditRecipePage />} />
-          <Route path="recipes/:recipeId" element={<RecipeDetailPage />} />
           <Route path="recipes/:recipeId/edit" element={<AddEditRecipePage />} />
+          <Route path="recipes/:recipeId" element={<RecipeDetailPage />} />
         </Route>
 
         {/* Ruta 404 */}

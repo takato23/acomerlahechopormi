@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getPlannedMeals } from '@/features/planning/planningService';
 import type { PlannedMeal } from '@/features/planning/types';
-import { useRecipeStore } from '@/stores/recipeStore'; 
+// import { useRecipeStore } from '@/stores/recipeStore'; // Comentado - Funcionalidad de recetas eliminada temporalmente
 import { usePantryStore } from '@/stores/pantryStore'; 
 import { useShoppingListStore } from '@/stores/shoppingListStore'; 
 import { motion, useReducedMotion } from 'framer-motion'; // Importar useReducedMotion
@@ -86,7 +86,12 @@ export function DashboardPage() {
   const [todayMeals, setTodayMeals] = useState<PlannedMeal[]>([]);
   const [isLoadingMeals, setIsLoadingMeals] = useState(true);
   const [errorMeals, setErrorMeals] = useState<string | null>(null);
-  const { recipes: allRecipes, isLoading: isLoadingRecipes, error: errorRecipes, fetchRecipes } = useRecipeStore();
+  // const { recipes: allRecipes, isLoading: isLoadingRecipes, error: errorRecipes, fetchRecipes } = useRecipeStore(); // Comentado
+  // Placeholders para evitar errores:
+  const allRecipes: any[] = [];
+  const isLoadingRecipes = false;
+  const errorRecipes = null;
+  // const fetchRecipes = () => {}; // No es necesario si el useEffect se comenta
   const { lowStockItems, isLoadingLowStock, errorLowStock, fetchLowStockItems, items: allPantryItems } = usePantryStore();
   const { items: shoppingListItems, isLoading: isLoadingShoppingList, error: errorShoppingList, fetchItems: fetchShoppingListItems } = useShoppingListStore();
 
@@ -119,12 +124,12 @@ export function DashboardPage() {
       .finally(() => setIsLoadingMeals(false));
   }, [todayDateStr]); // Solo depende de la fecha
 
-  // Efecto separado para recetas
-  useEffect(() => {
-    if (allRecipes.length === 0 && !isLoadingRecipes) {
-      fetchRecipes();
-    }
-  }, [allRecipes.length, isLoadingRecipes]);
+  // // Efecto separado para recetas - Comentado
+  // useEffect(() => {
+  //   if (allRecipes.length === 0 && !isLoadingRecipes) {
+  //     // fetchRecipes(); // LLAMADA COMENTADA
+  //   }
+  // }, [allRecipes.length, isLoadingRecipes]);
 
   // Efecto separado para pantry
   useEffect(() => {
@@ -142,9 +147,11 @@ export function DashboardPage() {
     }
   }, [shoppingListItems.length, isLoadingShoppingList]);
 
+  // Modificado para devolver array vacío ya que allRecipes está vacío
   const favoriteRecipes = useMemo(() => {
-    return allRecipes.filter(recipe => recipe.is_favorite);
-  }, [allRecipes]);
+    // return allRecipes.filter(recipe => recipe.is_favorite);
+    return [];
+  }, [/* allRecipes */]); // Dependencia eliminada o dejada vacía
 
   return (
     <motion.div 
@@ -199,11 +206,11 @@ export function DashboardPage() {
          </motion.div>
 
          <motion.div variants={widgetItemVariants} className="md:col-span-2 xl:col-span-3"> 
-           <FavoriteRecipesWidget 
-             favoriteRecipes={favoriteRecipes} 
-             isLoading={isLoadingRecipes} 
-             error={errorRecipes} 
-           /> 
+           <FavoriteRecipesWidget
+             favoriteRecipes={favoriteRecipes} // Ahora siempre es []
+             isLoading={isLoadingRecipes} // Ahora siempre es false
+             error={errorRecipes} // Ahora siempre es null
+           />
          </motion.div>
       </motion.div>
     </motion.div>

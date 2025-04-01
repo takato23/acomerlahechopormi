@@ -1,7 +1,7 @@
 // src/features/pantry/types.ts
 
 /**
- * Representa un ingrediente básico (tabla 'ingredients').
+ * Representa un ingrediente básico (tabla 'ingredient').
  */
 export interface Ingredient {
   id: string; // UUID
@@ -14,7 +14,7 @@ export interface Ingredient {
 
 /**
  * Representa una categoría para organizar ítems (si no existe globalmente).
- * Basado en la tabla 'categories' propuesta en el plan.
+ * Basado en la tabla 'category' propuesta en el plan.
  */
 export interface Category {
   id: string; // UUID
@@ -27,22 +27,32 @@ export interface Category {
 }
 
 /**
- * Representa un item en la despensa del usuario (tabla 'pantry_items').
+ * Representa un item en la despensa del usuario (tabla 'pantry_item').
  */
 export interface PantryItem {
   id: string; // UUID
   user_id: string; // UUID del usuario
   ingredient_id: string; // UUID del ingrediente (FK a ingredients.id)
   quantity: number | null;
-  unit: string | null;
+  unit: string | null; // Puede ser una unidad predefinida (COMMON_PANTRY_UNITS) o personalizada
   expiry_date?: string | null; // Formato YYYY-MM-DD
-  category_id?: string | null; // Añadido para el rediseño (FK a categories.id)
+  category_id?: string | null; // FK a categories.id
+  location?: string | null; // Ubicación (ej. Nevera, Despensa) - Fase 2
+  price?: number | null; // Precio por unidad/kg/etc. (opcional) - Fase 2
+  notes?: string | null; // Notas adicionales - Fase 2
+  min_stock?: number | null; // Nivel mínimo deseado - Fase 2
+  target_stock?: number | null; // Nivel objetivo deseado - Fase 2
+  tags?: string[] | null; // Etiquetas (ej. "sin gluten", "vegano") - Fase 2
   created_at: string; // Timestamp
   updated_at?: string | null; // Timestamp
 
   // Campos poblados opcionalmente via JOIN en el servicio
-  ingredients?: { name: string } | null; // Quitado image_url
-  categories?: { name: string; icon?: string | null; color?: string | null } | null; // Info de la categoría
+  ingredient?: { name: string } | null; // Relación con tabla 'ingredient'
+  category?: { name: string; icon?: string | null; color?: string | null } | null; // Relación con tabla 'category'
+
+  // Propiedades añadidas en el frontend para manejar la consolidación/agrupación
+  _consolidatedCount?: number; // Número de ítems originales representados por este ítem (si > 1, es consolidado/agrupado)
+  _originalItems?: PantryItem[]; // Array de los ítems originales (si está consolidado/agrupado)
 }
 
 /**
@@ -52,9 +62,15 @@ export interface PantryItem {
 export interface CreatePantryItemData {
   ingredient_name: string; // El nombre que el usuario ingresa
   quantity?: number | null;
-  unit?: string | null;
+  unit?: string | null; // Puede ser una unidad predefinida (COMMON_PANTRY_UNITS) o personalizada
   expiry_date?: string | null;
-  category_id?: string | null; // Añadido para el rediseño
+  category_id?: string | null;
+  location?: string | null; // Fase 2
+  price?: number | null; // Fase 2
+  notes?: string | null; // Fase 2
+  min_stock?: number | null; // Fase 2
+  target_stock?: number | null; // Fase 2
+  tags?: string[] | null; // Fase 2
 }
 
 /**
@@ -78,6 +94,19 @@ export interface CategoryKeywords {
   [categoryId: string]: CategoryKeywordSet;
 }
 
-
-// Podríamos añadir unidades comunes aquí si es necesario
+/**
+ * Lista de unidades comunes sugeridas para la despensa.
+ * El campo 'unit' puede contener estos valores o strings personalizados.
+ */
+export const COMMON_PANTRY_UNITS: string[] = [
+  'unidad', 'unidades',
+  'g', 'kg',
+  'ml', 'l',
+  'cucharadita', 'cucharada',
+  'taza', 'pizca',
+  'paquete', 'lata', 'botella', 'frasco', 'caja',
+  'diente', // ej. ajo
+  'ramita', // ej. perejil
+  'hoja', // ej. laurel
+];
 // export const PANTRY_UNITS = [...]

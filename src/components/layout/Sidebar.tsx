@@ -46,7 +46,7 @@ export function Sidebar({ isCollapsed, toggleSidebar }: SidebarProps) {
       <nav className="flex-grow space-y-1">
         {navigation.map((item) => {
           // Crear componente NavLink animado
-          const MotionNavLink = motion(NavLink);
+          const MotionNavLink = motion.create(NavLink);
           return (
             <MotionNavLink
               key={item.name}

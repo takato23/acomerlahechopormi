@@ -6,12 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 type ShoppingListItem = any; // Renombrado para claridad
 
 // Servicios y tipos de BuscaPrecios
-import { searchProducts as searchBuscaPrecios, BuscaPreciosProduct } from '../services/buscaPreciosService';
+import { searchProducts as searchBuscaPrecios, BuscaPreciosProduct, SearchProductsResult } from '../services/buscaPreciosService'; // Importar SearchProductsResult
 // Quitar servicios no usados
 // import { Store, preciosClarosService, Product } from '../services/preciosClarosService';
 // import { ratoneandoService, RatoneandoStore, RatoneandoProductsByStore, RatoneandoProduct } from '../services/ratoneandoService';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress'; // Asumiendo que se copiará aquí
+import { Progress } from '../../../components/ui/progress';
 import { toast } from 'sonner'; // Usar sonner directamente
 import { 
   ArrowLeft, 
@@ -30,7 +30,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Asumiendo que se copiará aquí
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Quitar import no usado
 // import { ratoneandoService, RatoneandoStore, RatoneandoProductsByStore, RatoneandoProduct } from '../services/ratoneandoService';
@@ -38,7 +38,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Tipo para los resultados de optimización usando BuscaPrecios
 interface OptimizedBuscaPreciosResult {
   item: ShoppingListItem; // El item original de la lista
-  results: BuscaPreciosProduct[]; // Productos encontrados por buscaPrecios
+  results: BuscaPreciosProduct[]; // Mantiene los productos encontrados en caso de éxito
   bestPrice: number;
   bestProduct?: BuscaPreciosProduct; // El producto específico con el mejor precio
   originalPrice: number; // Podríamos estimar un precio original o usar el más caro encontrado
@@ -103,11 +103,30 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
 
       const resultsPromises = pendingItems.map(async (item) => {
         try {
-          const searchResults = await searchBuscaPrecios(item.name);
+          const searchResult: SearchProductsResult = await searchBuscaPrecios(item.name);
           processedCount++;
           setProgress(10 + (processedCount / totalItems) * 80); // Actualizar progreso (10% a 90%)
 
-          if (searchResults.length === 0) {
+          // Manejar el caso de error primero
+          if (searchResult.error) {
+              console.error(`Error buscando item ${item.name} (reportado por searchBuscaPrecios):`, searchResult.originalError);
+              // Podríamos usar searchResult.fallbackSuggestions si quisiéramos mostrarlas aquí
+              return {
+                  item,
+                  results: [], // No hay resultados exitosos
+                  bestPrice: item.estimatedPrice || 0,
+                  originalPrice: item.estimatedPrice || 0,
+                  savings: 0,
+                  savingsPercentage: 0,
+                  searchStatus: 'error' as const,
+                  errorMessage: searchResult.originalError.message || 'Error desconocido'
+              };
+          }
+
+          // Si no hubo error, searchResult.products contiene los resultados
+          const products = searchResult.products;
+
+          if (products.length === 0) {
             return {
               item,
               results: [],
@@ -122,7 +141,7 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
           // Encontrar el mejor precio y producto
           let bestPrice = Infinity;
           let bestProduct: BuscaPreciosProduct | undefined;
-          searchResults.forEach(p => {
+          products.forEach(p => {
             if (p.precio < bestPrice) {
               bestPrice = p.precio;
               bestProduct = p;
@@ -130,7 +149,7 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
           });
 
           // Calcular precio original (usar el más caro encontrado o estimado)
-          const prices = searchResults.map(p => p.precio).filter(p => !isNaN(p));
+          const prices = products.map(p => p.precio).filter(p => !isNaN(p));
           const maxPrice = prices.length > 0 ? Math.max(...prices) : bestPrice;
           const originalPrice = item.estimatedPrice || maxPrice; // Priorizar estimado si existe
 
@@ -143,7 +162,7 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
 
           return {
             item,
-            results: searchResults,
+            results: products, // Guardar los productos encontrados
             bestPrice: finalBestPrice,
             bestProduct,
             originalPrice: finalOriginalPrice,
@@ -152,8 +171,9 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
             searchStatus: 'success' as const
           };
 
-        } catch (searchError) {
-          console.error(`Error buscando item ${item.name}:`, searchError);
+        } catch (unexpectedError) {
+          // Este catch es por si la promesa misma falla (no debería con el manejo interno)
+          console.error(`Error inesperado procesando item ${item.name}:`, unexpectedError);
           processedCount++;
           setProgress(10 + (processedCount / totalItems) * 80);
           return {
@@ -164,12 +184,13 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
             savings: 0,
             savingsPercentage: 0,
             searchStatus: 'error' as const,
-            errorMessage: searchError instanceof Error ? searchError.message : 'Error desconocido'
+            errorMessage: unexpectedError instanceof Error ? unexpectedError.message : 'Error inesperado en procesamiento'
           };
         }
       });
 
-      const unifiedResults = await Promise.all(resultsPromises);
+      // Asegurar que el tipo sea correcto para TypeScript
+      const unifiedResults: OptimizedBuscaPreciosResult[] = await Promise.all(resultsPromises);
       setProgress(95); // Casi listo
 
       // Ordenar por mayor ahorro porcentual
@@ -415,14 +436,15 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
                         </div>
                       </div>
                       
-                      {optimizedItem.stores.length > 0 && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                      {/* Mostrar botón "Ver opciones" solo si hay resultados exitosos */}
+                      {optimizedItem.searchStatus === 'success' && optimizedItem.results.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-xs"
                           onClick={() => toggleProductExpansion(optimizedItem.item.id)}
                         >
-                          Ver opciones {expandedProductIds[optimizedItem.item.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          {optimizedItem.results.length} opci{optimizedItem.results.length === 1 ? 'ón' : 'ones'} {expandedProductIds[optimizedItem.item.id] ? <ChevronUp size={14} className="ml-1"/> : <ChevronDown size={14} className="ml-1"/>}
                         </Button>
                       )}
                     </div>
@@ -435,140 +457,47 @@ const PriceOptimizer: React.FC<PriceOptimizerProps> = ({
                     )}
                     
                     {/* Opciones de productos y precios expandibles */}
-                    {expandedProductIds[optimizedItem.item.id] && optimizedItem.stores.length > 0 && (
+                    {/* Mostrar resultados de BuscaPrecios si está expandido y hay resultados */}
+                    {expandedProductIds[optimizedItem.item.id] && optimizedItem.searchStatus === 'success' && optimizedItem.results.length > 0 && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="mt-3 border-t pt-3"
+                        className="mt-3 border-t pt-3 space-y-2"
                       >
-                        <Accordion type="single" collapsible className="w-full">
-                          {/* Adaptar esta sección para mostrar resultados de buscaPrecios */}
-                          {/* Por ahora, comentamos el mapeo original */}
-                          {/* {optimizedItem.stores.map((storeData: any, storeIndex: number) => { */}
-                            {/* const storeName = ... */}
-                              
-                            return (
-                              <AccordionItem 
-                                key={typeof storeData.store.id === 'string' ? storeData.store.id : `store-${storeData.store.id}-${storeIndex}`}
-                                value={typeof storeData.store.id === 'string' ? storeData.store.id : `store-${storeData.store.id}-${storeIndex}`}
-                                className="border border-border/30 rounded-md mb-2 overflow-hidden"
-                              >
-                                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
-                                  <div className="flex justify-between items-center w-full pr-2">
-                                    <span className="font-medium">{storeName}</span>
-                                    <span className="text-xs">
-                                      {storeData.products.length} opciones
-                                    </span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-0 py-0">
-                                  <div className="divide-y">
-                                    {/* {storeData.products.map((productData: any, productIndex: number) => { */}
-                                      if (isRatoneandoProduct(productData)) {
-                                        // Render Ratoneando product
-                                        return (
-                                          <div 
-                                            key={`${productData.id}-${productIndex}`} 
-                                            className={`px-4 py-3 text-sm ${productIndex === 0 ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
-                                          >
-                                            <div className="flex justify-between items-start">
-                                              <div>
-                                                <div className="font-medium">{productData.brand}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">{productData.name}</div>
-                                                {productData.unit && (
-                                                  <div className="text-xs mt-1 bg-secondary/10 inline-block px-2 py-0.5 rounded-full">
-                                                    {productData.unit}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div className="flex flex-col items-end">
-                                                <div className={productData.discount_percentage ? "text-green-600 font-bold" : "font-medium"}>
-                                                  ${productData.price.toFixed(2)}
-                                                  {productData.discount_percentage && (
-                                                    <span className="ml-1 text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full">
-                                                      Oferta
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                {productData.original_price && (
-                                                  <div className="text-xs line-through text-muted-foreground mt-1">
-                                                    ${productData.original_price.toFixed(2)}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      } else {
-                                        // Render PreciosClaros product (assuming the old format from stores.prices)
-                                        const priceData = productData as any;
-                                        return (
-                                          <div 
-                                            key={`${priceData.product?.id || 'unknown'}-${productIndex}`} 
-                                            className={`px-4 py-3 text-sm ${productIndex === 0 ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
-                                          >
-                                            <div className="flex justify-between items-start">
-                                              <div>
-                                                <div className="font-medium">{priceData.product?.marca || 'Sin marca'}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">{priceData.product?.nombre || 'Sin nombre'}</div>
-                                                {priceData.product?.presentacion && (
-                                                  <div className="text-xs mt-1 bg-secondary/10 inline-block px-2 py-0.5 rounded-full">
-                                                    {formatProductPresentation(priceData.product.presentacion)}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div className="flex flex-col items-end">
-                                                <div className={priceData.isOferta ? "text-green-600 font-bold" : "font-medium"}>
-                                                  ${priceData.price?.toFixed(2) || '0.00'}
-                                                  {priceData.isOferta && (
-                                                    <span className="ml-1 text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full">
-                                                      Oferta
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground mt-1">
-                                                  Precio unitario
-                                                </div>
-                                              </div>
-                                            </div>
-                                            
-                                            <div className="flex justify-between items-center mt-2">
-                                              <div className="text-xs text-muted-foreground">
-                                                ID: {(priceData.product?.id || 'unknown').substring(0, 8)}...
-                                              </div>
-                                              <TooltipProvider>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <Button 
-                                                      variant="ghost" 
-                                                      size="sm" 
-                                                      className="h-6 w-6 p-0"
-                                                      onClick={() => {
-                                                        const searchTerm = `${priceData.product?.nombre || ''} ${priceData.product?.marca || ''}`;
-                                                        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`;
-                                                        window.open(searchUrl, '_blank');
-                                                      }}
-                                                    >
-                                                      <ExternalLink size={12} />
-                                                    </Button>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <p className="text-xs">Buscar producto en Google</p>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                    })}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            );
-                          })}
-                        </Accordion>
+                        {optimizedItem.results.map((product, index) => (
+                          <div
+                            key={product.id || `result-${index}`}
+                            className={`p-3 rounded-md text-sm flex items-center gap-3 ${index === 0 ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/50' : 'bg-secondary/30'}`}
+                          >
+                            <img src={product.imagen} alt={product.nombre} className="w-10 h-10 object-contain rounded flex-shrink-0" />
+                            <div className="flex-grow">
+                              <div className="font-medium text-xs">{product.nombre}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5 flex items-center">
+                                <StoreIcon size={10} className="mr-1" /> {product.tienda}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end flex-shrink-0">
+                                <div className={`font-bold ${index === 0 ? 'text-primary' : ''}`}>
+                                    ${product.precio.toFixed(2)}
+                                </div>
+                                <TooltipProvider delayDuration={100}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a href={product.url} target="_blank" rel="noopener noreferrer" className="mt-1">
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary">
+                                          <ExternalLink size={12} />
+                                        </Button>
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs">Ver en {product.tienda}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                     
