@@ -1,23 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  // CardFooter, // No se usa
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Edit, Trash2, Clock, Users, AlertCircle, Image as ImageIcon } from 'lucide-react';
-// Importar funciones específicas del servicio
 import { getRecipeById, deleteRecipe } from '@/features/recipes/services/recipeService';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
-// import { formatTime } from '@/lib/utils'; // formatTime no existe
+import { cn } from '@/lib/utils'; // Importar cn para clases condicionales
 
 const RecipeDetailPage: React.FC = () => {
   const { recipeId } = useParams<{ recipeId: string }>();
@@ -38,7 +29,6 @@ const RecipeDetailPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Usar la función importada directamente
         const fetchedRecipe = await getRecipeById(recipeId);
         if (fetchedRecipe) {
           setRecipe(fetchedRecipe);
@@ -59,26 +49,26 @@ const RecipeDetailPage: React.FC = () => {
   const handleDelete = async () => {
     if (!recipeId || !recipe) return;
 
-    // Usar recipe.title en lugar de recipe.name
     if (window.confirm(`¿Estás seguro de que quieres eliminar la receta "${recipe.title}"?`)) {
-      setIsLoading(true);
+      setIsLoading(true); // Podríamos usar un estado de loading específico para el borrado
       try {
-        // Usar la función importada directamente
         await deleteRecipe(recipeId);
         removeRecipeFromStore(recipeId);
         navigate('/app/recipes');
       } catch (err) {
         console.error('Error deleting recipe:', err);
         setError('Error al eliminar la receta.');
-        setIsLoading(false);
+        setIsLoading(false); // Resetear loading general si falla el borrado
       }
+      // No necesitamos resetear isLoading aquí si la navegación tiene éxito
     }
   };
 
-  if (isLoading) {
+  // --- Renderizado ---
+
+  if (isLoading && !recipe) { // Mostrar spinner solo en la carga inicial
     return (
-      <div className="flex justify-center items-center h-screen">
-        {/* Usar tamaño 'lg' */}
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Spinner size="lg" />
       </div>
     );
@@ -86,128 +76,152 @@ const RecipeDetailPage: React.FC = () => {
 
   if (error) {
     return (
-      <Alert variant="destructive" className="m-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
   if (!recipe) {
     return (
-       <Alert className="m-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Información</AlertTitle>
-        <AlertDescription>No se encontró la receta solicitada.</AlertDescription>
-      </Alert>
+       <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Información</AlertTitle>
+          <AlertDescription>No se encontró la receta solicitada.</AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
-  // Formatear instrucciones
-  const formattedInstructions = recipe.instructions?.split('\n').map((step, index) => (
-    step.trim() ? <li key={index} className="mb-2">{step}</li> : null
-  )).filter(Boolean);
+  // Formatear instrucciones (mejorado para manejar saltos de línea extra)
+  const formattedInstructions = recipe.instructions
+    ?.split('\n')
+    .map(step => step.trim()) // Limpiar espacios
+    .filter(step => step.length > 0) // Filtrar líneas vacías
+    .map((step, index) => (
+      <li key={index} className="mb-2 leading-relaxed">{step}</li>
+  ));
+
+  // Calcular tiempo total si ambos tiempos existen
+  const totalTime = (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <Card className="overflow-hidden">
-        <CardHeader className="relative p-0">
+    <div className="bg-slate-50 min-h-screen">
+      <div className="container mx-auto max-w-4xl p-4 md:p-6 lg:p-8">
+        {/* --- Imagen de la Receta --- */}
+        <div className="mb-8">
           {recipe.image_url ? (
             <img
-              src={recipe.image_url}
-              // Usar recipe.title
+              src={recipe.image_url ?? undefined}
               alt={recipe.title}
-              className="w-full h-64 object-cover"
+              className="w-full h-auto max-h-[450px] object-cover rounded-lg shadow-md"
+              loading="lazy" // Carga diferida para imágenes grandes
             />
           ) : (
-            <div className="w-full h-64 bg-muted flex items-center justify-center">
-              <ImageIcon className="h-16 w-16 text-muted-foreground" />
+            <div className="w-full h-64 bg-slate-200 rounded-lg flex items-center justify-center shadow-md">
+              <ImageIcon className="h-16 w-16 text-slate-400" />
             </div>
           )}
-           <div className="absolute top-4 right-4 flex gap-2">
-             <Button asChild size="icon" variant="outline">
-                <Link to={`/app/recipes/${recipeId}/edit`}>
-                  <Edit className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button size="icon" variant="destructive" onClick={handleDelete} disabled={isLoading}>
-                {/* Usar tamaño 'sm' */}
-                {isLoading ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
-           </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {/* Usar recipe.title */}
-          <CardTitle className="text-3xl font-bold mb-2">{recipe.title}</CardTitle>
-          <CardDescription className="text-muted-foreground mb-6">{recipe.description}</CardDescription>
+        </div>
 
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-6">
-            {/* Corregir &amp; a && */}
-            {recipe.prep_time_minutes != null && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                {/* Mostrar minutos directamente */}
-                <span>Prep: {recipe.prep_time_minutes} min</span>
-              </div>
-            )}
-             {/* Corregir &amp; a && */}
-             {recipe.cook_time_minutes != null && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                 {/* Mostrar minutos directamente */}
-                <span>Cocción: {recipe.cook_time_minutes} min</span>
-              </div>
-            )}
-             {/* Eliminar sección de tiempo total */}
-            {/* Corregir &amp; a && */}
-            {recipe.servings != null && (
-               <div className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                <span>Porciones: {recipe.servings}</span>
-              </div>
-            )}
-          </div>
+        {/* --- Título y Descripción --- */}
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">{recipe.title}</h1>
+        {recipe.description && (
+          <p className="text-lg text-slate-600 mb-6">{recipe.description}</p>
+        )}
 
-          {/* Corregir &amp; a && */}
-          {recipe.ingredients && recipe.ingredients.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-3">Ingredientes</h3>
-              <ul className="list-disc list-inside space-y-1">
-                {recipe.ingredients.map((ing: RecipeIngredient, index: number) => (
-                  <li key={index}>
-                    {/* Usar ing.ingredient_name y eliminar ing.notes */}
-                    {ing.quantity} {ing.unit} {ing.ingredient_name}
-                  </li>
+        {/* --- Metadata --- */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-600 mb-6">
+          {totalTime > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-5 w-5" />
+              <span>Total: {totalTime} min</span>
+            </div>
+          )}
+           {recipe.prep_time_minutes != null && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-5 w-5 text-emerald-600" /> {/* Icono diferente o color? */}
+              <span>Prep: {recipe.prep_time_minutes} min</span>
+            </div>
+          )}
+           {recipe.cook_time_minutes != null && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-5 w-5 text-orange-600" /> {/* Icono diferente o color? */}
+              <span>Cocción: {recipe.cook_time_minutes} min</span>
+            </div>
+          )}
+          {recipe.servings != null && (
+             <div className="flex items-center gap-1.5">
+              <Users className="h-5 w-5" />
+              <span>Porciones: {recipe.servings}</span>
+            </div>
+          )}
+        </div>
+
+         {/* --- Botones de Acción --- */}
+         <div className="flex gap-3 mb-8">
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/app/recipes/${recipeId}/edit`}>
+                <Edit className="mr-2 h-4 w-4" /> Editar
+              </Link>
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isLoading}>
+              {isLoading ? (
+                <Spinner size="sm" className="mr-2" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Eliminar
+            </Button>
+         </div>
+
+
+        {/* --- Ingredientes --- */}
+        {recipe.ingredients && recipe.ingredients.length > 0 && (
+          <section className="border-t border-slate-200 mt-8 pt-8">
+            <h2 className="text-2xl font-semibold text-slate-800 mb-4">Ingredientes</h2>
+            <ul className="list-disc list-inside space-y-2 text-slate-700 pl-2">
+              {recipe.ingredients.map((ing: RecipeIngredient, index: number) => (
+                <li key={index}>
+                  {ing.quantity && <span className="font-medium">{ing.quantity}</span>}
+                  {ing.unit && <span className="ml-1">{ing.unit}</span>}
+                  <span className="ml-2">{ing.ingredient_name}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* --- Instrucciones --- */}
+        {formattedInstructions && formattedInstructions.length > 0 && (
+          <section className="border-t border-slate-200 mt-8 pt-8">
+            <h2 className="text-2xl font-semibold text-slate-800 mb-4">Instrucciones</h2>
+            <ol className="list-decimal list-inside space-y-4 text-slate-700 pl-2">
+              {formattedInstructions}
+            </ol>
+          </section>
+        )}
+
+        {/* --- Tags --- */}
+        {recipe.tags && recipe.tags.length > 0 && (
+           <section className="border-t border-slate-200 mt-8 pt-8">
+              <h3 className="text-xl font-semibold text-slate-800 mb-3">Tags</h3>
+              <div className="flex flex-wrap gap-2">
+                {recipe.tags.map((tag: string, index: number) => (
+                  <Badge key={index} variant="secondary" className="font-normal">
+                    {tag}
+                  </Badge>
                 ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Corregir &amp; a && */}
-          {formattedInstructions && formattedInstructions.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-3">Instrucciones</h3>
-              <ol className="list-decimal list-inside space-y-2">
-                {formattedInstructions}
-              </ol>
-            </div>
-          )}
-
-          {/* Corregir &amp; a && y asegurar manejo de null/undefined */}
-          {recipe.tags && recipe.tags.length > 0 && (
-             <div className="mt-6 pt-4 border-t">
-                <h4 className="text-lg font-medium mb-2">Tags</h4>
-                <div className="flex flex-wrap gap-2">
-                  {recipe.tags.map((tag: string, index: number) => (
-                    <Badge key={index} variant="secondary">{tag}</Badge>
-                  ))}
-                </div>
               </div>
-          )}
+            </section>
+        )}
 
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 };

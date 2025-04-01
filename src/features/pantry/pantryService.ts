@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabaseClient';
 import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category } from './types';
 import { findOrCreateIngredient, normalizeIngredientName } from '../ingredients/ingredientService';
+import { inferCategory } from '../shopping-list/lib/categoryInference';
 
 /**
  * Obtiene todos los items de la despensa para el usuario actual.
@@ -84,20 +85,37 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
    if (!ingredient) {
        throw new Error(`No se pudo crear/encontrar el ingrediente "${itemData.ingredient_name}"`);
    }
+// Inferir categoría si no se proporcionó una explícitamente
+let finalCategoryId = itemData.category_id; // Usar la explícita si existe
+if (!finalCategoryId && ingredient?.name) { // Solo inferir si no hay explícita y tenemos nombre de ingrediente
+    try {
+        console.log(`Attempting to infer category for: "${ingredient.name}"`);
+        const inferredCategoryId = await inferCategory(ingredient.name);
+        if (inferredCategoryId) {
+            finalCategoryId = inferredCategoryId;
+            console.log(`Successfully inferred category ${finalCategoryId} for "${ingredient.name}"`);
+        } else {
+            console.log(`Could not infer category for "${ingredient.name}", leaving as null.`);
+        }
+    } catch (inferenceError) {
+        console.error("Error during category inference:", inferenceError);
+        // Continuar sin categoría inferida si falla la inferencia, finalCategoryId ya es null o el explícito
+    }
+}
 
-   const newItemData = {
-     user_id: user.id,
-     ingredient_id: ingredient.id,
-     quantity: itemData.quantity ?? 1, // Usar 1 como default si es null
-     unit: itemData.unit,
-     expiry_date: itemData.expiry_date,
-     category_id: itemData.category_id,
-     price: itemData.price, // Fase 2
-     notes: itemData.notes, // Fase 2
-     min_stock: itemData.min_stock, // Fase 2
-     target_stock: itemData.target_stock, // Fase 2
-     tags: itemData.tags, // Fase 2
-   };
+const newItemData = {
+  user_id: user.id,
+  ingredient_id: ingredient.id,
+  quantity: itemData.quantity ?? 1, // Usar 1 como default si es null
+  unit: itemData.unit,
+  expiry_date: itemData.expiry_date,
+  category_id: finalCategoryId, // Usar la categoría inferida o la explícita
+  price: itemData.price, // Fase 2
+  notes: itemData.notes, // Fase 2
+  min_stock: itemData.min_stock, // Fase 2
+  target_stock: itemData.target_stock, // Fase 2
+  tags: itemData.tags, // Fase 2
+};
 
    const { data, error } = await supabase
      .from('pantry_items')

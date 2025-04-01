@@ -32,18 +32,23 @@ export function AddItemForm({ onAddItem }: AddItemFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 mb-4">
+    <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
       <Input
         type="text"
         value={itemName}
         onChange={(e) => setItemName(e.target.value)}
         placeholder="Añadir ítem manualmente..."
-        className="flex-grow"
+        className="flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
         disabled={isAdding}
-        required // Hacer requerido
+        required
       />
-      <Button type="submit" disabled={isAdding || !itemName.trim()} size="icon">
-        {isAdding ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />}
+      <Button
+        type="submit"
+        disabled={isAdding || !itemName.trim()}
+        size="icon"
+        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+      >
+        {isAdding ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
       </Button>
     </form>
   );

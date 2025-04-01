@@ -185,43 +185,45 @@ const RecipePageContent: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-6">
+      <h1 className="text-3xl font-bold mb-6 text-slate-900">
         {recipeId ? 'Editar Receta' : 'Crear Nueva Receta'}
       </h1>
-      <Card className="mb-6">
+      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
         <CardHeader>
-          <CardTitle>Información General</CardTitle>
+          <CardTitle className="text-slate-900">Información General</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {/* Título */}
             <div className="space-y-1">
-              <Label htmlFor="title">Título</Label>
+              <Label htmlFor="title" className="text-slate-700">Título</Label>
               <Input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ej: Tarta de Manzana Simple"
                 disabled={isSaving}
+                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 
             {/* Descripción */}
             <div className="space-y-1">
-              <Label htmlFor="description">Descripción</Label>
+              <Label htmlFor="description" className="text-slate-700">Descripción</Label>
               <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Una breve descripción de la receta..."
                 disabled={isSaving}
+                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 
             {/* Tiempos y Porciones */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="prepTimeMinutes">Tiempo Prep. (min)</Label>
+                <Label htmlFor="prepTimeMinutes" className="text-slate-700">Tiempo Prep. (min)</Label>
                 <Input
                   id="prepTimeMinutes"
                   type="number"
@@ -230,10 +232,11 @@ const RecipePageContent: React.FC = () => {
                   placeholder="Ej: 15"
                   disabled={isSaving}
                   min="0"
+                  className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="cookTimeMinutes">Tiempo Cocción (min)</Label>
+                <Label htmlFor="cookTimeMinutes" className="text-slate-700">Tiempo Cocción (min)</Label>
                 <Input
                   id="cookTimeMinutes"
                   type="number"
@@ -242,10 +245,11 @@ const RecipePageContent: React.FC = () => {
                   placeholder="Ej: 30"
                   disabled={isSaving}
                    min="0"
+                   className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="servings">Porciones</Label>
+                <Label htmlFor="servings" className="text-slate-700">Porciones</Label>
                 <Input
                   id="servings"
                   type="number"
@@ -254,6 +258,7 @@ const RecipePageContent: React.FC = () => {
                   placeholder="Ej: 4"
                   disabled={isSaving}
                    min="1"
+                   className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -262,9 +267,9 @@ const RecipePageContent: React.FC = () => {
       </Card>
 
       {/* Card para Ingredientes */}
-      <Card className="mb-6">
+      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
          <CardHeader>
-           <CardTitle>Ingredientes</CardTitle>
+           <CardTitle className="text-slate-900">Ingredientes</CardTitle>
          </CardHeader>
          <CardContent>
             <Textarea
@@ -275,14 +280,15 @@ const RecipePageContent: React.FC = () => {
               rows={8}
               placeholder="Formato: [Cantidad] [Unidad] [Nombre] (uno por línea)&#10;Ej: 2 tazas Harina&#10;1 Huevo"
               disabled={isSaving}
+              className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
             />
          </CardContent>
       </Card>
 
        {/* Card para Instrucciones */}
-      <Card className="mb-6">
+      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
          <CardHeader>
-           <CardTitle>Instrucciones</CardTitle>
+           <CardTitle className="text-slate-900">Instrucciones</CardTitle>
          </CardHeader>
          <CardContent>
             <Textarea
@@ -293,6 +299,7 @@ const RecipePageContent: React.FC = () => {
               rows={10}
               placeholder="Escribe cada paso en una nueva línea..."
               disabled={isSaving}
+              className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
             />
          </CardContent>
       </Card>
@@ -304,10 +311,10 @@ const RecipePageContent: React.FC = () => {
 
       {/* Botones */}
       <div className="flex justify-end space-x-2 mt-4">
-         <Button variant="outline" onClick={() => navigate('/app/recipes')} disabled={isSaving}>
+         <Button variant="outline" onClick={() => navigate('/app/recipes')} disabled={isSaving} className="border-slate-300 text-slate-700 hover:bg-slate-50">
            Cancelar
          </Button>
-         <Button onClick={handleSaveRecipe} disabled={isSaving || !title.trim()}>
+         <Button onClick={handleSaveRecipe} disabled={isSaving || !title.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
            {recipeId ? 'Actualizar Receta' : 'Guardar Receta'}
          </Button>

@@ -306,7 +306,7 @@ export function UserProfilePage() {
 
   return (
     <div className="container mx-auto max-w-2xl py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6">Tu Perfil</h1>
+      <h1 className="text-3xl font-bold mb-6 text-slate-900">Tu Perfil</h1>
       
       {/* Mostrar error general si existe y no hay error específico de username */}
       {error && !usernameError && ( 
@@ -319,9 +319,9 @@ export function UserProfilePage() {
 
       <div className="space-y-6">
         {/* Sección Avatar */}
-         <Card>
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
            <CardHeader>
-             <CardTitle>Avatar</CardTitle>
+             <CardTitle className="text-slate-900">Avatar</CardTitle>
            </CardHeader>
            <CardContent>
              <AvatarUpload 
@@ -333,24 +333,24 @@ export function UserProfilePage() {
          </Card>
 
         {/* Card para Información Básica */}
-        <Card>
+        <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
           <CardHeader>
-            <CardTitle>Información Básica</CardTitle>
+            <CardTitle className="text-slate-900">Información Básica</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Email */}
             <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-700">Email</Label>
               <div 
-                id="email" 
-                className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50"
+                id="email"
+                className="text-sm text-slate-600 p-2 border border-slate-300 rounded-md bg-slate-50"
               >
                 {profile.email || 'No disponible'}
               </div>
             </div>
             {/* Username */}
             <div className="space-y-1">
-              <Label htmlFor="username">Nombre de Usuario</Label>
+              <Label htmlFor="username" className="text-slate-700">Nombre de Usuario</Label>
               <Input 
                 id="username"
                 value={usernameInput}
@@ -361,6 +361,7 @@ export function UserProfilePage() {
                 }}
                 placeholder="Tu nombre público (opcional)"
                 disabled={isSavingUsername}
+                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               />
                {usernameError && <p className="text-sm text-destructive pt-1">{usernameError}</p>}
                {usernameSuccess && <p className="text-sm text-green-600 pt-1">Nombre de usuario guardado.</p>}
@@ -371,9 +372,9 @@ export function UserProfilePage() {
                onClick={handleUpdateUsername} 
                disabled={!usernameHasChanged || isSavingUsername}
                size="sm"
-               className="ml-auto" 
+               className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white"
              >
-               {isSavingUsername ? <Spinner size="sm" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+               {isSavingUsername ? <Spinner size="sm" className="mr-2 text-white" /> : <Save className="mr-2 h-4 w-4" />}
                Guardar Usuario
              </Button>
            </CardFooter>
@@ -404,9 +405,9 @@ export function UserProfilePage() {
          />
 
          {/* Card para API Key de Gemini */}
-         <Card>
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
            <CardHeader>
-             <CardTitle>API Key de Gemini (Opcional)</CardTitle>
+             <CardTitle className="text-slate-900">API Key de Gemini (Opcional)</CardTitle>
            </CardHeader>
            <CardContent className="space-y-4">
              <p className="text-sm text-muted-foreground">
@@ -414,16 +415,16 @@ export function UserProfilePage() {
                para habilitar funcionalidades avanzadas de IA en la aplicación. 
                Tu clave se almacena de forma segura y solo se usa para interactuar con la API de Gemini en tu nombre.
                {/* TODO: Reemplazar con enlace real a la guía */}
-               <a href="#" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
+               <a href="#" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 hover:underline ml-1">
                  ¿Cómo obtener una clave?
                </a>
              </p>
 
              {apiKeySuccess && (
                <Alert>
-                 <Terminal className="h-4 w-4" />
-                 <AlertTitle>Éxito</AlertTitle>
-                 <AlertDescription>{apiKeySuccess}</AlertDescription>
+                 <Terminal className="h-4 w-4 text-emerald-700" /> {/* Ajustar color icono */}
+                 <AlertTitle className="text-emerald-800">Éxito</AlertTitle> {/* Ajustar color título */}
+                 <AlertDescription className="text-emerald-700">{apiKeySuccess}</AlertDescription> {/* Ajustar color descripción */}
                </Alert>
              )}
              {apiKeyError && (
@@ -437,20 +438,21 @@ export function UserProfilePage() {
              {/* Mostrar Clave Actual (Ofuscada) */}
              {geminiApiKey && (
                <div className="space-y-1">
-                 <Label htmlFor="currentApiKey">Clave API Actual</Label>
+                 <Label htmlFor="currentApiKey" className="text-slate-700">Clave API Actual</Label>
                  <div className="flex items-center space-x-2">
                    <Input 
                      id="currentApiKey"
                      type={showApiKey ? 'text' : 'password'}
                      readOnly
                      value={showApiKey ? geminiApiKey : obfuscateApiKey(geminiApiKey)}
-                     className="flex-grow bg-muted/50"
+                     className="flex-grow bg-slate-100 border-slate-300 text-slate-700" // Estilo deshabilitado
                    />
                    <Button 
                      variant="outline"
                      size="icon"
                      onClick={() => setShowApiKey(!showApiKey)}
                      aria-label={showApiKey ? "Ocultar clave" : "Mostrar clave"}
+                     className="border-slate-300 text-slate-700 hover:bg-slate-100"
                    >
                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                    </Button>
@@ -460,7 +462,7 @@ export function UserProfilePage() {
 
              {/* Input para Nueva Clave */}
              <div className="space-y-1">
-               <Label htmlFor="newApiKey">{geminiApiKey ? 'Reemplazar Clave API' : 'Ingresar Nueva Clave API'}</Label>
+               <Label htmlFor="newApiKey" className="text-slate-700">{geminiApiKey ? 'Reemplazar Clave API' : 'Ingresar Nueva Clave API'}</Label>
                <Input 
                  id="newApiKey"
                  type="password" 
@@ -472,6 +474,7 @@ export function UserProfilePage() {
                  }}
                  placeholder="Pega tu clave API de Gemini aquí"
                  disabled={isSavingApiKey}
+                 className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                />
              </div>
 
@@ -492,8 +495,9 @@ export function UserProfilePage() {
                onClick={handleUpdateApiKey}
                disabled={!newGeminiApiKey.trim() || isSavingApiKey}
                size="sm"
+               className="bg-emerald-600 hover:bg-emerald-700 text-white"
              >
-               {isSavingApiKey ? <Spinner size="sm" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+               {isSavingApiKey ? <Spinner size="sm" className="mr-2 text-white" /> : <Save className="mr-2 h-4 w-4" />}
                Guardar Clave
              </Button>
            </CardFooter>

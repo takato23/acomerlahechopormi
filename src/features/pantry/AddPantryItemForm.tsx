@@ -77,7 +77,8 @@ export function AddPantryItemForm({
       setTargetStock(''); // Fase 2
       setTags(''); // Fase 2
       // Verificar si existe itemToEdit y su category_id
-      setCategoryManuallySelected(itemToEdit ? !!itemToEdit.category_id : false);
+      // Usar optional chaining para asegurar el tipo y evitar el error 'never'
+      setCategoryManuallySelected(!!itemToEdit?.category_id);
       // No enfocar al editar
     }
   }, [itemToEdit, isOpen]); // Depender de isOpen para resetear al abrir
@@ -197,33 +198,33 @@ export function AddPantryItemForm({
           {!itemToEdit && (
             <> {/* Abrir Fragmento */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="itemName" className="text-right">
+              <Label htmlFor="itemName" className="text-right text-slate-700">
                 Nombre*
               </Label>
               <Input
                 id="itemName"
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 required
                 // TODO: Añadir autocompletado inteligente aquí
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="location" className="text-right">
+              <Label htmlFor="location" className="text-right text-slate-700">
                 Ubicación
               </Label>
               <Input
                 id="location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="Ej: Nevera, Despensa..."
               />
             </div>
             {/* Precio (Fase 2) */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="price" className="text-right">
+              <Label htmlFor="price" className="text-right text-slate-700">
                 Precio
               </Label>
               <Input
@@ -231,27 +232,27 @@ export function AddPantryItemForm({
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                className="col-span-3"
+                className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="Opcional (ej: 1.50)"
                 step="0.01"
               />
           </div>
           {/* Notas (Fase 2) */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="notes" className="text-right">
+            <Label htmlFor="notes" className="text-right text-slate-700">
               Notas
             </Label>
             <Input // Podría ser Textarea si se esperan notas largas
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               placeholder="Opcional..."
             />
            </div>
            {/* Stock Mínimo (Fase 2) */}
            <div className="grid grid-cols-4 items-center gap-4">
-             <Label htmlFor="minStock" className="text-right">
+             <Label htmlFor="minStock" className="text-right text-slate-700">
                Stock Mín.
              </Label>
              <Input
@@ -259,14 +260,14 @@ export function AddPantryItemForm({
                type="number"
                value={minStock}
                onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))}
-               className="col-span-3"
+               className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                placeholder="Opcional"
                step="any"
              />
            </div>
            {/* Stock Objetivo (Fase 2) */}
            <div className="grid grid-cols-4 items-center gap-4">
-             <Label htmlFor="targetStock" className="text-right">
+             <Label htmlFor="targetStock" className="text-right text-slate-700">
                Stock Obj.
              </Label>
              <Input
@@ -274,21 +275,21 @@ export function AddPantryItemForm({
                type="number"
                value={targetStock}
                onChange={(e) => setTargetStock(e.target.value === '' ? '' : Number(e.target.value))}
-               className="col-span-3"
+               className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                placeholder="Opcional"
                step="any"
              />
            </div>
            {/* Tags (Fase 2) */}
            <div className="grid grid-cols-4 items-center gap-4">
-             <Label htmlFor="tags" className="text-right">
+             <Label htmlFor="tags" className="text-right text-slate-700">
                Etiquetas
              </Label>
              <Input
                id="tags"
                value={tags}
                onChange={(e) => setTags(e.target.value)}
-               className="col-span-3"
+               className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                placeholder="Ej: sin gluten, vegano, oferta"
              />
              <p className="col-start-2 col-span-3 text-xs text-muted-foreground -mt-3">
@@ -300,14 +301,14 @@ export function AddPantryItemForm({
            {/* Mostrar nombre si se edita (no editable aquí) */}
            {itemToEdit && (
              <div className="grid grid-cols-4 items-center gap-4">
-               <Label className="text-right">Nombre</Label>
+               <Label className="text-right text-slate-700">Nombre</Label>
                <p className="col-span-3 font-medium">{itemToEdit.ingredient?.name || 'N/A'}</p>
              </div>
            )}
 
           {/* Cantidad */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="quantity" className="text-right">
+            <Label htmlFor="quantity" className="text-right text-slate-700">
               Cantidad
             </Label>
             <Input
@@ -315,7 +316,7 @@ export function AddPantryItemForm({
               type="number"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-              className="col-span-3"
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               placeholder="Ej: 1, 500, 0.5"
               step="any" // Permitir decimales
             />
@@ -323,7 +324,7 @@ export function AddPantryItemForm({
 
           {/* Unidad */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="unit" className="text-right">
+            <Label htmlFor="unit" className="text-right text-slate-700">
               Unidad
             </Label>
             {/* Usar Input con datalist para permitir unidades comunes y personalizadas */}
@@ -331,7 +332,7 @@ export function AddPantryItemForm({
               id="unit"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               placeholder="Ej: kg, L, unidad, paquete"
               list="common-units" // Asociar con datalist
             />
@@ -345,11 +346,11 @@ export function AddPantryItemForm({
 
           {/* Categoría */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category" className="text-right">
+            <Label htmlFor="category" className="text-right text-slate-700">
               Categoría {/* TODO: Marcar como sugerida si !categoryManuallySelected? */}
             </Label>
             <Select value={categoryId} onValueChange={handleCategoryChange}> {/* Usar nuevo handler */}
-                 <SelectTrigger id="category" className="col-span-3">
+                 <SelectTrigger id="category" className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500">
                      <SelectValue placeholder="Selecciona categoría..." />
                  </SelectTrigger>
                  <SelectContent>
@@ -362,7 +363,7 @@ export function AddPantryItemForm({
 
            {/* Fecha de Caducidad */}
            <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="expiryDate" className="text-right">
+            <Label htmlFor="expiryDate" className="text-right text-slate-700">
               Caducidad
             </Label>
             <Input
@@ -370,7 +371,7 @@ export function AddPantryItemForm({
               type="date"
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
             />
           </div>
 
@@ -380,7 +381,7 @@ export function AddPantryItemForm({
         <DialogFooter className="sm:justify-between gap-2">
            {/* Botón Cancelar */}
            <DialogClose asChild>
-             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="border-slate-300 text-slate-700 hover:bg-slate-50">Cancelar</Button>
            </DialogClose>
            <div className="flex gap-2">
               {/* Botón Guardar y Añadir Otro (solo en modo creación) */}
@@ -390,6 +391,7 @@ export function AddPantryItemForm({
                     variant="secondary"
                     onClick={() => handleFormSubmit(false)} // No cerrar modal
                     disabled={isSubmitting}
+                    className="bg-slate-100 text-slate-900 hover:bg-slate-200"
                  >
                     {isSubmitting ? 'Guardando...' : 'Guardar y Añadir Otro'}
                  </Button>
@@ -399,6 +401,7 @@ export function AddPantryItemForm({
                  type="button" // Cambiado a button para manejar submit manualmente
                  onClick={() => handleFormSubmit(true)} // Cerrar modal y usar handleFormSubmit
                  disabled={isSubmitting}
+                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                  {isSubmitting ? 'Guardando...' : (itemToEdit ? 'Guardar Cambios' : 'Añadir Item')}
               </Button>

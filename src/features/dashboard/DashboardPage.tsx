@@ -184,7 +184,7 @@ export function DashboardPage() {
         {/* Widgets (usan variantes dinámicas) */}
         <motion.div variants={widgetItemVariants} className="md:col-span-1 xl:col-span-1"> 
            {isLoadingMeals 
-             ? ( <div className="flex justify-center items-center h-40 bg-card rounded-lg shadow-sm border border-border/30"><Spinner /></div> ) 
+             ? ( <div className="flex justify-center items-center h-40 bg-white rounded-lg shadow-md border border-slate-200"><Spinner /></div> )
              : ( <TodayPlanWidget meals={todayMeals} today={today} /> )
            }
         </motion.div>

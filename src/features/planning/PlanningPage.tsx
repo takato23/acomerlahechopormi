@@ -5,10 +5,12 @@ import { getPlannedMeals, upsertPlannedMeal, deletePlannedMeal } from './plannin
 import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
 // import { getRecipes } from '../recipes/recipeService'; // Comentado - Funcionalidad de recetas eliminada temporalmente
 // import type { Recipe } from '../recipes/recipeTypes'; // Comentado - Funcionalidad de recetas eliminada temporalmente
+import { generateRecipesFromPantry, GenerateRecipesResult } from '../recipes/generationService'; // Importar servicio de generación
 import { getMealAlternatives } from '../suggestions/suggestionService';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getUserProfile } from '@/features/user/userService';
 import type { UserProfile } from '@/features/user/userTypes';
+import { Sparkles } from 'lucide-react'; // Importar icono Sparkles
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'; 
 import { format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isToday } from 'date-fns';
 import { MealFormModal } from './components/MealFormModal';
@@ -59,6 +61,10 @@ export function PlanningPage() {
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
   /** @state {PlannedMeal | null} editingMeal - Comida que se está editando actualmente en el modal. */
   const [editingMeal, setEditingMeal] = useState<PlannedMeal | null>(null);
+  /** @state {boolean} isAutocompleting - Indica si se está ejecutando la generación automática de recetas. */
+  const [isAutocompleting, setIsAutocompleting] = useState(false);
+  /** @state {string | null} autocompleteError - Mensaje de error específico de la función de autocompletar. */
+  const [autocompleteError, setAutocompleteError] = useState<string | null>(null);
   
   /** @constant {AuthContextValue} user - Información del usuario autenticado. */
   const { user } = useAuth();
@@ -138,7 +144,7 @@ export function PlanningPage() {
   useEffect(() => {
     const loadProfile = async () => {
       if (user) {
-        const profile = await getUserProfile();
+        const profile = await getUserProfile(user.id); // Pasar userId
         setUserProfile(profile);
       }
     };
@@ -261,6 +267,119 @@ export function PlanningPage() {
    * @returns {Promise<MealAlternative[] | null>} Alternativas o null.
    */
   const handleRequestAlternatives = async (context: MealAlternativeRequestContext): Promise<MealAlternative[] | null> => { 
+
+  /**
+   * Maneja la acción de autocompletar la semana con recetas generadas por IA.
+   * @async
+   */
+  const handleAutocompleteWeek = async () => {
+    if (!user?.id) {
+      setAutocompleteError("Debes iniciar sesión para autocompletar la semana.");
+      return;
+    }
+
+    setIsAutocompleting(true);
+    setAutocompleteError(null);
+    setError(null); // Limpiar error general también
+
+    const recipesToGenerate = 7; // Generar 7 recetas (una cena por día)
+
+    try {
+      console.log(`[PlanningPage] Iniciando autocompletado para ${recipesToGenerate} recetas...`);
+      const result: GenerateRecipesResult = await generateRecipesFromPantry(recipesToGenerate, user.id);
+      console.log('[PlanningPage] Resultado de generación:', result);
+
+      if (result.errors.length > 0) {
+        // Mostrar el primer error de generación, o un mensaje genérico
+        const firstErrorMsg = result.errors[0].message;
+        setAutocompleteError(`Error generando recetas: ${firstErrorMsg}${result.errors.length > 1 ? ` (y ${result.errors.length - 1} más)` : ''}`);
+        // Continuar para intentar añadir las recetas exitosas si las hay
+      }
+
+      if (result.successfulRecipes.length > 0) {
+        console.log(`[PlanningPage] ${result.successfulRecipes.length} recetas generadas con éxito. Guardando en planificación...`);
+        const mealTypeToAssign: MealType = 'Cena'; // Asignar a la cena por defecto
+        const mealUpsertPromises: Promise<PlannedMeal | null>[] = [];
+
+        // Mapear recetas a los días de la semana actual
+        result.successfulRecipes.forEach((recipe, index) => {
+          if (index < weekDays.length) { // Asegurar que no nos pasemos de días
+            const targetDate = weekDays[index];
+            const dateStr = format(targetDate, 'yyyy-MM-dd');
+
+            const mealData: UpsertPlannedMealData = {
+              plan_date: dateStr,
+              meal_type: mealTypeToAssign,
+              // Usar datos de la receta generada
+              custom_meal_name: recipe.title, // Usar título como nombre
+              notes: recipe.description, // Usar descripción como notas
+              recipe_id: null, // No estamos guardando la receta completa aún
+              // Podríamos añadir ingredientes/instrucciones a las notas si quisiéramos
+            };
+
+            console.log(`[PlanningPage] Preparando para guardar comida para ${dateStr} - ${mealTypeToAssign}: ${recipe.title}`);
+            // Usamos upsert directamente, asumiendo que queremos sobrescribir si ya existe algo para esa cena
+            // Podríamos añadir lógica para verificar si el slot está vacío antes
+            mealUpsertPromises.push(upsertPlannedMeal(mealData));
+          }
+        });
+
+        const settledUpserts = await Promise.allSettled(mealUpsertPromises);
+        console.log('[PlanningPage] Resultados de guardar comidas:', settledUpserts);
+
+        const newlyAddedMeals: PlannedMeal[] = [];
+        let saveErrors = 0;
+        settledUpserts.forEach((settledResult, index) => {
+          if (settledResult.status === 'fulfilled' && settledResult.value) {
+            newlyAddedMeals.push(settledResult.value);
+          } else {
+            saveErrors++;
+            console.error(`[PlanningPage] Error guardando comida ${index + 1}:`, settledResult.status === 'rejected' ? settledResult.reason : 'Resultado nulo');
+          }
+        });
+
+        if (newlyAddedMeals.length > 0) {
+          console.log(`[PlanningPage] ${newlyAddedMeals.length} comidas añadidas/actualizadas con éxito.`);
+          // Actualizar estado local: añadir nuevas y filtrar posibles antiguas sobrescritas
+          // Es más simple recargar los datos, pero intentaremos actualizar localmente
+          const mealTypesOrder: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
+          const updatedMeals = [
+            // Mantener comidas que NO son las que acabamos de intentar añadir/sobrescribir
+            ...plannedMeals.filter(meal => {
+              const isTargetSlot = weekDays.some((day, idx) => 
+                format(day, 'yyyy-MM-dd') === meal.plan_date && 
+                meal.meal_type === mealTypeToAssign && 
+                idx < result.successfulRecipes.length
+              );
+              return !isTargetSlot;
+            }),
+            // Añadir las nuevas comidas guardadas
+            ...newlyAddedMeals
+          ].sort((a, b) =>
+            a.plan_date.localeCompare(b.plan_date) || mealTypesOrder.indexOf(a.meal_type) - mealTypesOrder.indexOf(b.meal_type)
+          );
+          setPlannedMeals(updatedMeals);
+        }
+
+        if (saveErrors > 0) {
+          const currentError = autocompleteError ? `${autocompleteError}. ` : '';
+          setAutocompleteError(`${currentError}Ocurrieron ${saveErrors} error(es) al guardar las comidas en el planificador.`);
+        }
+
+      } else if (result.errors.length === recipesToGenerate) {
+        // Si todas las generaciones fallaron, el error ya se estableció arriba.
+        console.log('[PlanningPage] No se generó ninguna receta con éxito.');
+      }
+
+    } catch (err: any) {
+      console.error('[PlanningPage] Error inesperado durante el autocompletado:', err);
+      setAutocompleteError(`Error inesperado: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setIsAutocompleting(false);
+      console.log('[PlanningPage] Proceso de autocompletado finalizado.');
+    }
+  };
+
      console.log('[PlanningPage] Requesting alternatives for:', context);
      // const alternatives = await getMealAlternatives(context, userProfile); 
      return null; 
@@ -371,6 +490,17 @@ export function PlanningPage() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+          {/* Botón Autocompletar Semana */} 
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={handleAutocompleteWeek} 
+            disabled={isAutocompleting || isLoading}
+            className="ml-4"
+          >
+            {isAutocompleting ? <Spinner size="sm" className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            Autocompletar Semana
+          </Button>
       </div>
 
       {error && <p className="mb-3 text-red-500 text-center text-sm">{error}</p>}
