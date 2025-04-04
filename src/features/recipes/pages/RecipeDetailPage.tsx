@@ -11,7 +11,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner'; // Asumiendo que sonner está instalado para toasts
-import { generateRecipeVariation, GeneratedRecipeData } from '@/features/recipes/generationService'; // Ajustar path si es necesario
+import { generateRecipeVariation } from '@/features/recipes/generationService'; // Ajustar path si es necesario
 import { getRecipeById, deleteRecipe } from '@/features/recipes/services/recipeService';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
@@ -144,10 +144,15 @@ const RecipeDetailPage: React.FC = () => {
 
   // Formatear instrucciones directamente desde el array
   const formattedInstructions = recipe.instructions
-    ?.filter((step: string) => step && step.trim().length > 0) // Filtrar pasos vacíos o nulos
-    .map((step: string, index: number) => (
-      <li key={index} className="mb-2 leading-relaxed">{step.trim()}</li> // Asegurar trim en el renderizado
-  ));
+    ? (Array.isArray(recipe.instructions)
+        ? recipe.instructions
+        : (recipe.instructions as string).split('\n'))
+        .map((step: string) => step.trim())
+        .filter((step: string) => step.length > 0)
+        .map((step: string, index: number) => (
+          <li key={index} className="mb-2 leading-relaxed">{step}</li>
+        ))
+    : []; // Devolver array vacío si no es string o no existe
 
   const totalTime = (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
 
@@ -207,13 +212,16 @@ const RecipeDetailPage: React.FC = () => {
          {/* --- Botones de Acción --- */}
          <div className="flex gap-3 mb-8">
             <Button asChild variant="outline" size="sm">
-              <Link to={`/app/recipes/${recipeId}/edit`}>
-                <Edit className="mr-2 h-4 w-4" /> Editar
+              <Link to={`/app/recipes/${recipeId}/edit`} className="flex items-center">
+                <Edit className="mr-2 h-4 w-4" />
+                <span>Editar</span>
               </Link>
+            </Button>
             <Dialog open={isVariationModalOpen} onOpenChange={setIsVariationModalOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Wand2 className="mr-2 h-4 w-4" /> Pedir Variación
+                <Button variant="outline" size="sm" className="flex items-center">
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  <span>Pedir Variación</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
@@ -250,7 +258,6 @@ const RecipeDetailPage: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            </Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isLoading}>
               {isLoading ? (
                 <Spinner size="sm" className="mr-2" />
