@@ -18,9 +18,17 @@ export async function getPlannedMeals(startDate: string, endDate: string): Promi
           id,
           title,
           description,
-          image_url
+          image_url,
+          recipe_ingredients (
+            id,
+            ingredient_id,
+            ingredient_name,
+            quantity,
+            unit,
+            notes
+          )
         )
-      `) // Hacer JOIN para obtener datos de receta necesarios para preview
+      `) // JOIN con recetas e ingredientes
       .gte('plan_date', startDate)
       .lte('plan_date', endDate)
       .order('plan_date', { ascending: true })
@@ -82,7 +90,15 @@ export async function upsertPlannedMeal(
         id,
         title,
         description,
-        image_url
+        image_url,
+        recipe_ingredients (
+          id,
+          ingredient_id,
+          ingredient_name,
+          quantity,
+          unit,
+          notes
+        )
       )
     `).single();
 
@@ -117,6 +133,31 @@ export async function deletePlannedMeal(mealId: string): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Error inesperado en deletePlannedMeal:', error);
+    throw error;
+  }
+}
+
+/**
+ * Elimina todas las comidas planificadas dentro de un rango de fechas para el usuario actual.
+ */
+export async function deletePlannedMealsInRange(startDate: string, endDate: string): Promise<void> {
+  try {
+    console.log(`[planningService] Deleting planned meals between ${startDate} and ${endDate}`);
+    // RLS se encarga de filtrar por user_id
+    const { error } = await supabase
+      .from('meal_plan_entries')
+      .delete()
+      .gte('plan_date', startDate)
+      .lte('plan_date', endDate);
+
+    if (error) {
+      console.error('[planningService] Error deleting planned meals in range:', error);
+      throw error;
+    }
+    console.log(`[planningService] Successfully deleted meals between ${startDate} and ${endDate}`);
+  } catch (error) {
+    console.error('Error inesperado en deletePlannedMealsInRange:', error);
+    // Lanzar el error para que el store lo maneje
     throw error;
   }
 }

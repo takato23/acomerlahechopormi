@@ -17,7 +17,8 @@ export interface PlannedMeal {
   recipes?: {
     id: string;
     title: string;
-    // ... otras propiedades de receta si son necesarias
+    description: string | null;
+    image_url: string | null;
   } | null;
 }
 
@@ -44,3 +45,29 @@ export interface MealAlternativeRequestContext {
 export type MealAlternative = 
   | { type: 'recipe'; id: string; title: string } 
   | { type: 'custom'; text: string };
+
+// --- Tipos para Plantillas de Planificación ---
+
+export interface PlanningTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  template_data: TemplateData;
+  created_at: string;
+}
+
+export interface TemplateData {
+  meals: TemplateMeal[];
+}
+
+export interface TemplateMeal {
+  day_index: number; // 0 = Lunes, 1 = Martes, etc.
+  meal_type: MealType;
+  recipe_id?: string | null;
+  custom_meal_name?: string | null;
+}
+
+export interface SaveTemplateData {
+  name: string;
+  meals: PlannedMeal[];
+}

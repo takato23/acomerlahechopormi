@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'; // Corregir ruta relativ
 import type { Recipe, RecipeIngredient } from '../../../types/recipeTypes'; // Corregir ruta relativa
 import { findOrCreateIngredient } from '../../ingredients/ingredientService'; // Importar servicio de ingredientes
 
-type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients'> & {
+export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients'> & {
   user_id: string;
   ingredients: Array<{ name: string; quantity: string | number | null; unit?: string | null }>;
 };
@@ -23,6 +23,12 @@ interface GetRecipesResult {
   hasMore: boolean;
 }
 
+// Tipo intermedio para la respuesta de Supabase con la relación
+type RecipeWithIngredientsRaw = Omit<Recipe, 'ingredients' | 'instructions'> & {
+  instructions: string | null; // Viene como string de la DB
+  recipe_ingredients: RecipeIngredient[] | null;
+};
+
 /**
  * Obtiene las recetas para un usuario específico, aplicando filtros y paginación.
  */
@@ -40,10 +46,20 @@ export const getRecipes = async ({
   let query = supabase
     .from('recipes')
     .select(`
-      *,
+      id,
+      user_id,
+      title,
+      description,
+      image_url,
+      prep_time_minutes,
+      cook_time_minutes,
+      servings,
       is_favorite,
+      instructions,
+      created_at,
       recipe_ingredients (
         id,
+        recipe_id,
         ingredient_name,
         quantity,
         unit,
@@ -129,10 +145,12 @@ export const getRecipes = async ({
   const safeData = data || [];
   // Mapear los ingredientes al formato esperado por el tipo Recipe
   // Añadir tipo explícito al parámetro del map
-  const recipesWithMappedIngredients = safeData.map((recipe: any) => ({
+  const recipesWithMappedIngredients = safeData.map((recipe: RecipeWithIngredientsRaw): Recipe => ({
     ...recipe,
-    // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
-    ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[], // Renombrar y asegurar tipo
+    // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
+    ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[],
+    // Convertir instructions (string) a string[]
+    instructions: typeof recipe.instructions === 'string' ? recipe.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
   }));
 
   // Determinar si hay más páginas comparando la cantidad obtenida con el límite
@@ -151,16 +169,26 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
   const { data, error } = await supabase
     .from('recipes')
     .select(`
-      *,
+      id,
+      user_id,
+      title,
+      description,
+      image_url,
+      prep_time_minutes,
+      cook_time_minutes,
+      servings,
       is_favorite,
+      instructions,
+      created_at,
       recipe_ingredients (
         id,
+        recipe_id,
         ingredient_name,
         quantity,
         unit,
         ingredient_id
       )
-    `) // Sintaxis correcta: is_favorite al mismo nivel que *
+    `)
     .eq('id', recipeId)
     .single();
 
@@ -177,11 +205,13 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
 
    // Mapear ingredientes
    // Añadir aserción de tipo a 'data'
-   const recipeWithMappedIngredients = {
-     ...(data as any), // Usar 'any' temporalmente o un tipo más específico si es posible
-     ...data,
-     // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
-     ingredients: (data.recipe_ingredients || []) as RecipeIngredient[],
+   const rawData = data as RecipeWithIngredientsRaw; // Usar el tipo definido arriba
+   const recipeWithMappedIngredients: Recipe = {
+     ...rawData,
+     // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
+     ingredients: (rawData.recipe_ingredients || []) as RecipeIngredient[],
+     // Convertir instructions (string) a string[]
+     instructions: typeof rawData.instructions === 'string' ? rawData.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
    };
 
   return recipeWithMappedIngredients;

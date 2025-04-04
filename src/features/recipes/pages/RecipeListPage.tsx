@@ -607,7 +607,7 @@ useEffect(() => {
         <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
           <SheetTrigger asChild>
             {/* Ajustar clase para que no se pegue a la derecha si hay espacio */}
-            <Button variant="outline" className="flex-shrink-0">
+            <Button variant="outline" className="flex-shrink-0" aria-label="Abrir filtros avanzados de recetas"> {/* Añadido aria-label descriptivo */}
               <Filter className="mr-2 h-4 w-4" /> Filtros
             </Button>
           </SheetTrigger>
@@ -621,40 +621,42 @@ useEffect(() => {
             <div className="grid gap-6 py-4">
               {/* Filtro por Ingredientes */}
               <div>
-                <h4 className="mb-2 font-medium text-sm">Por Ingredientes (contiene al menos uno)</h4>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2"> {/* Scroll si hay muchos */}
+                <h4 className="mb-2 font-medium text-sm" id="filter-ingredients-heading">Por Ingredientes (contiene al menos uno)</h4> {/* Añadido id al heading */}
+                <ul aria-labelledby="filter-ingredients-heading" className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 space-y-0"> {/* Usar lista semántica y ajustar clases */}
                   {availableIngredients.map((ingredient) => (
-                    <div key={ingredient} className="flex items-center space-x-2">
+                    <li key={ingredient} className="flex items-center space-x-2"> {/* Usar item de lista */}
                       <Checkbox
-                        id={`ingredient-${ingredient}`}
+                        id={`filter-ingredient-${ingredient.toLowerCase().replace(/\s+/g, '-')}`} // Usar id consistente
                         checked={tempSelectedIngredients.includes(ingredient)}
                         onCheckedChange={(checked) => handleIngredientChange(ingredient, !!checked)}
+                        aria-labelledby={`filter-ingredient-label-${ingredient.toLowerCase().replace(/\s+/g, '-')}`} // Usar aria-labelledby
                       />
-                      <Label htmlFor={`ingredient-${ingredient}`} className="text-sm font-normal">
+                      <Label htmlFor={`filter-ingredient-${ingredient.toLowerCase().replace(/\s+/g, '-')}`} id={`filter-ingredient-label-${ingredient.toLowerCase().replace(/\s+/g, '-')}`} className="text-sm font-normal"> {/* Usar id consistente */}
                         {ingredient}
                       </Label>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
               {/* Filtro por Tags */}
               <div>
-                <h4 className="mb-2 font-medium text-sm">Por Tags (contiene todos)</h4>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2"> {/* Scroll si hay muchos */}
+                <h4 className="mb-2 font-medium text-sm" id="filter-tags-heading">Por Tags (contiene todos)</h4> {/* Añadido id al heading */}
+                <ul aria-labelledby="filter-tags-heading" className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 space-y-0"> {/* Usar lista semántica y ajustar clases */}
                   {availableTags.map((tag) => (
-                    <div key={tag} className="flex items-center space-x-2">
+                    <li key={tag} className="flex items-center space-x-2"> {/* Usar item de lista */}
                       <Checkbox
-                        id={`tag-${tag}`}
+                        id={`filter-tag-${tag.toLowerCase().replace(/\s+/g, '-')}`} // Usar id consistente
                         checked={tempSelectedTags.includes(tag)}
                         onCheckedChange={(checked) => handleTagChange(tag, !!checked)}
+                        aria-labelledby={`filter-tag-label-${tag.toLowerCase().replace(/\s+/g, '-')}`} // Usar aria-labelledby
                       />
-                      <Label htmlFor={`tag-${tag}`} className="text-sm font-normal">
+                      <Label htmlFor={`filter-tag-${tag.toLowerCase().replace(/\s+/g, '-')}`} id={`filter-tag-label-${tag.toLowerCase().replace(/\s+/g, '-')}`} className="text-sm font-normal"> {/* Usar id consistente */}
                         {tag}
                       </Label>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             </div>
             <SheetFooter className="mt-4">
@@ -691,6 +693,8 @@ useEffect(() => {
       )}
 
       {!isLoading && !error && recipes.length > 0 && (
+        <> {/* Fragmento para añadir el log sin afectar la estructura */}
+        {console.log("[RecipeListPage] Rendering recipes data:", JSON.stringify(recipes, null, 2))} {/* LOG DE DATOS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Reducido número de columnas en XL */}
           {/* Mapeo de recetas usando RecipeCard */}
           {/* Filtrar recetas localmente basado en showOnlyFavorites */}
@@ -704,6 +708,7 @@ useEffect(() => {
             />
           ))}
         </div>
+        </>
       )}
 
       {/* Botón Cargar Más y Spinner */}

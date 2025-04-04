@@ -216,7 +216,7 @@ export function MealFormModal({
               onClick={handleRequestAlternativesClick}
               disabled={isSaving || isLoadingAlternatives || (!selectedRecipeId && !customMealName.trim())}
             >
-              <Sparkles className="mr-2 h-4 w-4" />
+              <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" /> {/* Ocultar icono decorativo */}
               {isLoadingAlternatives ? 'Buscando...' : 'Buscar Alternativas'}
             </Button>
 
@@ -226,11 +226,14 @@ export function MealFormModal({
               </div>
             )}
 
+            {/* Corregir estructura JSX y check de null para alternatives */}
             {alternatives && alternatives.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Sugerencias:</p>
-                <ul className="max-h-32 overflow-y-auto rounded-md border border-border/30 bg-muted/30 p-2">
-                  {alternatives.map((alt, index) => (
+              <div className="mt-4 space-y-2" aria-live="polite"> {/* Añadir aria-live para anunciar la aparición de sugerencias */}
+                {/* Usar h4 para el título y asociarlo a la lista */}
+                <h4 id="suggestions-heading" className="text-sm font-medium text-muted-foreground">Sugerencias:</h4>
+                <ul aria-labelledby="suggestions-heading" className="max-h-32 overflow-y-auto rounded-md border border-border/30 bg-muted/30 p-2">
+                  {/* Asegurarse que alternatives no es null antes de mapear */}
+                  {alternatives?.map((alt, index) => (
                     <li key={index}>
                       <button
                         type="button"

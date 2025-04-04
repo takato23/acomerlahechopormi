@@ -1,130 +1,153 @@
 import React from 'react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Users, Heart, Trash2, ImageOff, Pencil } from 'lucide-react'; // Asegurar Pencil
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, Users, ImageOff, Heart, Trash2, Pencil } from 'lucide-react'; // Asegurar todos los iconos
 import { Recipe } from '@/types/recipeTypes';
-import { Button } from '@/components/ui/button';
-import { Link, useNavigate } from 'react-router-dom'; // Importar useNavigate
+import { Link, useNavigate } from 'react-router-dom'; // Añadir importación Link y useNavigate
+import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button'; // Asegurar Button
 
 interface RecipeCardProps {
   recipe: Recipe;
   className?: string;
+  // Mantener props aunque no se usen en la versión mínima para evitar errores en RecipeListPage
   onToggleFavorite: (recipeId: string) => void;
   onDelete: (recipeId: string) => void;
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, className, onToggleFavorite, onDelete }) => {
-  const navigate = useNavigate(); // Hook para navegación programática
-  // Calcular tiempo total
+  const navigate = useNavigate(); // Definir navigate aquí
+  // Reintroducir cálculo de tiempo total
   const prepTime = recipe.prep_time_minutes ?? 0;
   const cookTime = recipe.cook_time_minutes ?? 0;
   const totalTime = prepTime + cookTime;
 
+  // Reintroducir estructura principal y contenido
   return (
-    // Envolver toda la tarjeta en un Link, excepto los botones de acción
-    <Link
-      to={`/app/recipes/${recipe.id}`}
-      className={cn("block group relative rounded-xl overflow-hidden", className)} // Añadir group, relative, rounded, overflow
-      aria-label={`Ver receta ${recipe.title}`}
-    >
-      <Card className={cn(
-        "bg-white border border-slate-200 shadow-md group-hover:shadow-lg transition-shadow duration-200 flex flex-col h-full", // Quitar rounded y overflow de aquí
-      )}>
-        {/* Contenedor de Imagen o Placeholder */}
+    <Card className={cn(
+      "group relative bg-white border border-slate-200 shadow-md hover:shadow-lg focus-within:shadow-lg transition-shadow duration-200 flex flex-col h-full rounded-xl overflow-hidden",
+      className
+    )}>
+      {/* Mantener Link de fondo (simplificado, sin span sr-only por ahora) */}
+      {/* Restaurar Link original */}
+      <Link
+        to={`/app/recipes/${recipe.id}`}
+        className="absolute inset-0 z-0" // Cubre el área, pero está detrás de los botones
+        aria-label={`Ver receta ${recipe.title ?? 'receta sin título'}`} // Añadir fallback para title
+        tabIndex={-1} // Quitar del orden de tabulación normal
+      >
+        <span className="sr-only">Ver receta {recipe.title ?? 'receta sin título'}</span>
+      </Link>
+
+      {/* Contenido principal */}
+      <div className="relative z-[1] flex flex-col flex-grow"> {/* Añadido flex-grow */}
+        {/* Restaurar sección de imagen */}
         <div className="aspect-video w-full flex-shrink-0 bg-slate-100 flex items-center justify-center overflow-hidden">
           {recipe.image_url ? (
             <img
-              src={recipe.image_url}
-              alt={recipe.title}
+              src={recipe.image_url} // Usar original, la lógica ternaria maneja null
+              alt={recipe.title ?? 'Imagen de receta'}
               className="object-cover w-full h-full"
               loading="lazy"
+              onError={(e) => {
+                  console.error(`Error cargando imagen para receta ${recipe.id}: ${recipe.image_url}`);
+                  (e.target as HTMLImageElement).style.display = 'none'; // Ocultar imagen rota
+              }}
             />
           ) : (
-            <ImageOff className="h-12 w-12 text-slate-400" />
+            // Asegurar que ImageOff esté importado
+            <ImageOff className="h-12 w-12 text-slate-400" aria-hidden="true" />
           )}
         </div>
         {/* Contenido Principal */}
-        <div className="flex flex-col flex-grow p-4">
+        <div className="flex flex-col flex-grow p-4"> {/* Contenedor del texto */}
           <CardHeader className="p-0 mb-2">
-            <CardTitle className="text-lg font-semibold line-clamp-2">{recipe.title}</CardTitle>
+            <CardTitle className="text-lg font-semibold line-clamp-2">{recipe.title ?? 'Sin Título'}</CardTitle>
           </CardHeader>
           <CardContent className="p-0 flex-grow">
-          {recipe.description && (
-            <p className="text-sm text-slate-600 mb-3 line-clamp-3">
-              {recipe.description}
-            </p>
-          )}
-          <div className="flex items-center space-x-4 text-sm text-slate-500">
-            {totalTime > 0 && (
-              <div className="flex items-center space-x-1">
-                <Clock className="h-4 w-4" />
-                <span>{totalTime} min</span>
-              </div>
+            {recipe.description && (
+              <p className="text-sm text-slate-600 mb-3 line-clamp-3">
+                {recipe.description}
+              </p>
             )}
-            {recipe.servings && recipe.servings > 0 && (
-              <div className="flex items-center space-x-1">
-                <Users className="h-4 w-4" />
-                <span>{recipe.servings} {recipe.servings === 1 ? 'porción' : 'porciones'}</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
+            <div className="flex items-center space-x-4 text-sm text-slate-500 mt-auto"> {/* mt-auto para empujar al fondo */}
+              {totalTime > 0 && (
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-4 w-4" />
+                  <span>{totalTime} min</span>
+                </div>
+              )}
+              {recipe.servings && recipe.servings > 0 && (
+                <div className="flex items-center space-x-1">
+                  <Users className="h-4 w-4" />
+                  <span>{recipe.servings} {recipe.servings === 1 ? 'porción' : 'porciones'}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
         </div>
-        {/* Footer vacío o con otra info si se necesita, los botones ahora están en hover */}
-        {/* <CardFooter className="p-3 pt-2 border-t border-slate-100 mt-auto"></CardFooter> */}
-      </Card>
+        {/* Botones comentados por ahora */}
+      </div>
 
-      {/* Botones de acción en hover */}
-      <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Restaurar botones con logs y simplificaciones */}
+      <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
          {/* Botón Favorito */}
+         {/* Log eliminado del JSX */}
          <Button
            variant="ghost"
            size="icon"
-           className={cn(
-             "h-7 w-7 bg-background/50 hover:bg-background/80 backdrop-blur-sm rounded-full", // Fondo y redondeado
-             recipe.is_favorite ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500"
-           )}
+           // Simplificar cn temporalmente
+           className={`h-7 w-7 bg-background/50 backdrop-blur-sm rounded-full transition-colors duration-150 ${
+             recipe.is_favorite ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+           }`}
            onClick={(e) => {
              e.stopPropagation();
              e.preventDefault();
-             onToggleFavorite(recipe.id);
+             console.log(`[RecipeCard Fav Click] Toggling favorite for ID: ${recipe?.id}`);
+             if (recipe.id) onToggleFavorite(recipe.id); // Añadir check por si acaso
            }}
-           title={recipe.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+           aria-label={recipe.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
          >
-           <Heart className={cn("h-4 w-4", recipe.is_favorite && "fill-current")} />
+           {/* Simplificar cn temporalmente */}
+           <Heart className={`h-4 w-4 ${recipe.is_favorite ? "fill-current" : ""}`} />
          </Button>
          {/* Botón Editar */}
+         {/* Log eliminado del JSX */}
          <Button
            variant="ghost"
            size="icon"
-           className="h-7 w-7 bg-background/50 hover:bg-background/80 backdrop-blur-sm rounded-full text-muted-foreground hover:text-primary"
+           className="h-7 w-7 bg-background/50 backdrop-blur-sm rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors duration-150"
            onClick={(e) => {
              e.stopPropagation();
              e.preventDefault();
-             navigate(`/app/recipes/${recipe.id}/edit`); // Navegar programáticamente
+             console.log(`[RecipeCard Edit Click] Navigating to edit for ID: ${recipe?.id}`);
+             // Usar la variable navigate definida al inicio del componente
+             if (recipe.id) navigate(`/app/recipes/${recipe.id}/edit`);
            }}
-           title="Editar receta"
+           aria-label="Editar receta"
          >
            <Pencil className="h-4 w-4" />
          </Button>
          {/* Botón Eliminar */}
+         {/* Log eliminado del JSX */}
          <Button
            variant="ghost"
            size="icon"
-           className="h-7 w-7 bg-background/50 hover:bg-background/80 backdrop-blur-sm rounded-full text-muted-foreground hover:text-destructive"
+           className="h-7 w-7 bg-background/50 backdrop-blur-sm rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors duration-150"
            onClick={(e) => {
              e.stopPropagation();
              e.preventDefault();
-             if (window.confirm(`¿Eliminar la receta "${recipe.title}"?`)) {
-               onDelete(recipe.id);
+             const title = recipe.title ?? 'sin título';
+             console.log(`[RecipeCard Delete Click] Confirming delete for ID: ${recipe?.id}, Title: ${title}`);
+             if (window.confirm(`¿Eliminar la receta "${title}"?`)) {
+               if (recipe.id) onDelete(recipe.id); // Añadir check por si acaso
              }
            }}
-           title="Eliminar receta"
+           aria-label="Eliminar receta"
          >
            <Trash2 className="h-4 w-4" />
          </Button>
       </div>
-    </Link>
+    </Card>
   );
 };
 
