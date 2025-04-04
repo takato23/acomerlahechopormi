@@ -1,7 +1,7 @@
 // src/features/planning/components/MealFormModal.tsx
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog'; // Añadir DialogDescription
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -144,13 +144,10 @@ export function MealFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open: boolean) => !open && onClose()}>
-      <DialogContent
-        aria-describedby="meal-form-description"
-      >
+      {/* Referenciar la nueva descripción visible */}
+      <DialogContent aria-describedby="meal-form-description-visible">
         <DialogHeader>
-        <div id="meal-form-description" className="sr-only">
-          Formulario para {isEditing ? 'editar' : 'añadir'} una comida planificada
-        </div>
+        {/* Eliminar descripción sr-only anterior */}
           <DialogTitle>
             {isEditing ? 'Editar Comida' : 'Añadir Comida'}
             {date && mealType && (
@@ -158,6 +155,10 @@ export function MealFormModal({
                 {mealTypeLabels[mealType] ?? mealType} - {format(date, 'eeee d MMM', { locale: es })}
               </span>
             )}
+            {/* Añadir descripción para accesibilidad */}
+            <DialogDescription id="meal-form-description-visible">
+              {isEditing ? 'Modifica los detalles de tu comida.' : 'Añade una receta o escribe un nombre para tu comida.'}
+            </DialogDescription>
           </DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">

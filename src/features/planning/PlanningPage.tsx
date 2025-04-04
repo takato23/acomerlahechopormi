@@ -1,88 +1,55 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Importar useCallback
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
 import { getPlannedMeals, upsertPlannedMeal, deletePlannedMeal } from './planningService';
 import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
-// import { getRecipes } from '../recipes/recipeService'; // Comentado - Funcionalidad de recetas eliminada temporalmente
-// import type { Recipe } from '../recipes/recipeTypes'; // Comentado - Funcionalidad de recetas eliminada temporalmente
-import { generateRecipesFromPantry, GenerateRecipesResult } from '../recipes/generationService'; // Importar servicio de generación
+import { useRecipeStore } from '@/stores/recipeStore'; // Importar store de recetas
+import { generateRecipesFromPantry, GenerateRecipesResult } from '../recipes/generationService';
 import { getMealAlternatives } from '../suggestions/suggestionService';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getUserProfile } from '@/features/user/userService';
 import type { UserProfile } from '@/features/user/userTypes';
-import { Sparkles } from 'lucide-react'; // Importar icono Sparkles
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'; 
+import type { Recipe } from '@/types/recipeTypes'; // Importar tipo Recipe
+import { Sparkles, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isToday } from 'date-fns';
 import { MealFormModal } from './components/MealFormModal';
 import { WeekDaySelector } from './components/WeekDaySelector';
 import { PlanningDayView } from './components/PlanningDayView';
-import { MealCard } from './components/MealCard'; 
+import { MealCard } from './components/MealCard';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import useBreakpoint from '@/hooks/useBreakpoint'; 
+import useBreakpoint from '@/hooks/useBreakpoint';
+import { toast } from 'sonner'; // Asegurar importación de toast
 
-/**
- * Helper para obtener el intervalo de la semana (Lunes-Domingo).
- * @param {Date} date - Una fecha dentro de la semana deseada.
- * @returns {{start: Date, end: Date}} Objeto con las fechas de inicio y fin de la semana.
- */
 const getWeekInterval = (date: Date): { start: Date; end: Date } => {
-  const start = startOfWeek(date, { weekStartsOn: 1 }); 
-  const end = endOfWeek(date, { weekStartsOn: 1 }); 
+  const start = startOfWeek(date, { weekStartsOn: 1 });
+  const end = endOfWeek(date, { weekStartsOn: 1 });
   return { start, end };
 };
 
-/**
- * Página principal para la planificación semanal de comidas.
- * Muestra una vista de calendario semanal en escritorio y una vista diaria con selector en móvil.
- * Permite añadir, editar y eliminar comidas planificadas (recetas o personalizadas).
- * @component
- */
-const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno explícito
-  // --- Estados del Componente ---
-  /** @state {Date} currentDate - Fecha utilizada para determinar la semana mostrada/seleccionada. */
+const PlanningPage: React.FC = (): JSX.Element => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  /** @state {Date} selectedDate - Fecha del día seleccionado actualmente (relevante en vista móvil). */
-  const [selectedDate, setSelectedDate] = useState(new Date()); 
-  /** @state {PlannedMeal[]} plannedMeals - Array de todas las comidas planificadas para la semana actual. */
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [plannedMeals, setPlannedMeals] = useState<PlannedMeal[]>([]);
-  /** @state {boolean} isLoading - Indica si se están cargando los datos iniciales (comidas, recetas). */
-  const [isLoading, setIsLoading] = useState(true);
-  /** @state {string | null} error - Mensaje de error general de la página. */
+  const [isLoading, setIsLoading] = useState(true); // Loading general para comidas planificadas
   const [error, setError] = useState<string | null>(null);
-  /** @state {Recipe[]} userRecipes - Lista de todas las recetas del usuario (para el modal). */
-  // const [userRecipes, setUserRecipes] = useState<Recipe[]>([]); // Comentado - Funcionalidad de recetas eliminada temporalmente
-  const userRecipes: any[] = []; // Placeholder para evitar errores en el prop del modal
-  /** @state {UserProfile | null} userProfile - Perfil del usuario (para sugerencias futuras). */
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  /** @state {boolean} showModal - Controla la visibilidad del modal de añadir/editar comida. */
   const [showModal, setShowModal] = useState(false);
-  /** @state {MealType | null} selectedMealType - Tipo de comida seleccionado al abrir el modal. */
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
-  /** @state {PlannedMeal | null} editingMeal - Comida que se está editando actualmente en el modal. */
   const [editingMeal, setEditingMeal] = useState<PlannedMeal | null>(null);
-  /** @state {boolean} isAutocompleting - Indica si se está ejecutando la generación automática de recetas. */
   const [isAutocompleting, setIsAutocompleting] = useState(false);
-  /** @state {string | null} autocompleteError - Mensaje de error específico de la función de autocompletar. */
   const [autocompleteError, setAutocompleteError] = useState<string | null>(null);
-  
-  /** @constant {AuthContextValue} user - Información del usuario autenticado. */
-  const { user } = useAuth();
-  /** @constant {'mobile' | 'tablet' | 'desktop'} breakpoint - Breakpoint actual detectado. */
-  const breakpoint = useBreakpoint();
-  /** @constant {boolean} isDesktop - Indica si la vista actual es tablet o desktop. */
-  const isDesktop = breakpoint !== 'mobile'; 
 
-  /** @constant {{start: Date, end: Date}} weekInterval - Fechas de inicio y fin de la semana actual. */
+  const { user } = useAuth();
+  const breakpoint = useBreakpoint();
+  const isDesktop = breakpoint !== 'mobile';
+
+  // Usar el store para las recetas
+  const { recipes: userRecipes, isLoading: isLoadingRecipes, error: errorRecipes, fetchRecipes } = useRecipeStore();
+
   const { start: weekStart, end: weekEnd } = getWeekInterval(currentDate);
-  /** @constant {Date[]} weekDays - Array de objetos Date para cada día de la semana actual. */
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  /**
-   * Agrupa las comidas planificadas por fecha y tipo de comida.
-   * @function mealsByDay
-   * @returns {Record<string, Record<MealType, PlannedMeal[]>>} Objeto anidado con comidas agrupadas.
-   */
   const mealsByDay = useMemo(() => {
     const grouped: { [date: string]: { [key in MealType]?: PlannedMeal[] } } = {};
     plannedMeals.forEach(meal => {
@@ -94,66 +61,53 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
     return grouped;
   }, [plannedMeals]);
 
-  // --- Funciones de Carga y Navegación ---
-  /**
-   * Carga las comidas planificadas y las recetas del usuario para el rango de fechas dado.
-   * Estabilizada con useCallback para usarla como dependencia de efecto.
-   * @async
-   * @function loadWeekData
-   */
   const loadWeekData = useCallback(async (start: Date, end: Date) => {
-    setIsLoading(true);
+    setIsLoading(true); // Loading para comidas planificadas
     setError(null);
     try {
       const startDateStr = format(start, 'yyyy-MM-dd');
       const endDateStr = format(end, 'yyyy-MM-dd');
-      // Modificado para no llamar a getRecipes
-      const [meals /*, recipes */] = await Promise.all([
-        getPlannedMeals(startDateStr, endDateStr),
-        // getRecipes() // LLAMADA COMENTADA
-        Promise.resolve([]) // Devolver array vacío para mantener estructura de Promise.all
-      ]);
+      const meals = await getPlannedMeals(startDateStr, endDateStr);
       setPlannedMeals(meals);
-      // setUserRecipes(recipes); // LLAMADA COMENTADA
     } catch (err: any) {
-      setError('Error al cargar datos de planificación o recetas.');
-      console.error('[PlanningPage] Error loading data:', err);
+      setError('Error al cargar datos de planificación.');
+      console.error('[PlanningPage] Error loading planning data:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Sin dependencias internas, ya que usa setIsLoading, setError, etc. del scope del componente
+  }, []);
 
-  // --- Efectos ---
-  /**
-   * Carga los datos de planificación y recetas para la semana actual cuando cambia `currentDate`.
-   * @effect loadWeekDataEffect
-   */
-  // Formatear las fechas de inicio y fin para usarlas como dependencias estables
   const weekStartStr = useMemo(() => format(weekStart, 'yyyy-MM-dd'), [weekStart]);
   const weekEndStr = useMemo(() => format(weekEnd, 'yyyy-MM-dd'), [weekEnd]);
 
   useEffect(() => {
-    // Usar las fechas originales (Date objects) para la lógica interna
     loadWeekData(weekStart, weekEnd);
-  }, [weekStartStr, weekEndStr, loadWeekData]); // Depender de las strings formateadas y loadWeekData
+  }, [weekStartStr, weekEndStr, loadWeekData]);
 
-  /**
-   * Carga el perfil del usuario al montar si está autenticado.
-   * @effect loadProfileEffect
-   */
+  // Cargar recetas si es necesario
+  useEffect(() => {
+    if (user?.id && userRecipes.length === 0 && !isLoadingRecipes) {
+       console.log("[PlanningPage] Fetching user recipes...");
+      fetchRecipes(user.id);
+    }
+  }, [user?.id, userRecipes.length, isLoadingRecipes, fetchRecipes]);
+
+  // Cargar perfil
   useEffect(() => {
     const loadProfile = async () => {
       if (user) {
-        const profile = await getUserProfile(user.id); // Pasar userId
-        setUserProfile(profile);
+        try {
+          const profile = await getUserProfile(user.id);
+          setUserProfile(profile);
+        } catch (profileError) {
+           console.error("Error loading user profile:", profileError);
+           // Podríamos mostrar un error específico si es necesario
+        }
       }
     };
     loadProfile();
   }, [user]);
 
-  // La definición de loadWeekData se movió antes del useEffect
-
-  /** Navega a la semana anterior y actualiza la fecha seleccionada. */
   const goToPreviousWeek = () => {
     const newDate = subDays(currentDate, 7);
     setCurrentDate(newDate);
@@ -162,56 +116,33 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
     setSelectedDate(startOfNewWeek < today ? startOfNewWeek : (isToday(startOfNewWeek) ? today : startOfNewWeek));
   };
 
-  /** Navega a la semana siguiente y actualiza la fecha seleccionada al lunes. */
   const goToNextWeek = () => {
     const newDate = addDays(currentDate, 7);
     setCurrentDate(newDate);
-    setSelectedDate(startOfWeek(newDate, { weekStartsOn: 1 })); 
+    setSelectedDate(startOfWeek(newDate, { weekStartsOn: 1 }));
   };
 
-  // --- Handlers para el Modal ---
-  /**
-   * Abre el modal para añadir una nueva comida.
-   * @function handleOpenAddModal
-   * @param {Date} date - Fecha para la nueva comida.
-   * @param {MealType} mealType - Tipo de comida.
-   */
   const handleOpenAddModal = (date: Date, mealType: MealType) => {
-    setSelectedDate(date); 
+    setSelectedDate(date);
     setSelectedMealType(mealType);
     setEditingMeal(null);
     setShowModal(true);
   };
 
-  /**
-   * Abre el modal para editar una comida existente.
-   * @function handleOpenEditModal
-   * @param {PlannedMeal} meal - La comida a editar.
-   */
   const handleOpenEditModal = (meal: PlannedMeal) => {
-    const mealDate = new Date(meal.plan_date + 'T00:00:00'); // Ajustar zona horaria si es necesario
-    setSelectedDate(mealDate); 
+    const mealDate = new Date(meal.plan_date + 'T00:00:00');
+    setSelectedDate(mealDate);
     setSelectedMealType(meal.meal_type);
     setEditingMeal(meal);
     setShowModal(true);
   };
 
-  /** Cierra el modal de añadir/editar comida. */
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingMeal(null);
     setSelectedMealType(null);
   };
 
-  /**
-   * Guarda una comida (nueva o editada) llamando al servicio y actualiza el estado local.
-   * @async
-   * @function handleSaveMeal
-   * @param {UpsertPlannedMealData} data - Datos de la comida a guardar.
-   * @param {string} [mealId] - ID de la comida si se está editando.
-   * @returns {Promise<void>}
-   * @throws {Error} Si ocurre un error durante el guardado.
-   */
   const handleSaveMeal = async (data: UpsertPlannedMealData, mealId?: string) => {
     setError(null);
     try {
@@ -219,10 +150,8 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
       if (savedMeal) {
         const mealTypesOrder: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
         if (mealId) {
-          // Actualizar comida existente en el estado
           setPlannedMeals(plannedMeals.map(m => m.id === mealId ? savedMeal : m));
         } else {
-          // Añadir nueva comida y reordenar
           setPlannedMeals([...plannedMeals, savedMeal].sort((a, b) =>
             a.plan_date.localeCompare(b.plan_date) || mealTypesOrder.indexOf(a.meal_type) - mealTypesOrder.indexOf(b.meal_type)
           ));
@@ -234,16 +163,10 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
     } catch (err) {
       console.error("Error saving meal:", err);
       setError(`Error al guardar: ${err instanceof Error ? err.message : 'Error desconocido'}`);
-      throw err; // Re-lanzar para que el modal sepa que hubo error
+      throw err;
     }
   };
 
-  /**
-   * Elimina una comida planificada llamando al servicio y actualiza el estado local.
-   * @async
-   * @function handleDeleteMeal
-   * @param {string} mealId - ID de la comida a eliminar.
-   */
   const handleDeleteMeal = async (mealId: string) => {
     setError(null);
     try {
@@ -259,30 +182,19 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
     }
   };
 
-  /**
-   * (Placeholder) Maneja la solicitud de alternativas de comida usando IA.
-   * @async
-   * @function handleRequestAlternatives
-   * @param {MealAlternativeRequestContext} context - Contexto para la solicitud.
-   * @returns {Promise<MealAlternative[] | null>} Alternativas o null.
-   */
-  /**
-   * (Placeholder) Maneja la solicitud de alternativas de comida usando IA.
-   * @async
-   * @function handleRequestAlternatives
-   * @param {MealAlternativeRequestContext} context - Contexto para la solicitud.
-   * @returns {Promise<MealAlternative[] | null>} Alternativas o null.
-   */
-  const handleRequestAlternatives = async (context: MealAlternativeRequestContext): Promise<MealAlternative[] | null> => {
+  const handleRequestAlternatives = useCallback(async (context: MealAlternativeRequestContext): Promise<MealAlternative[] | null> => {
      console.log('[PlanningPage] Requesting alternatives for:', context);
-     // const alternatives = await getMealAlternatives(context, userProfile);
-     return null;
-  };
+     try {
+       const alternatives = await getMealAlternatives(context, userProfile);
+       console.log('[PlanningPage] Alternatives received:', alternatives);
+       return alternatives;
+     } catch (error) {
+       console.error('[PlanningPage] Error fetching alternatives:', error);
+       toast.error("Error al buscar alternativas.");
+       return null;
+     }
+  }, [userProfile]);
 
-  /**
-   * Maneja la acción de autocompletar la semana con recetas generadas por IA.
-   * @async
-   */
   const handleAutocompleteWeek = async () => {
     if (!user?.id) {
       setAutocompleteError("Debes iniciar sesión para autocompletar la semana.");
@@ -291,55 +203,41 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
 
     setIsAutocompleting(true);
     setAutocompleteError(null);
-    setError(null); // Limpiar error general también
+    setError(null);
 
-    const recipesToGenerate = 7; // Generar 7 recetas (una cena por día)
+    const recipesToGenerate = 7;
 
     try {
-      console.log(`[PlanningPage] Iniciando autocompletado para ${recipesToGenerate} recetas...`);
       const result: GenerateRecipesResult = await generateRecipesFromPantry(recipesToGenerate, user.id);
-      console.log('[PlanningPage] Resultado de generación:', result);
 
       if (result.errors.length > 0) {
-        // Mostrar el primer error de generación, o un mensaje genérico
         const firstErrorMsg = result.errors[0].message;
         setAutocompleteError(`Error generando recetas: ${firstErrorMsg}${result.errors.length > 1 ? ` (y ${result.errors.length - 1} más)` : ''}`);
-        // Continuar para intentar añadir las recetas exitosas si las hay
       }
 
       if (result.successfulRecipes.length > 0) {
-        console.log(`[PlanningPage] ${result.successfulRecipes.length} recetas generadas con éxito. Guardando en planificación...`);
-        const mealTypeToAssign: MealType = 'Cena'; // Asignar a la cena por defecto
+        const mealTypeToAssign: MealType = 'Cena';
         const mealUpsertPromises: Promise<PlannedMeal | null>[] = [];
 
-        // Mapear recetas a los días de la semana actual
         result.successfulRecipes.forEach((recipe, index) => {
-          if (index < weekDays.length) { // Asegurar que no nos pasemos de días
+          if (index < weekDays.length) {
             const targetDate = weekDays[index];
             const dateStr = format(targetDate, 'yyyy-MM-dd');
-
             const mealData: UpsertPlannedMealData = {
               plan_date: dateStr,
               meal_type: mealTypeToAssign,
-              // Usar datos de la receta generada
-              custom_meal_name: recipe.title, // Usar título como nombre
-              notes: recipe.description, // Usar descripción como notas
-              recipe_id: null, // No estamos guardando la receta completa aún
-              // Podríamos añadir ingredientes/instrucciones a las notas si quisiéramos
+              custom_meal_name: recipe.title,
+              notes: recipe.description,
+              recipe_id: null,
             };
-
-            console.log(`[PlanningPage] Preparando para guardar comida para ${dateStr} - ${mealTypeToAssign}: ${recipe.title}`);
-            // Usamos upsert directamente, asumiendo que queremos sobrescribir si ya existe algo para esa cena
-            // Podríamos añadir lógica para verificar si el slot está vacío antes
             mealUpsertPromises.push(upsertPlannedMeal(mealData));
           }
         });
 
         const settledUpserts = await Promise.allSettled(mealUpsertPromises);
-        console.log('[PlanningPage] Resultados de guardar comidas:', settledUpserts);
-
         const newlyAddedMeals: PlannedMeal[] = [];
         let saveErrors = 0;
+
         settledUpserts.forEach((settledResult, index) => {
           if (settledResult.status === 'fulfilled' && settledResult.value) {
             newlyAddedMeals.push(settledResult.value);
@@ -350,12 +248,8 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
         });
 
         if (newlyAddedMeals.length > 0) {
-          console.log(`[PlanningPage] ${newlyAddedMeals.length} comidas añadidas/actualizadas con éxito.`);
-          // Actualizar estado local: añadir nuevas y filtrar posibles antiguas sobrescritas
-          // Es más simple recargar los datos, pero intentaremos actualizar localmente
           const mealTypesOrder: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
           const updatedMeals = [
-            // Mantener comidas que NO son las que acabamos de intentar añadir/sobrescribir
             ...plannedMeals.filter(meal => {
               const isTargetSlot = weekDays.some((day, idx) =>
                 format(day, 'yyyy-MM-dd') === meal.plan_date &&
@@ -364,7 +258,6 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
               );
               return !isTargetSlot;
             }),
-            // Añadir las nuevas comidas guardadas
             ...newlyAddedMeals
           ].sort((a, b) =>
             a.plan_date.localeCompare(b.plan_date) || mealTypesOrder.indexOf(a.meal_type) - mealTypesOrder.indexOf(b.meal_type)
@@ -374,11 +267,10 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
 
         if (saveErrors > 0) {
           const currentError = autocompleteError ? `${autocompleteError}. ` : '';
-          setAutocompleteError(`${currentError}Ocurrieron ${saveErrors} error(es) al guardar las comidas en el planificador.`);
+          setAutocompleteError(`${currentError}Ocurrieron ${saveErrors} error(es) al guardar las comidas.`);
         }
 
       } else if (result.errors.length === recipesToGenerate) {
-        // Si todas las generaciones fallaron, el error ya se estableció arriba.
         console.log('[PlanningPage] No se generó ninguna receta con éxito.');
       }
 
@@ -387,22 +279,13 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
       setAutocompleteError(`Error inesperado: ${err.message || 'Error desconocido'}`);
     } finally {
       setIsAutocompleting(false);
-      console.log('[PlanningPage] Proceso de autocompletado finalizado.');
     }
   };
 
-  /** @constant {MealType[]} mealTypes - Array con los tipos de comida en orden. */
   const mealTypes: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
-  /** @constant {string} selectedDateStr - Fecha seleccionada formateada. */
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  /** @constant {Record<MealType, PlannedMeal[]>} selectedDayMeals - Comidas agrupadas para el día seleccionado (móvil). */
-  const selectedDayMeals = mealsByDay ? (mealsByDay[selectedDateStr] || {}) : {}; 
+  const selectedDayMeals = mealsByDay ? (mealsByDay[selectedDateStr] || {}) : {};
 
-  // --- Componentes de Layout Condicional ---
-  /**
-   * Renderiza el layout para pantallas móviles/tablets pequeñas.
-   * @returns {React.ReactElement}
-   */
   const renderMobileLayout = () => (
     <div className="flex flex-col w-full space-y-3">
       <WeekDaySelector
@@ -423,18 +306,13 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
     </div>
   );
 
-  /**
-   * Renderiza el layout de cuadrícula para pantallas de escritorio.
-   * @returns {React.ReactElement}
-   */
   const renderDesktopLayout = () => (
-    <div className="overflow-x-auto w-full max-w-[1200px]"> {/* Contenedor para scroll horizontal */}
-      <div className="grid grid-cols-7 grid-rows-[auto_repeat(4,auto)] gap-1 min-w-[900px] border border-border/20 rounded-lg overflow-hidden shadow-sm"> {/* Aumentado min-w */}
-      {/* Encabezados */}
+    <div className="overflow-x-auto w-full max-w-[1200px]">
+      <div className="grid grid-cols-7 grid-rows-[auto_repeat(4,auto)] gap-1 min-w-[900px] border border-border/20 rounded-lg overflow-hidden shadow-sm">
       {weekDays.map((day) => (
         <div key={`header-${day.toISOString()}`} className={cn(
-          "p-2 text-center border-b border-r border-border/10", 
-          "bg-card", 
+          "p-2 text-center border-b border-r border-border/10",
+          "bg-card",
           isToday(day) ? "bg-primary/5" : ""
         )}>
           <div className="text-sm font-medium text-foreground/90">
@@ -450,15 +328,13 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
           </div>
         </div>
       ))}
-      {/* Celdas de Comida */}
-      {weekDays.flatMap((day) => { 
+      {weekDays.flatMap((day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const dayMeals = mealsByDay ? (mealsByDay[dateStr] || {}) : {}; 
-        
-        return mealTypes.map(mealType => { 
+        const dayMeals = mealsByDay ? (mealsByDay[dateStr] || {}) : {};
+        return mealTypes.map(mealType => {
           const mealsForSlot = dayMeals[mealType] || [];
           return (
-            <div key={`${dateStr}-${mealType}`} className="border-r border-b border-border/10 bg-card min-h-0"> 
+            <div key={`${dateStr}-${mealType}`} className="border-r border-b border-border/10 bg-card min-h-0">
               <MealCard
                 date={day}
                 mealType={mealType}
@@ -466,7 +342,7 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
                 onAddClick={handleOpenAddModal}
                 onEditClick={handleOpenEditModal}
                 onDeleteClick={handleDeleteMeal}
-                className="h-full" 
+                className="h-full"
               />
             </div>
           );
@@ -474,9 +350,8 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
       })}
       </div>
     </div>
-   ); // Fin del renderDesktopLayout
+   );
 
-  // --- Renderizado Principal ---
   return (
     <div className="flex flex-col items-center w-full h-full px-2 py-3 mx-auto">
       {/* Header */}
@@ -498,27 +373,23 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-          {/* Botón Autocompletar Semana */} 
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            onClick={handleAutocompleteWeek} 
-            disabled={isAutocompleting || isLoading}
-            className="ml-4"
-          >
-            {isAutocompleting ? <Spinner size="sm" className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            Autocompletar Semana
-          </Button>
+        {/* Botón Autocompletar */}
+         <div className="mt-4">
+           <Button onClick={handleAutocompleteWeek} disabled={isAutocompleting}>
+             {isAutocompleting ? <Spinner size="sm" className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
+             Autocompletar Semana (Cenas)
+           </Button>
+           {autocompleteError && <p className="text-red-500 text-xs mt-1 text-center">{autocompleteError}</p>}
+         </div>
       </div>
 
-      {error && <p className="mb-3 text-red-500 text-center text-sm">{error}</p>}
-
-      {/* Contenido Principal (Carga o Layout Condicional) */}
+      {/* Contenido Principal (Layout Responsivo) */}
       {isLoading ? (
-        <div className="flex justify-center py-20"><Spinner size="lg" /></div>
+        <div className="flex justify-center items-center flex-grow"><Spinner size="lg" /></div>
+      ) : error ? (
+        <p className="text-red-500 text-center flex-grow flex items-center justify-center">{error}</p>
       ) : (
-         // Usar directamente la comparación del breakpoint
-         breakpoint === 'mobile' ? renderMobileLayout() : renderDesktopLayout()
+        isDesktop ? renderDesktopLayout() : renderMobileLayout()
       )}
 
       {/* Modal */}
@@ -528,12 +399,12 @@ const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno 
         date={selectedDate}
         mealType={selectedMealType}
         mealToEdit={editingMeal}
-        userRecipes={userRecipes} // userRecipes es ahora un array vacío constante
+        userRecipes={userRecipes} // Pasar recetas del store
         onSave={handleSaveMeal}
         onRequestAlternatives={handleRequestAlternatives}
       />
     </div>
   );
-}; // Fin de la definición del componente PlanningPage
+};
 
-export default PlanningPage; // Exportación por defecto
+export default PlanningPage; // Añadir exportación por defecto

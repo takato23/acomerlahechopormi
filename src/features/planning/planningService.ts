@@ -14,8 +14,13 @@ export async function getPlannedMeals(startDate: string, endDate: string): Promi
       .from('meal_plan_entries')
       .select(`
         *,
-        recipes ( id, title )
-      `) // Hacer JOIN para obtener título de receta
+        recipes (
+          id,
+          title,
+          description,
+          image_url
+        )
+      `) // Hacer JOIN para obtener datos de receta necesarios para preview
       .gte('plan_date', startDate)
       .lte('plan_date', endDate)
       .order('plan_date', { ascending: true })
@@ -71,7 +76,15 @@ export async function upsertPlannedMeal(
         .insert(dataToSave);
     }
 
-    const { data, error } = await query.select(`*, recipes ( id, title )`).single();
+    const { data, error } = await query.select(`
+      *,
+      recipes (
+        id,
+        title,
+        description,
+        image_url
+      )
+    `).single();
 
     if (error) {
       console.error('Error al guardar comida planificada:', error);
