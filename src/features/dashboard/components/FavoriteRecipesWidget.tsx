@@ -27,14 +27,14 @@ const listItemVariants = {
 
 export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: FavoriteRecipesWidgetProps) { 
   return (
-    <Card className="h-full flex flex-col"> 
+    <Card className="h-full flex flex-col bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden hover:shadow-lg">
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-base font-medium flex items-center gap-2"> 
+        <CardTitle className="text-lg font-medium flex items-center gap-2">
           <Star className="h-4 w-4 text-muted-foreground" /> 
           Recetas Favoritas
         </CardTitle>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-xs" asChild> 
+          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-sm" asChild>
             <Link to="/app/recipes?view=favorites"> 
               Ver Todas <ArrowRight className="ml-1 h-3 w-3" />
             </Link>
@@ -66,14 +66,14 @@ export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: Fav
                       animate="visible"
                       exit="exit"
                       layout
-                      className="hover:bg-muted/50 rounded"
-                    > 
+                      className="hover:bg-slate-100 rounded"
+                    >
                       <Link 
                         to={`/app/recipes/${recipe.id}`} 
-                        className="flex items-center gap-2 p-1.5 text-xs text-foreground/90 hover:text-primary" 
+                        className="flex items-center gap-2 p-1.5 text-sm text-slate-900 hover:text-emerald-600"
                       >
                          <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                            <ImageOff className="h-4 w-4 text-muted-foreground/60" />
+                            <ImageOff className="h-4 w-4 text-slate-400" />
                          </div>
                          <span className="truncate flex-grow"> 
                            {recipe.name || 'Receta sin nombre'}
@@ -83,7 +83,7 @@ export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: Fav
                   ))}
                 </AnimatePresence>
                 {favoriteRecipes.length > 5 && (
-                  <li className="text-xs text-muted-foreground text-center pt-1">
+                  <li className="text-xs text-slate-500 text-center pt-1">
                     ...y {favoriteRecipes.length - 5} más
                   </li>
                 )}

@@ -3,7 +3,7 @@ module.exports = {
     ['@babel/preset-env', { targets: { node: 'current' } }],
     '@babel/preset-typescript',
     // Añadir preset de React si hay errores de JSX más adelante
-    // ['@babel/preset-react', { runtime: 'automatic' }] 
+    ['@babel/preset-react', { runtime: 'automatic' }] // Descomentado para transformar JSX
   ],
   plugins: [
     // Añadir plugins para sintaxis específicas si son necesarias

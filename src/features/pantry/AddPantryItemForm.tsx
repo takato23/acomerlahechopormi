@@ -1,268 +1,371 @@
-// src/features/pantry/AddPantryItemForm.tsx
-import { useState, useEffect, useCallback } from 'react';
-import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Ingredient, Category } from './types';
-import { FormItemData } from './formTypes';
-import { addPantryItem, updatePantryItem } from './pantryService';
-import { getCategories } from '../shopping-list/services/categoryService';
-import { parseShoppingInput, ParsedShoppingInput } from '../shopping-list/lib/inputParser'; // Importar parser
-import { inferCategory } from '../shopping-list/lib/categoryInference'; // Importar inferencia
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { IngredientCombobox } from './components/IngredientCombobox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category, COMMON_PANTRY_UNITS } from './types';
+import { suggestCategory } from './lib/categorySuggestor';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface AddPantryItemFormProps {
-  itemToEdit?: FormItemData | null;
-  onSave: (item: PantryItem) => void;
-  onCancel: () => void;
-  onError?: (message: string) => void; // Hacer opcional
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: CreatePantryItemData | UpdatePantryItemData, closeModal: boolean) => Promise<void>;
+  itemToEdit?: PantryItem | null | undefined;
+  categories: Category[];
 }
 
-export function AddPantryItemForm({
+const AddPantryItemForm: React.FC<AddPantryItemFormProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
   itemToEdit,
-  onSave,
-  onCancel,
-  onError, // Recibir prop opcional
-}: AddPantryItemFormProps) {
-  const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
-  const [quantity, setQuantity] = useState<string>('');
+  categories,
+}) => {
+  // Estados
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemName, setItemName] = useState('');
+  const [quantity, setQuantity] = useState<number | ''>('');
   const [unit, setUnit] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [rawInputText, setRawInputText] = useState<string>(''); // Estado para input crudo
+  const [location, setLocation] = useState('');
+  const [price, setPrice] = useState<number | ''>('');
+  const [notes, setNotes] = useState('');
+  const [minStock, setMinStock] = useState<number | ''>('');
+  const [targetStock, setTargetStock] = useState<number | ''>('');
+  const [tags, setTags] = useState('');
+  const [categoryManuallySelected, setCategoryManuallySelected] = useState(false);
+  const itemNameInputRef = useRef<HTMLInputElement>(null);
 
-  // Un ítem es existente si es de tipo PantryItem (tiene id)
-  const isEditing = Boolean(itemToEdit && 'id' in itemToEdit);
+  const debouncedItemName = useDebounce(itemName, 400);
 
+  // Efectos
   useEffect(() => {
     if (itemToEdit) {
-      // Si es un ítem existente (tipo PantryItem)
-      if ('id' in itemToEdit) {
-        const item = itemToEdit as PantryItem;
-        const initialIngredient: Ingredient = {
-          id: item.ingredient_id,
-          name: item.ingredients?.name ?? '',
-          created_at: '',
-        };
-        setSelectedIngredient(initialIngredient);
-        setQuantity(item.quantity?.toString() ?? '');
-        setUnit(item.unit ?? '');
-        setExpiryDate(item.expiry_date ?? '');
-        // Usar ?? null para manejar undefined
-        setSelectedCategoryId(item.category_id ?? null);
-      }
-      // Si son datos parciales (Quick Add)
-      else {
-        if (itemToEdit.ingredients?.name) {
-          setSelectedIngredient({
-            id: itemToEdit.ingredient_id ?? '--new--',
-            name: itemToEdit.ingredients.name,
-            created_at: '',
-          });
-        }
-        setQuantity(itemToEdit.quantity?.toString() ?? '');
-        setUnit(itemToEdit.unit ?? '');
-        setSelectedCategoryId(itemToEdit.category_id ?? null);
-      }
+      setItemName(itemToEdit.ingredient?.name || '');
+      setQuantity(itemToEdit.quantity ?? '');
+      setUnit(itemToEdit.unit || '');
+      setCategoryId(itemToEdit.category_id || '');
+      setExpiryDate(itemToEdit.expiry_date || '');
+      setLocation(itemToEdit.location || '');
+      setPrice(itemToEdit.price ?? '');
+      setNotes(itemToEdit.notes || '');
+      setMinStock(itemToEdit.min_stock ?? '');
+      setTargetStock(itemToEdit.target_stock ?? '');
+      setTags(itemToEdit.tags?.join(', ') || '');
     } else {
-      // Reset completo
-      setSelectedIngredient(null);
+      setItemName('');
       setQuantity('');
-      setUnit('');
+      setUnit(COMMON_PANTRY_UNITS[0] || '');
+      setCategoryId('');
       setExpiryDate('');
-      setSelectedCategoryId(null);
+      setLocation('');
+      setPrice('');
+      setNotes('');
+      setMinStock('');
+      setTargetStock('');
+      setTags('');
+      setCategoryManuallySelected(false);
     }
-  }, [itemToEdit]);
+  }, [itemToEdit, isOpen]);
 
   useEffect(() => {
-    async function loadCategories() {
-      try {
-        const cats = await getCategories();
-        setAvailableCategories(cats);
-      } catch (err) {
-        console.error("Error loading categories for form:", err);
+    if (!itemToEdit && debouncedItemName && !categoryManuallySelected) {
+      const suggestedId = suggestCategory(debouncedItemName);
+      if (suggestedId && suggestedId !== categoryId) {
+        console.log(`Suggesting category ${suggestedId} for "${debouncedItemName}"`);
+        setCategoryId(suggestedId);
       }
     }
-    loadCategories();
-  }, []);
+  }, [debouncedItemName, itemToEdit, categoryManuallySelected]);
 
-  const handleIngredientSelect = useCallback((ingredient: Ingredient | null, isNew = false) => {
-    setSelectedIngredient(ingredient);
-    if (isNew && ingredient) {
-      setRawInputText(ingredient.name); // Guardar input crudo si es nuevo
-    } else {
-      setRawInputText(''); // Limpiar si no es nuevo
-      // Mantener la lógica de unidad por defecto si existe y el campo unit está vacío
-      if (ingredient && !isNew && ingredient.default_unit && !unit) {
-        setUnit(ingredient.default_unit);
-      }
-    }
-  }, [unit]); // Dependencia solo de unit para la lógica de unidad por defecto
+  // Handlers
+  const handleFormSubmit = async (closeModalAfterSubmit: boolean) => {
+    setIsSubmitting(true);
 
-  // Efecto para parsear e inferir cuando cambia el input crudo
-  useEffect(() => {
-    if (!rawInputText) return;
+    let formData: CreatePantryItemData | UpdatePantryItemData;
 
-    const processInput = async () => {
-      const parsed = parseShoppingInput(rawInputText);
-      const inferredCatId = await inferCategory(parsed.name);
-
-      // Actualizar solo si los campos están vacíos
-      if (!quantity && parsed.quantity !== null) {
-        setQuantity(parsed.quantity.toString());
-      }
-      if (!unit && parsed.unit !== null) {
-        setUnit(parsed.unit);
-      }
-      if (!selectedCategoryId && inferredCatId !== null) {
-        setSelectedCategoryId(inferredCatId);
-      }
-      // Actualizar el nombre del ingrediente seleccionado por si el parser lo modificó (ej: capitalización)
-      if (selectedIngredient && selectedIngredient.name !== parsed.name) {
-           setSelectedIngredient(prev => prev ? { ...prev, name: parsed.name } : null);
-      }
+    const commonData = {
+      quantity: quantity === '' ? null : Number(quantity),
+      unit: unit || null,
+      category_id: categoryId || null,
+      expiry_date: expiryDate || null,
+      location: location || null,
+      price: price === '' ? null : Number(price),
+      notes: notes || null,
+      min_stock: minStock === '' ? null : Number(minStock),
+      target_stock: targetStock === '' ? null : Number(targetStock),
+      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) || null,
     };
 
-    processInput();
-    // Limpiar rawInputText después de procesar para evitar re-ejecuciones innecesarias
-    // Opcional: podrías querer mantenerlo si el usuario sigue editando el nombre
-    // setRawInputText('');
-
-  }, [rawInputText, quantity, unit, selectedCategoryId, selectedIngredient]); // Dependencias relevantes
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsSaving(true);
-    onError?.(''); // Llamar solo si existe
-
-    const quantityValue = quantity.trim() === '' ? null : parseFloat(quantity);
-    if (quantity.trim() !== '' && isNaN(quantityValue!)) {
-      onError?.('La cantidad debe ser un número válido.'); // Llamar solo si existe
-      setIsSaving(false);
-      return;
+    if (itemToEdit) {
+      formData = { ...commonData };
+    } else {
+      if (!itemName.trim()) {
+        console.error("El nombre del ingrediente es requerido.");
+        setIsSubmitting(false);
+        return;
+      }
+      formData = {
+        ...commonData,
+        ingredient_name: itemName.trim(),
+      };
     }
 
-    if (!selectedIngredient?.name) {
-      onError?.('Debes seleccionar o crear un ingrediente.'); // Llamar solo si existe
-      setIsSaving(false);
-      return;
+    if (!isOpen) {
+      setCategoryManuallySelected(false);
     }
 
-    const baseData = {
-      quantity: quantityValue,
-      unit: unit.trim() === '' ? null : unit.trim(),
-      expiry_date: expiryDate || null,
-      category_id: selectedCategoryId,
+    const resetForAddAnother = () => {
+      setItemName('');
+      setQuantity('');
+      setExpiryDate('');
+      setLocation('');
+      setPrice('');
+      setNotes('');
+      setMinStock('');
+      setTargetStock('');
+      setTags('');
+      setCategoryManuallySelected(false);
+      itemNameInputRef.current?.focus();
     };
 
     try {
-      let savedItem: PantryItem | null = null;
-      
-      // Si estamos editando un ítem existente
-      if (isEditing && itemToEdit && 'id' in itemToEdit) {
-        const updateData: UpdatePantryItemData = baseData;
-        savedItem = await updatePantryItem(itemToEdit.id, updateData);
-      }
-      // Si es nuevo (ya sea desde Quick Add o completamente nuevo)
-      else {
-        const createData: CreatePantryItemData = {
-          ...baseData,
-          ingredient_name: selectedIngredient.name,
-        };
-        savedItem = await addPantryItem(createData);
-      }
-
-      if (savedItem) {
-        onSave(savedItem);
+      await onSubmit(formData, closeModalAfterSubmit);
+      if (closeModalAfterSubmit) {
+        onClose();
       } else {
-        onError?.(`Error al ${isEditing ? 'actualizar' : 'añadir'} el item.`); // Llamar solo si existe
+        resetForAddAnother();
       }
     } catch (error) {
-      console.error(`Error saving pantry item:`, error);
-      onError?.(`Ocurrió un error al ${isEditing ? 'actualizar' : 'añadir'} el item.`); // Llamar solo si existe
+      console.error("Error submitting pantry item:", error);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="ingredientCombobox">Ingrediente</Label>
-        <IngredientCombobox
-          selectedIngredient={selectedIngredient}
-          onSelect={handleIngredientSelect}
-          disabled={isSaving || isEditing}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="quantity">Cantidad</Label>
-          <Input
-            id="quantity"
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="Ej: 100"
-            disabled={isSaving}
-            step="any"
-          />
-        </div>
-        <div>
-          <Label htmlFor="unit">Unidad</Label>
-          <Input
-            id="unit"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="Ej: gr, ml, unidad"
-            disabled={isSaving}
-          />
-        </div>
-      </div>
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value);
+    setCategoryManuallySelected(true);
+  };
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="category">Categoría</Label>
-          <Select
-            value={selectedCategoryId ?? undefined}
-            onValueChange={(value) => setSelectedCategoryId(value === 'none' ? null : value)}
-            disabled={isSaving}
-          >
-            <SelectTrigger id="category">
-              <SelectValue placeholder="Seleccionar categoría..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">-- Sin Categoría --</SelectItem>
-              {availableCategories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
+  if (!isOpen) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>{itemToEdit ? 'Editar Item' : 'Añadir Item a la Despensa'}</DialogTitle>
+        </DialogHeader>
+        <form className="grid gap-4 py-4">
+          {!itemToEdit && (
+            <>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="itemName" className="text-right text-slate-700">
+                  Nombre*
+                </Label>
+                <Input
+                  id="itemName"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="location" className="text-right text-slate-700">
+                  Ubicación
+                </Label>
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ej: Nevera, Despensa..."
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="price" className="text-right text-slate-700">
+                  Precio
+                </Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Opcional (ej: 1.50)"
+                  step="0.01"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="notes" className="text-right text-slate-700">
+                  Notas
+                </Label>
+                <Input
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Opcional..."
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minStock" className="text-right text-slate-700">
+                  Stock Mín.
+                </Label>
+                <Input
+                  id="minStock"
+                  type="number"
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Opcional"
+                  step="any"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="targetStock" className="text-right text-slate-700">
+                  Stock Obj.
+                </Label>
+                <Input
+                  id="targetStock"
+                  type="number"
+                  value={targetStock}
+                  onChange={(e) => setTargetStock(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Opcional"
+                  step="any"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="tags" className="text-right text-slate-700">
+                  Etiquetas
+                </Label>
+                <Input
+                  id="tags"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ej: sin gluten, vegano, oferta"
+                />
+                <p className="col-start-2 col-span-3 text-xs text-muted-foreground -mt-3">
+                  Separadas por comas.
+                </p>
+              </div>
+            </>
+          )}
+
+          {itemToEdit && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-slate-700">Nombre</Label>
+              <p className="col-span-3 font-medium">{itemToEdit.ingredient?.name || 'N/A'}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="quantity" className="text-right text-slate-700">
+              Cantidad
+            </Label>
+            <Input
+              id="quantity"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="Ej: 1, 500, 0.5"
+              step="any"
+            />
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="unit" className="text-right text-slate-700">
+              Unidad
+            </Label>
+            <Input
+              id="unit"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="Ej: kg, L, unidad, paquete"
+              list="common-units"
+            />
+            <datalist id="common-units">
+              {COMMON_PANTRY_UNITS.map(u => (
+                <option key={u} value={u} />
               ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="expiryDate">Fecha Vencimiento</Label>
-          <Input
-            id="expiryDate"
-            type="date"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-            disabled={isSaving}
-          />
-        </div>
-      </div>
-      <div className="flex justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={isSaving}>
-          {isSaving ? 'Guardando...' : (isEditing ? 'Actualizar Item' : 'Añadir Item')}
-        </Button>
-      </div>
-    </form>
+            </datalist>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="category" className="text-right text-slate-700">
+              Categoría
+            </Label>
+            <Select value={categoryId} onValueChange={handleCategoryChange}>
+              <SelectTrigger id="category" className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500">
+                <SelectValue placeholder="Selecciona categoría..." />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="expiryDate" className="text-right text-slate-700">
+              Caducidad
+            </Label>
+            <Input
+              id="expiryDate"
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              className="col-span-3 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+        </form>
+
+        <DialogFooter className="sm:justify-between gap-2">
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Cancelar
+            </Button>
+          </DialogClose>
+          <div className="flex gap-2">
+            {!itemToEdit && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleFormSubmit(false)}
+                disabled={isSubmitting}
+                className="bg-slate-100 text-slate-900 hover:bg-slate-200"
+              >
+                {isSubmitting ? 'Guardando...' : 'Guardar y Añadir Otro'}
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={() => handleFormSubmit(true)}
+              disabled={isSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? 'Guardando...' : (itemToEdit ? 'Guardar Cambios' : 'Añadir Item')}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
-}
+};
+
+export default AddPantryItemForm;

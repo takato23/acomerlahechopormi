@@ -35,9 +35,9 @@ export function TodayPlanWidget({ meals, today }: TodayPlanWidgetProps) {
   );
 
   return (
-    <Card className="h-full flex flex-col"> 
+    <Card className="h-full flex flex-col bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden hover:shadow-lg">
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-base font-medium flex items-center gap-2"> 
+        <CardTitle className="text-lg font-medium flex items-center gap-2">
            <CalendarClock className="h-4 w-4 text-muted-foreground" /> 
            Plan de Hoy 
            <span className="text-muted-foreground font-normal text-sm">
@@ -45,7 +45,7 @@ export function TodayPlanWidget({ meals, today }: TodayPlanWidgetProps) {
            </span>
         </CardTitle>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-xs" asChild> 
+          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-sm" asChild>
             <Link to="/app/planning">
               Ver Semana <ArrowRight className="ml-1 h-3 w-3" />
             </Link>
@@ -60,16 +60,16 @@ export function TodayPlanWidget({ meals, today }: TodayPlanWidgetProps) {
           className="h-full" 
         >
           {sortedMeals.length > 0 ? (
-            <ul className="space-y-1.5 overflow-y-auto h-full pr-1"> 
+            <ul className="space-y-2 overflow-y-auto h-full pr-1">
               {sortedMeals.map((meal) => (
-                <li key={meal.id} className="flex items-center justify-between p-1.5 rounded-md bg-muted/40 hover:bg-muted/70 text-xs"> 
+                <li key={meal.id} className="flex items-center justify-between p-1.5 rounded-md bg-slate-50 hover:bg-slate-100 text-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm">{mealVisuals[meal.meal_type]?.emoji || '🍽️'}</span> 
-                    <span className="font-medium text-foreground/80">{meal.meal_type}</span>
+                    <span className="font-medium text-slate-700">{meal.meal_type}</span>
                   </div>
-                  <span className="text-foreground/90 truncate max-w-[120px] sm:max-w-[150px] text-right"> 
+                  <span className="text-slate-900 truncate max-w-[120px] sm:max-w-[150px] text-right">
                     {meal.recipe_id && meal.recipes ? (
-                      <Link to={`/app/recipes/${meal.recipe_id}`} className="hover:underline hover:text-primary">
+                      <Link to={`/app/recipes/${meal.recipe_id}`} className="hover:underline hover:text-emerald-600">
                         {meal.recipes.name} 
                       </Link>
                     ) : (

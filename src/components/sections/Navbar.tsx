@@ -102,8 +102,27 @@ const Navbar = () => {
             </div>
           )}
 
-          {/* Espaciador si no es landing page (para empujar acciones a la derecha) */}
-          {!isLandingPage && <div className="flex-grow"></div>}
+          {/* Navegación principal de la App (Desktop) */}
+          {isAppPage && showUserElements && (
+            <div className="hidden md:flex md:items-center md:space-x-4 lg:space-x-6 flex-grow justify-center"> {/* Centrar enlaces */}
+              {appNavigation.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  end={item.exact}
+                  className={({ isActive }: { isActive: boolean }) => cn(
+                    'text-sm font-medium text-foreground/80 transition-colors duration-200 hover:text-foreground px-2 py-1 rounded-md', // Estilo similar a sidebar pero horizontal
+                    isActive ? 'bg-muted text-foreground font-semibold' : ''
+                  )}
+                >
+                  {item.name}
+                </NavLink>
+              ))}
+            </div>
+          )}
+
+          {/* Espaciador si no es landing page Y NO es app page con usuario (caso raro, pero por si acaso) */}
+          {!isLandingPage && !(isAppPage && showUserElements) && <div className="flex-grow"></div>}
 
           {/* Botones de Acción y Menú Móvil */}
           <div className="flex items-center">

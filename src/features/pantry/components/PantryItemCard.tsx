@@ -1,153 +1,207 @@
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { PantryItem } from '../types';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Importar CardFooter
 import { Button } from '@/components/ui/button';
-// Card ya no se usa directamente, usamos motion.div con clases de card
-// import { Card } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/Spinner';
-import { Trash2, Plus, Minus, Pencil, CalendarClock, Tag } from 'lucide-react'; // Añadido Tag como placeholder
-import { useState } from 'react';
-import { format, differenceInDays, parseISO, isValid } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Pencil, Trash2, Star, Package } from 'lucide-react'; // Importar Package
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion'; // Importar motion
+import { Checkbox } from '@/components/ui/checkbox';
+import { getLucideIcon, DefaultIcon } from '@/lib/iconMap'; // Importar getLucideIcon y DefaultIcon
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Importar Tooltip
 
 interface PantryItemCardProps {
   item: PantryItem;
-  onUpdateQuantity: (item: PantryItem, delta: number) => Promise<void>;
-  onDelete: (itemId: string) => Promise<void>;
   onEdit: (item: PantryItem) => void;
-  isUpdating?: boolean;
-  isDeleting?: boolean;
+  onDelete: (itemId: string) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onSelectItem: (itemId: string) => void;
+  onToggleFavorite: (itemId: string) => void; // Solo espera itemId
 }
 
 export function PantryItemCard({
   item,
-  onUpdateQuantity,
-  onDelete,
   onEdit,
-  isUpdating,
-  isDeleting,
+  onDelete,
+  isSelectionMode,
+  isSelected,
+  onSelectItem,
+  onToggleFavorite
 }: PantryItemCardProps) {
 
-  const handleUpdate = async (delta: number) => {
-    await onUpdateQuantity(item, delta);
-  };
+  useEffect(() => {
+    // console.log('[PantryItemCard] Rendering. onToggleFavorite type:', typeof onToggleFavorite); // Log opcional
+  }, [onToggleFavorite]);
 
-  const handleDelete = async () => {
-    await onDelete(item.id);
-  };
-
-  // Calcular estado de vencimiento
-  let expiryStatus: 'ok' | 'soon' | 'expired' = 'ok';
-  let daysRemaining: number | null = null;
-  let formattedExpiryDate: string | null = null;
-
-  if (item.expiry_date) {
-    const expiryDateObj = parseISO(item.expiry_date);
-    if (isValid(expiryDateObj)) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        daysRemaining = differenceInDays(expiryDateObj, today);
-        formattedExpiryDate = format(expiryDateObj, 'dd MMM yy', { locale: es }); // Formato más corto
-
-        if (daysRemaining < 0) {
-            expiryStatus = 'expired';
-        } else if (daysRemaining <= 7) {
-            expiryStatus = 'soon';
-        }
+  const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (typeof onToggleFavorite === 'function') {
+      onToggleFavorite(item.id);
+    } else {
+      console.error('[PantryItemCard] onToggleFavorite is not a function');
     }
-  }
+  }, [item.id, onToggleFavorite]);
 
-  // Clases condicionales para la tarjeta
-  const cardClasses = cn(
-    "p-2 flex items-center justify-between gap-2 transition-opacity duration-300", // Padding reducido
-    "rounded-lg border bg-card text-card-foreground shadow-sm", // Clases base de Card
-    expiryStatus === 'expired' && 'opacity-60 border-destructive/40', // Más sutil
-    expiryStatus === 'soon' && 'border-yellow-500/50'
-  );
+  const handleCardClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const targetElement = e.target as Element;
+    const isButtonClick = targetElement.closest('button');
+    const isCheckboxClick = targetElement.closest('[role="checkbox"]');
+    if (isSelectionMode && !isButtonClick && !isCheckboxClick) {
+      onSelectItem(item.id);
+    }
+  }, [isSelectionMode, item.id, onSelectItem]);
 
-  // Placeholder para icono de categoría
-  const CategoryIcon = item.categories?.icon ? Tag : null; // Reemplazar Tag con componente real de iconos
+  // Determinar qué mostrar: Imagen, Icono de Categoría o Icono Fallback
+  const VisualRepresentation = useMemo(() => {
+    // Prioridad 1: Imagen del ingrediente
+    if (item.ingredient?.image_url) {
+      return (
+        <img
+          src={item.ingredient.image_url}
+          alt={item.ingredient.name || 'Ingrediente'}
+          className="w-10 h-10 object-cover rounded-md mr-2 flex-shrink-0" // Ajustar margen
+          loading="lazy"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }} // Ocultar si la imagen falla
+        />
+      );
+    }
+    // Prioridad 2: Icono de la categoría
+    const CategoryIcon = getLucideIcon(item.category?.icon_name);
+    if (CategoryIcon) {
+      return <CategoryIcon className="w-6 h-6 text-muted-foreground mr-2 flex-shrink-0" />; // Ajustar margen
+    }
+    // Prioridad 3: Icono por defecto
+    return <DefaultIcon className="w-6 h-6 text-muted-foreground mr-2 flex-shrink-0" />; // Ajustar margen
+  }, [item.ingredient?.image_url, item.ingredient?.name, item.category?.icon_name]);
 
   return (
-    <motion.div className={cardClasses}>
-      {/* Contenedor Principal Flex */}
-      <div className="flex flex-1 items-center gap-2 overflow-hidden"> {/* Reducido gap */}
-        {/* Icono de Categoría */}
-        {CategoryIcon && (
-           <span
-             className="p-1.5 bg-muted/40 rounded-full flex-shrink-0"
-             style={{ color: item.categories?.color ?? 'hsl(var(--muted-foreground))' }} // Usar muted-foreground como fallback
-             title={item.categories?.name ?? 'Sin Categoría'}
-            >
-             <CategoryIcon className="h-4 w-4" />
-           </span>
+    <TooltipProvider> {/* Necesario para que funcionen los Tooltips internos */}
+      <Card
+        className={cn(
+          "relative flex flex-col h-full shadow-sm hover:shadow-md transition-shadow duration-200",
+          "bg-card/80 backdrop-blur-md rounded-lg",
+          isSelectionMode && "cursor-pointer",
+          isSelected && "ring-2 ring-primary ring-offset-2"
         )}
-        {/* Info Principal */}
-        <div className="flex-grow overflow-hidden">
-          <p className="font-medium truncate text-sm" title={item.ingredients?.name ?? 'Ingrediente desconocido'}>
-            {item.ingredients?.name ?? 'Ingrediente desconocido'}
-          </p>
-          {/* Cantidad y Unidad */}
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-             {/* Controles +/- */}
-             <Button
-                variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground" // Más pequeño, ghost
-                onClick={() => handleUpdate(-1)}
-                disabled={isUpdating || isDeleting || (item.quantity ?? 0) <= 0}
-                aria-label="Disminuir cantidad"
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="min-w-[2ch] text-center font-medium text-foreground text-sm"> {/* Ajustado tamaño */}
-                {isUpdating ? <Spinner size="sm"/> : (item.quantity ?? 0)}
-              </span>
-              <Button
-                variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground" // Más pequeño, ghost
-                onClick={() => handleUpdate(1)}
-                disabled={isUpdating || isDeleting}
-                aria-label="Aumentar cantidad"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-              <span className="ml-1 truncate">{item.unit ?? 'un.'}</span>
-          </div>
-          {/* Fecha Vencimiento */}
-          {formattedExpiryDate && (
-            <p className={cn(
-                "text-xs mt-0.5 flex items-center gap-1",
-                expiryStatus === 'expired' && 'text-red-600 font-medium',
-                expiryStatus === 'soon' && 'text-yellow-600'
-            )}>
-              <CalendarClock className="h-3 w-3" />
-              {formattedExpiryDate}
-              {/* {expiryStatus === 'soon' && ` (${daysRemaining}d)`} */}
-              {/* {expiryStatus === 'expired' && ` (Vencido)`} */}
-            </p>
+        onClick={handleCardClick}
+        data-testid="pantry-item-card"
+      >
+        <CardHeader
+          className={cn(
+            "p-3 flex flex-row items-center gap-0 space-y-0", // gap-0 para controlar espacio con mr-*
+            isSelectionMode && "pointer-events-auto"
           )}
-        </div>
-      </div>
+        >
+          {/* Checkbox */}
+          {isSelectionMode && (
+            <div className="flex items-center h-7 w-7 mr-2">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onSelectItem(item.id)}
+                aria-label={`Seleccionar ${item.ingredient?.name || 'item'}`}
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+          )}
 
-      {/* Botones de Acción (Editar/Eliminar) */}
-      <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-          <Button
-            variant="ghost" size="icon"
-            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-6 w-6" // Más pequeño
-            onClick={() => onEdit(item)}
-            disabled={isDeleting || isUpdating}
-            aria-label="Editar item"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost" size="icon"
-            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-6 w-6" // Más pequeño
-            onClick={handleDelete}
-            disabled={isDeleting || isUpdating}
-            aria-label="Eliminar item"
-          >
-            {isDeleting ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
-          </Button>
-      </div>
-    </motion.div>
+          {/* Imagen o Icono (siempre visible ahora) */}
+          {VisualRepresentation}
+
+          {/* Título y Categoría */}
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-sm font-medium leading-tight truncate">
+              {item.ingredient?.name || 'Ingrediente Desconocido'}
+            </CardTitle>
+            {item.category?.name && (
+              <p className="text-xs font-medium text-muted-foreground truncate">
+                {item.category.name}
+              </p>
+            )}
+          </div>
+
+          {/* Botones de Acción (Favorito y Editar) - Solo si no está en modo selección */}
+          {!isSelectionMode && (
+            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleToggleFavorite}
+                    aria-label={item.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+                    data-testid="favorite-button"
+                  >
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        item.is_favorite ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground"
+                      )}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{item.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                    aria-label="Editar"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Editar item</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent className="p-3 pt-1 text-sm">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <span className="font-medium">{item.quantity ?? '-'}</span>
+              <span className="text-muted-foreground">{item.unit || ''}</span>
+            </div>
+            {item.expiry_date && (
+              <p className="text-xs text-muted-foreground">Vence: {item.expiry_date}</p>
+            )}
+          </div>
+        </CardContent>
+
+        {/* Botón Eliminar en Footer (Solo si no está en modo selección) */}
+        {!isSelectionMode && (
+          <CardFooter className="p-2 justify-end">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive/90"
+                  onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                  aria-label="Eliminar"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Eliminar item</p>
+              </TooltipContent>
+            </Tooltip>
+          </CardFooter>
+        )}
+      </Card>
+    </TooltipProvider>
   );
 }

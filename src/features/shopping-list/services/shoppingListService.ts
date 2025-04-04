@@ -8,7 +8,7 @@ type Recipe = any;
 type RecipeIngredient = any;
 type PantryItem = any; 
 import { getPlannedMeals } from '@/features/planning/planningService';
-import { getRecipeById } from '@/features/recipes/recipeService'; 
+// import { getRecipeById } from '@/features/recipes/recipeService'; // Comentado - Funcionalidad de recetas eliminada temporalmente
 import { getPantryItems } from '@/features/pantry/pantryService'; 
 
 /** @constant {string} TABLE_NAME - Nombre de la tabla de la lista de compras en Supabase. */
@@ -224,41 +224,43 @@ export const generateShoppingList = async (startDate: string, endDate: string): 
     }
   });
 
-  // 2. Obtener detalles de recetas
-  const recipeIds = [...new Set(plannedMeals.map(meal => meal.recipe_id).filter(id => id !== null))] as string[];
-  const recipes: Recipe[] = [];
-  // Considerar Promise.all para optimizar si hay muchas recetas
-  for (const id of recipeIds) {
-    const recipe = await getRecipeById(id);
-    if (recipe) recipes.push(recipe);
-    else console.warn(`Recipe with ID ${id} planned but not found.`);
-  }
-  const recipeMap = new Map<string, Recipe>(recipes.map(r => [r.id, r]));
+  // --- Lógica dependiente de Recetas - Comentada Temporalmente ---
+  // // 2. Obtener detalles de recetas
+  // const recipeIds = [...new Set(plannedMeals.map(meal => meal.recipe_id).filter(id => id !== null))] as string[];
+  // const recipes: Recipe[] = [];
+  // // Considerar Promise.all para optimizar si hay muchas recetas
+  // for (const id of recipeIds) {
+  //   // const recipe = await getRecipeById(id); // LLAMADA COMENTADA
+  //   // if (recipe) recipes.push(recipe);
+  //   // else console.warn(`Recipe with ID ${id} planned but not found.`);
+  // }
+  // const recipeMap = new Map<string, Recipe>(recipes.map(r => [r.id, r]));
 
-  // 3. Consolidar ingredientes requeridos
+  // 3. Consolidar ingredientes requeridos (Modificado para no depender de recipeMap)
   const requiredIngredients: { [key: string]: { name: string; quantity: number | null; unit: string | null; sources: string[] } } = {};
   plannedMeals.forEach(meal => {
-    if (meal.recipe_id) {
-      const recipe = recipeMap.get(meal.recipe_id);
-      if (recipe?.recipe_ingredients) {
-        recipe.recipe_ingredients.forEach((ingredient: RecipeIngredient) => {
-          const name = ingredient.name.trim();
-          const unit = (ingredient.unit || '').trim();
-          const key = `${name.toLowerCase()}-${unit.toLowerCase()}`;
-          if (!requiredIngredients[key]) {
-            requiredIngredients[key] = { name: name, quantity: 0, unit: unit || null, sources: [] };
-          }
-          if (typeof ingredient.quantity === 'number' && requiredIngredients[key].quantity !== null) {
-            requiredIngredients[key].quantity! += ingredient.quantity;
-          } else {
-            requiredIngredients[key].quantity = null; 
-          }
-          if (!requiredIngredients[key].sources.includes(recipe.name)) {
-             requiredIngredients[key].sources.push(recipe.name);
-          }
-        });
-      }
-    } else if (meal.custom_meal_name) {
+    // if (meal.recipe_id) { // LÓGICA DE RECETA COMENTADA
+    //   const recipe = recipeMap.get(meal.recipe_id);
+    //   if (recipe?.recipe_ingredients) {
+    //     recipe.recipe_ingredients.forEach((ingredient: RecipeIngredient) => {
+    //       const name = ingredient.name.trim();
+    //       const unit = (ingredient.unit || '').trim();
+    //       const key = `${name.toLowerCase()}-${unit.toLowerCase()}`;
+    //       if (!requiredIngredients[key]) {
+    //         requiredIngredients[key] = { name: name, quantity: 0, unit: unit || null, sources: [] };
+    //       }
+    //       if (typeof ingredient.quantity === 'number' && requiredIngredients[key].quantity !== null) {
+    //         requiredIngredients[key].quantity! += ingredient.quantity;
+    //       } else {
+    //         requiredIngredients[key].quantity = null;
+    //       }
+    //       if (!requiredIngredients[key].sources.includes(recipe.name)) {
+    //          requiredIngredients[key].sources.push(recipe.name);
+    //       }
+    //     });
+    //   }
+    // } else
+    if (meal.custom_meal_name) { // Mantener lógica para comidas personalizadas
        const name = meal.custom_meal_name.trim();
        const key = `${name.toLowerCase()}-custom`;
        if (!requiredIngredients[key]) {

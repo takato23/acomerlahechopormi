@@ -4,40 +4,28 @@ import {
   addPantryItem as addItemService,
   updatePantryItem as updateItemService,
   deletePantryItem as deleteItemService,
-  getLowStockItems as getLowStockService 
-} from '@/features/pantry/pantryService';
-// Usar any temporalmente
-// import type { PantryItem, NewPantryItem, UpdatePantryItem } from '@/features/pantry/types';
-type PantryItem = any;
-type NewPantryItem = any;
-type UpdatePantryItem = any;
+  toggleFavoritePantryItem // Importar la nueva función del servicio
+} from '../features/pantry/pantryService'; // Asegurar ruta relativa correcta
+import type { PantryItem, CreatePantryItemData, UpdatePantryItemData } from '../features/pantry/types'; // Usar tipos reales
 
 /**
  * @interface PantryState Define el estado y las acciones para la gestión de la despensa.
- * @property {PantryItem[]} items - Array de todos los ítems en la despensa del usuario.
- * @property {PantryItem[]} lowStockItems - Array de ítems con bajo stock.
- * @property {boolean} isLoading - Indica si se están cargando todos los ítems.
- * @property {boolean} isLoadingLowStock - Indica si se están cargando los ítems con bajo stock.
- * @property {string | null} error - Mensaje de error si la carga de todos los ítems falla.
- * @property {string | null} errorLowStock - Mensaje de error si la carga de ítems bajos falla.
- * @property {() => Promise<void>} fetchItems - Acción para cargar todos los ítems de la despensa.
- * @property {(threshold?: number) => Promise<void>} fetchLowStockItems - Acción para cargar ítems con stock bajo o igual al umbral.
- * @property {(itemData: NewPantryItem) => Promise<PantryItem | null>} addItem - Acción para añadir un nuevo ítem.
- * @property {(itemId: string, updates: UpdatePantryItem) => Promise<PantryItem | null>} updateItem - Acción para actualizar un ítem existente.
- * @property {(itemId: string) => Promise<boolean>} deleteItem - Acción para eliminar un ítem.
+ * ... (descripciones de props existentes) ...
+ * @property {() => Promise<void>} toggleFavorite - Acción para cambiar el estado de favorito de un ítem.
  */
 interface PantryState {
   items: PantryItem[];
-  lowStockItems: PantryItem[]; 
+  lowStockItems: PantryItem[];
   isLoading: boolean;
-  isLoadingLowStock: boolean; 
+  isLoadingLowStock: boolean;
   error: string | null;
-  errorLowStock: string | null; 
+  errorLowStock: string | null;
   fetchItems: () => Promise<void>;
-  fetchLowStockItems: (threshold?: number) => Promise<void>; 
-  addItem: (itemData: NewPantryItem) => Promise<PantryItem | null>;
-  updateItem: (itemId: string, updates: UpdatePantryItem) => Promise<PantryItem | null>;
+  fetchLowStockItems: (threshold?: number) => Promise<void>;
+  addItem: (itemData: CreatePantryItemData) => Promise<PantryItem | null>;
+  updateItem: (itemId: string, updates: UpdatePantryItemData) => Promise<PantryItem | null>;
   deleteItem: (itemId: string) => Promise<boolean>;
+  toggleFavorite: (itemId: string) => Promise<void>; // Nueva acción
 }
 
 /**
@@ -51,19 +39,12 @@ export const usePantryStore = create<PantryState>((set, get) => ({
   error: null,
   errorLowStock: null,
 
-  /**
-   * Carga todos los ítems de la despensa del usuario desde el servicio.
-   * @async
-   */
   fetchItems: async () => {
-    // Evitar carga múltiple si ya está cargando
-    if (get().isLoading) return; 
+    if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
       const items = await getItemsService();
       set({ items, isLoading: false });
-      // Opcional: Recalcular low stock después de cargar todos los items
-      // get().fetchLowStockItems(); 
     } catch (error) {
       console.error("Error fetching pantry items for store:", error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido al cargar despensa.';
@@ -71,43 +52,22 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }
   },
 
-  /**
-   * Carga los ítems con bajo stock desde el servicio.
-   * @async
-   * @param {number} [threshold=1] - Umbral de cantidad para considerar bajo stock.
-   */
-  fetchLowStockItems: async (threshold = 1) => {
-     // Evitar carga múltiple
-    if (get().isLoadingLowStock) return;
-    set({ isLoadingLowStock: true, errorLowStock: null });
-    try {
-      const lowStockItems = await getLowStockService(threshold);
-      set({ lowStockItems, isLoadingLowStock: false });
-    } catch (error) {
-      console.error("Error fetching low stock items for store:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al cargar items bajos.';
-      set({ errorLowStock: errorMessage, isLoadingLowStock: false });
-    }
+  // Placeholder para evitar errores si se llama accidentalmente
+  fetchLowStockItems: async (_threshold = 1) => {
+      console.warn("fetchLowStockItems llamado pero no implementado en pantryService.");
+      set({ lowStockItems: [], isLoadingLowStock: false, errorLowStock: 'Funcionalidad no implementada' });
+      return Promise.resolve();
   },
 
-  /**
-   * Añade un nuevo ítem a la despensa llamando al servicio y actualiza el estado.
-   * @async
-   * @param {NewPantryItem} itemData - Datos del nuevo ítem.
-   * @returns {Promise<PantryItem | null>} El ítem añadido o null si falla.
-   */
   addItem: async (itemData) => {
     try {
       const newItem = await addItemService(itemData);
-      set((state) => ({ 
+      if (!newItem) throw new Error("Failed to add item"); // Manejar caso null
+      set((state) => ({
         items: [newItem, ...state.items].sort((a, b) => // Mantener ordenado si es necesario
-           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        ) 
+           new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+        )
       }));
-      // Refrescar low stock si el nuevo item podría calificar
-      if (newItem.quantity !== null && newItem.quantity <= (get().lowStockItems.length > 0 ? 1 : 1)) { // Asumiendo umbral 1 por defecto
-         get().fetchLowStockItems(); 
-      }
       return newItem;
     } catch (error) {
       console.error("Error adding pantry item via store:", error);
@@ -115,31 +75,24 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }
   },
 
-  /**
-   * Actualiza un ítem existente llamando al servicio y actualiza el estado.
-   * Realiza una actualización optimista.
-   * @async
-   * @param {string} itemId - ID del ítem a actualizar.
-   * @param {UpdatePantryItem} updates - Datos a actualizar.
-   * @returns {Promise<PantryItem | null>} El ítem actualizado o null si falla.
-   */
   updateItem: async (itemId, updates) => {
      const originalItems = get().items;
+     const itemIndex = originalItems.findIndex(i => i.id === itemId);
+     if (itemIndex === -1) return null; // Item no encontrado
+
      // Optimistic update
+     const updatedOptimisticItem = { ...originalItems[itemIndex], ...updates };
      set((state) => ({
-       items: state.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
+       items: state.items.map(i => i.id === itemId ? updatedOptimisticItem : i)
      }));
 
      try {
       const updatedItem = await updateItemService(itemId, updates);
-      // Re-sincronizar con la respuesta del servidor (opcional pero más seguro)
+      if (!updatedItem) throw new Error("Update failed on server"); // Manejar caso null
+      // Re-sincronizar con la respuesta del servidor
       set((state) => ({
         items: state.items.map(i => i.id === itemId ? updatedItem : i)
       }));
-       // Refrescar low stock si la cantidad cambió
-       if (updates.quantity !== undefined) {
-          get().fetchLowStockItems(); 
-       }
       return updatedItem;
     } catch (error) {
       console.error("Error updating pantry item via store:", error);
@@ -148,13 +101,6 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }
   },
 
-  /**
-   * Elimina un ítem llamando al servicio y actualiza el estado.
-   * Realiza una actualización optimista.
-   * @async
-   * @param {string} itemId - ID del ítem a eliminar.
-   * @returns {Promise<boolean>} `true` si la eliminación fue exitosa, `false` si falló.
-   */
   deleteItem: async (itemId) => {
     const originalItems = get().items;
     // Optimistic update
@@ -163,13 +109,49 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }));
     try {
       await deleteItemService(itemId);
-       // Refrescar low stock después de eliminar
-       get().fetchLowStockItems();
       return true;
     } catch (error) {
       console.error("Error deleting pantry item via store:", error);
       set({ items: originalItems }); // Revertir
       return false;
+    }
+  },
+
+  // Nueva acción para togglear favoritos
+  toggleFavorite: async (itemId: string) => {
+    const originalItems = get().items;
+    const itemIndex = originalItems.findIndex(i => i.id === itemId);
+    if (itemIndex === -1) {
+      console.error(`[toggleFavorite] Item with ID ${itemId} not found in store.`);
+      return; // Item no encontrado en el store
+    }
+
+    const currentItem = originalItems[itemIndex];
+    const currentState = Boolean(currentItem.is_favorite); // Asegurar que sea booleano
+    const newState = !currentState;
+
+    // Optimistic update
+    set((state) => ({
+      items: state.items.map(i => i.id === itemId ? { ...i, is_favorite: newState } : i)
+    }));
+
+    try {
+      const updatedItem = await toggleFavoritePantryItem(itemId, newState);
+      if (!updatedItem) {
+        // Si el servicio devuelve null (ej: error o no encontrado), revertir
+        throw new Error("Toggle favorite failed on server or item not found.");
+      }
+      // Opcional: Re-sincronizar con la respuesta del servidor si es necesario
+      // set((state) => ({
+      //   items: state.items.map(i => i.id === itemId ? updatedItem : i)
+      // }));
+      console.log(`[toggleFavorite] Successfully toggled favorite for ${itemId} to ${newState}`);
+    } catch (error) {
+      console.error("Error toggling favorite via store:", error);
+      // Revertir en caso de error
+      set({ items: originalItems });
+      // Opcional: Lanzar el error o mostrar un toast
+      // throw error;
     }
   },
 }));

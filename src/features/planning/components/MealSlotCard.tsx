@@ -14,9 +14,11 @@ const mealVisuals: {
     label: string;
   };
 } = {
-  breakfast: { bgColor: 'bg-yellow-50', icon: Egg, emoji: '🍳', label: 'Desayuno' },
-  lunch: { bgColor: 'bg-green-50', icon: Utensils, emoji: '🥗', label: 'Almuerzo' },
-  dinner: { bgColor: 'bg-indigo-50', icon: Moon, emoji: '🌙', label: 'Cena' },
+  // Usar las claves exactas del tipo MealType (asumiendo que son las labels)
+  'Desayuno': { bgColor: 'bg-yellow-50', icon: Egg, emoji: '🍳', label: 'Desayuno' },
+  'Almuerzo': { bgColor: 'bg-green-50', icon: Utensils, emoji: '🥗', label: 'Almuerzo' },
+  'Merienda': { bgColor: 'bg-orange-50', icon: Utensils, emoji: '🫖', label: 'Merienda' }, // Añadir Merienda si existe en MealType
+  'Cena': { bgColor: 'bg-indigo-50', icon: Moon, emoji: '🌙', label: 'Cena' },
 };
 
 interface MealSlotCardProps {
@@ -60,7 +62,7 @@ export function MealSlotCard({
                 onClick={() => onEditClick(plannedMeals[0])}
               >
                 <span className="line-clamp-2 flex-grow mr-2 text-center"> {/* Centrar texto */}
-                  {plannedMeals[0].recipes ? plannedMeals[0].recipes.title : plannedMeals[0].custom_meal_text}
+                  {plannedMeals[0].recipes ? plannedMeals[0].recipes.title : plannedMeals[0].custom_meal_name} {/* Corregir a custom_meal_name */}
                 </span>
                 <Button
                   variant="ghost"

@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
-import AuthProvider from '@/features/auth/AuthContext';
+import AuthProvider from './features/auth/AuthContext'; // Ruta relativa
+import { SettingsProvider } from './context/SettingsContext'; // Importar SettingsProvider
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Importar React Query
 
 // Crear una instancia de QueryClient
@@ -22,7 +24,9 @@ function Root() {
   return (
     <QueryClientProvider client={queryClient}> {/* Envolver con React Query Provider */}
       <AuthProvider>
-        <App />
+        <SettingsProvider>
+          <App />
+        </SettingsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

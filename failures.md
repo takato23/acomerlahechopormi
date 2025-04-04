@@ -1,8 +1,22 @@
-# Registro de Fallos y Tareas Pendientes
+# Depuración de Errores Post-Rediseño Despensa (30/Mar/2025)
 
-## Restauración de Funcionalidades (30/03/2025)
+## Problema
+Errores persistentes 500 Internal Server Error en el servidor de desarrollo Vite, impidiendo la carga de la aplicación, a pesar de corregir errores de sintaxis y tipos en los archivos del feature `pantry`.
 
-*   **Fase 3: UI Avanzada - Implementación del Mapa Interactivo:**
-    *   **Estado:** Pendiente.
-    *   **Descripción:** La implementación completa del mapa interactivo en `ShoppingMap.tsx`, `StoreMarker.tsx`, y `MapControls.tsx` (incluyendo selección de librería, obtención de datos de tiendas, renderizado e interacciones) se omite por ahora debido a su complejidad y dependencias externas no definidas. Los componentes base se crearon como placeholders.
-    *   **Próximos Pasos:** Requiere una decisión sobre la librería de mapas a usar, definir la fuente de datos de ubicación de tiendas, e implementar la lógica del mapa.
+## Limitación Actual
+No se puede acceder directamente a los logs detallados del **terminal del servidor Vite**. Los logs de la consola del navegador solo muestran el error 500 genérico, no la causa raíz (archivo/línea específica del crash). Se necesita la salida del terminal donde se ejecuta `npm run dev` para un diagnóstico preciso.
+
+## Próximos Pasos (Plan B - Sin Logs del Servidor)
+1. Revisar archivos de configuración (`vite.config.ts`, `tsconfig.json`).
+2. Revisar archivos core (`src/main.tsx`, `src/App.tsx`).
+3. Considerar limpieza de caché/dependencias.
+
+---
+*Nota: Se han corregido múltiples errores de sintaxis JSX, tipos y alias en los siguientes archivos:*
+* `src/features/pantry/types.ts`
+* `src/features/pantry/PantryPage.tsx`
+* `src/features/pantry/AddPantryItemForm.tsx`
+* `src/features/pantry/components/PantryListItemRow.tsx`
+* `src/features/pantry/components/PantryItemCard.tsx`
+* `src/features/pantry/pantryService.ts`
+* `src/components/ui/tooltip.tsx`

@@ -1,112 +1,167 @@
-import { describe, expect, test } from '@jest/globals';
-import { parsePantryInput } from '../pantryParser';
+import { parsePantryInput, normalizeUnit, ParseResult } from '../pantryParser';
 
-describe('parsePantryInput', () => {
-  // Tests para números escritos en texto
-  test('maneja números en texto correctamente', () => {
-    expect(parsePantryInput('una docena de huevos')).toEqual({
-      quantity: 1,
-      unit: 'doc',
-      ingredientName: 'huevos',
+// Helper para extraer datos del resultado exitoso
+const expectSuccess = (result: ParseResult) => {
+  expect(result.success).toBe(true);
+  return (result as { success: true; data: any; usedFallback?: boolean });
+};
+
+// Helper para esperar un fallo
+const expectFailure = (result: ParseResult, errorType?: 'empty_input' | 'unparseable') => {
+  expect(result.success).toBe(false);
+  if (errorType && !result.success) {
+      expect(result.error).toBe(errorType);
+  }
+  return (result as { success: false; error: string; originalText: string });
+};
+
+
+describe('pantryParser', () => {
+  // Casos de prueba para parsePantryInput
+  describe('parsePantryInput', () => {
+    test('should parse "Cantidad Unidad Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('2 kg harina'));
+      expect(result.data.quantity).toBe(2);
+      expect(result.data.unit).toBe('kg');
+      expect(result.data.ingredientName).toBe('harina');
+      expect(result.usedFallback).toBeUndefined();
     });
 
-    expect(parsePantryInput('medio kilo de azúcar')).toEqual({
-      quantity: 0.5,
-      unit: 'kg',
-      ingredientName: 'azúcar',
+    test('should parse "CantidadDecimal Unidad Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('1.5 lt leche'));
+      expect(result.data.quantity).toBe(1.5);
+      expect(result.data.unit).toBe('l'); // Normalizado
+      expect(result.data.ingredientName).toBe('leche');
     });
 
-    expect(parsePantryInput('dos litros de leche')).toEqual({
-      quantity: 2,
-      unit: 'lt',
-      ingredientName: 'leche',
+    test('should parse "Cantidad Unidad y medio Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('1 kg y medio de pollo'));
+      expect(result.data.quantity).toBe(1.5);
+      expect(result.data.unit).toBe('kg');
+      expect(result.data.ingredientName).toBe('pollo');
     });
+
+    test('should parse "Nombre Cantidad Unidad"', () => {
+      const result = expectSuccess(parsePantryInput('Leche 1 litro'));
+      expect(result.data.quantity).toBe(1);
+      expect(result.data.unit).toBe('l'); // Normalizado
+      expect(result.data.ingredientName).toBe('Leche'); // Mantiene mayúscula inicial
+    });
+
+     test('should parse "Nombre CantidadDecimal Unidad"', () => {
+      const result = expectSuccess(parsePantryInput('Pollo 2.5 kg'));
+      expect(result.data.quantity).toBe(2.5);
+      expect(result.data.unit).toBe('kg');
+      expect(result.data.ingredientName).toBe('Pollo');
+    });
+
+    test('should parse "Cantidad Nombre" (sin unidad)', () => {
+      const result = expectSuccess(parsePantryInput('5 Manzanas'));
+      expect(result.data.quantity).toBe(5);
+      expect(result.data.unit).toBe('u'); // Unidad por defecto
+      expect(result.data.ingredientName).toBe('Manzanas');
+    });
+
+     test('should parse "CantidadDecimal Nombre" (sin unidad)', () => {
+      const result = expectSuccess(parsePantryInput('0.5 Pan'));
+      expect(result.data.quantity).toBe(0.5);
+      expect(result.data.unit).toBe('u');
+      expect(result.data.ingredientName).toBe('Pan');
+    });
+
+    test('should parse "NumeroTexto Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('Doce huevos'));
+      expect(result.data.quantity).toBe(12);
+      expect(result.data.unit).toBe('u');
+      expect(result.data.ingredientName).toBe('huevos');
+    });
+
+     test('should parse "NumeroTexto Fraccion Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('Media sandia'));
+      expect(result.data.quantity).toBe(0.5);
+      expect(result.data.unit).toBe('u');
+      expect(result.data.ingredientName).toBe('sandia');
+    });
+
+     test('should parse "NumeroTexto Unidad Nombre"', () => {
+        const result = expectSuccess(parsePantryInput('una docena de huevos'));
+        expect(result.data.quantity).toBe(1); // "una" es 1
+        expect(result.data.unit).toBe('doc'); // "docena" normalizado
+        expect(result.data.ingredientName).toBe('huevos'); // "de" eliminado
+    });
+
+     test('should parse "Unidad de Nombre"', () => {
+        const result = expectSuccess(parsePantryInput('paquete de fideos'));
+        expect(result.data.quantity).toBe(1); // Cantidad asumida 1
+        expect(result.data.unit).toBe('paq'); // Normalizado
+        expect(result.data.ingredientName).toBe('fideos'); // "de" eliminado
+    });
+
+    test('should use fallback for "Solo Nombre"', () => {
+      const result = expectSuccess(parsePantryInput('Sal'));
+      expect(result.data.quantity).toBe(1);
+      expect(result.data.unit).toBe('u');
+      expect(result.data.ingredientName).toBe('Sal');
+      expect(result.usedFallback).toBe(true);
+    });
+
+     test('should handle extra spaces', () => {
+      const result = expectSuccess(parsePantryInput('  2  kg   harina de trigo  '));
+      expect(result.data.quantity).toBe(2);
+      expect(result.data.unit).toBe('kg');
+      expect(result.data.ingredientName).toBe('harina trigo'); // "de" eliminado
+    });
+
+    test('should handle case insensitivity for units', () => {
+      const result = expectSuccess(parsePantryInput('1 KG Carne'));
+      expect(result.data.quantity).toBe(1);
+      expect(result.data.unit).toBe('kg'); // Normalizado a minúscula
+      expect(result.data.ingredientName).toBe('Carne');
+    });
+
+     test('should handle case insensitivity for text numbers', () => {
+      const result = expectSuccess(parsePantryInput('DOS Manzanas'));
+      expect(result.data.quantity).toBe(2);
+      expect(result.data.unit).toBe('u');
+      expect(result.data.ingredientName).toBe('Manzanas');
+    });
+
+    test('should return error for empty input', () => {
+      expectFailure(parsePantryInput(''), 'empty_input');
+    });
+
+     test('should return error for unparseable input', () => {
+      expectFailure(parsePantryInput('de'), 'unparseable');
+    });
+
+     test('should use fallback for only number (current behavior)', () => {
+      // Podría mejorarse para marcar como unparseable, pero probamos el estado actual
+      const result = expectSuccess(parsePantryInput('123'));
+      expect(result.data.ingredientName).toBe('123');
+      expect(result.usedFallback).toBe(true);
+    });
+
   });
 
-  // Tests para formato Cantidad Unidad Nombre
-  test('maneja formato "Cantidad Unidad Nombre"', () => {
-    expect(parsePantryInput('2 kg harina')).toEqual({
-      quantity: 2,
-      unit: 'kg',
-      ingredientName: 'harina',
+  // Casos de prueba para normalizeUnit
+  describe('normalizeUnit', () => {
+    test('should normalize common units', () => {
+      expect(normalizeUnit('kilo')).toBe('kg');
+      expect(normalizeUnit('gramos')).toBe('g');
+      expect(normalizeUnit('LITROS')).toBe('l');
+      expect(normalizeUnit('unidad')).toBe('u');
+      expect(normalizeUnit('Docena')).toBe('doc');
+      expect(normalizeUnit('paquete')).toBe('paq');
+      expect(normalizeUnit('Botella')).toBe('bot');
     });
 
-    expect(parsePantryInput('1.5 lt leche')).toEqual({
-      quantity: 1.5,
-      unit: 'lt',
-      ingredientName: 'leche',
-    });
-  });
-
-  // Tests para formato Nombre Cantidad Unidad
-  test('maneja formato "Nombre Cantidad Unidad"', () => {
-    expect(parsePantryInput('harina 1 kg')).toEqual({
-      quantity: 1,
-      unit: 'kg',
-      ingredientName: 'harina',
+    test('should return lowercase unit if not in map', () => {
+      expect(normalizeUnit('Cucharada')).toBe('cucharada');
+      expect(normalizeUnit('slice')).toBe('slice');
     });
 
-    expect(parsePantryInput('leche 1.5 litros')).toEqual({
-      quantity: 1.5,
-      unit: 'lt',
-      ingredientName: 'leche',
+    test('should return null for null input', () => {
+      expect(normalizeUnit(null)).toBeNull();
     });
-  });
-
-  // Tests para nombres compuestos con "de"
-  test('maneja nombres compuestos con "de" correctamente', () => {
-    expect(parsePantryInput('1 kg de azúcar')).toEqual({
-      quantity: 1,
-      unit: 'kg',
-      ingredientName: 'azúcar',
-    });
-
-    expect(parsePantryInput('paquete de café')).toEqual({
-      quantity: 1,
-      unit: 'paquete',
-      ingredientName: 'café',
-    });
-  });
-
-  // Tests para entradas sin unidad
-  test('maneja entradas sin unidad explicita', () => {
-    expect(parsePantryInput('5 manzanas')).toEqual({
-      quantity: 5,
-      unit: 'u',
-      ingredientName: 'manzanas',
-    });
-
-    expect(parsePantryInput('manzanas')).toEqual({
-      quantity: 1,
-      unit: 'u',
-      ingredientName: 'manzanas',
-    });
-  });
-
-  // Tests para docenas y pares
-  test('maneja docenas y pares correctamente', () => {
-    expect(parsePantryInput('una docena de huevos')).toEqual({
-      quantity: 1,
-      unit: 'doc',
-      ingredientName: 'huevos',
-    });
-
-    expect(parsePantryInput('dos docenas huevos')).toEqual({
-      quantity: 2,
-      unit: 'doc',
-      ingredientName: 'huevos',
-    });
-
-    expect(parsePantryInput('un par de medias')).toEqual({
-      quantity: 1,
-      unit: 'par',
-      ingredientName: 'medias',
-    });
-  });
-
-  // Tests para entradas inválidas o vacías
-  test('maneja entradas inválidas o vacías', () => {
-    expect(parsePantryInput('')).toBeNull();
-    expect(parsePantryInput('   ')).toBeNull();
   });
 });

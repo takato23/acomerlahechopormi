@@ -1,142 +1,171 @@
+import React, { useCallback, useMemo } from 'react'; // Añadir useMemo
 import { PantryItem } from '../types';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/Spinner';
-import { Trash2, Plus, Minus, Pencil, CalendarClock, Tag } from 'lucide-react';
-import { format, differenceInDays, parseISO, isValid } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Pencil, Trash2, Star, Package } from 'lucide-react'; // Añadir Package
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion'; // Para animaciones si se aplica aquí
+import { getLucideIcon, DefaultIcon } from '@/lib/iconMap'; // Importar helpers de iconos
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Importar Tooltip
 
 interface PantryListItemRowProps {
   item: PantryItem;
-  onUpdateQuantity: (item: PantryItem, delta: number) => Promise<void>;
-  onDelete: (itemId: string) => Promise<void>;
   onEdit: (item: PantryItem) => void;
-  isUpdating?: boolean;
-  isDeleting?: boolean;
+  onDelete: (itemId: string) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onSelectItem: (itemId: string) => void;
+  onToggleFavorite: (itemId: string) => void; // Solo itemId
 }
 
 export function PantryListItemRow({
   item,
-  onUpdateQuantity,
-  onDelete,
   onEdit,
-  isUpdating,
-  isDeleting,
+  onDelete,
+  isSelectionMode,
+  isSelected,
+  onSelectItem,
+  onToggleFavorite
 }: PantryListItemRowProps) {
 
-  const handleUpdate = async (delta: number) => {
-    await onUpdateQuantity(item, delta);
-  };
-
-  const handleDelete = async () => {
-    await onDelete(item.id);
-  };
-
-  // Calcular estado de vencimiento (lógica similar a PantryItemCard)
-  let expiryStatus: 'ok' | 'soon' | 'expired' = 'ok';
-  let daysRemaining: number | null = null;
-  let formattedExpiryDate: string | null = null;
-
-  if (item.expiry_date) {
-    const expiryDateObj = parseISO(item.expiry_date);
-    if (isValid(expiryDateObj)) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        daysRemaining = differenceInDays(expiryDateObj, today);
-        formattedExpiryDate = format(expiryDateObj, 'dd/MM/yy', { locale: es }); // Formato más corto
-
-        if (daysRemaining < 0) {
-            expiryStatus = 'expired';
-        } else if (daysRemaining <= 7) {
-            expiryStatus = 'soon';
-        }
+  const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (typeof onToggleFavorite === 'function') {
+      onToggleFavorite(item.id);
+    } else {
+      console.error('[PantryListItemRow] onToggleFavorite is not a function');
     }
-  }
+  }, [item.id, onToggleFavorite]);
 
-  // Placeholder para icono de categoría
-  const CategoryIcon = item.categories?.icon ? Tag : null; // Reemplazar Tag
+  const handleRowClick = useCallback(() => {
+    if (isSelectionMode) {
+      onSelectItem(item.id);
+    }
+  }, [isSelectionMode, item.id, onSelectItem]);
+
+  const isExpired = item.expiry_date && new Date(item.expiry_date) < new Date();
+
+  // Determinar qué mostrar: Imagen, Icono de Categoría o Icono Fallback
+  const VisualRepresentation = useMemo(() => {
+    if (item.ingredient?.image_url) {
+      return (
+        <img
+          src={item.ingredient.image_url}
+          alt={item.ingredient.name || 'Ingrediente'}
+          className="w-6 h-6 object-cover rounded mr-2 flex-shrink-0" // Tamaño más pequeño para la fila
+          loading="lazy"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+      );
+    }
+    const CategoryIcon = getLucideIcon(item.category?.icon_name);
+    if (CategoryIcon) {
+      return <CategoryIcon className="w-4 h-4 text-muted-foreground mr-2 flex-shrink-0" />;
+    }
+    return <DefaultIcon className="w-4 h-4 text-muted-foreground mr-2 flex-shrink-0" />;
+  }, [item.ingredient?.image_url, item.ingredient?.name, item.category?.icon_name]);
+
 
   return (
-    // Usar flexbox para alinear elementos en la fila
-    <div className={cn(
-        "flex items-center gap-3 px-3 py-2 border-b last:border-b-0", // Estilo de fila
-        expiryStatus === 'expired' && 'opacity-60',
-        isUpdating || isDeleting ? 'opacity-50 pointer-events-none' : '' // Feedback visual durante acción
-    )}>
-        {/* Icono Categoría */}
-        {CategoryIcon && (
-           <span
-             className="p-1 bg-muted/40 rounded-full flex-shrink-0 hidden sm:inline-flex" // Ocultar en móvil?
-             style={{ color: item.categories?.color ?? 'hsl(var(--muted-foreground))' }}
-             title={item.categories?.name ?? 'Sin Categoría'}
-            >
-             <CategoryIcon className="h-4 w-4" />
-           </span>
+    <TooltipProvider> {/* Necesario para Tooltips */}
+      <div
+        className={cn(
+          "flex w-full border-b items-center hover:bg-muted/30 transition-colors",
+          isSelectionMode && "cursor-pointer",
+          isSelected && "bg-primary/10"
+        )}
+        onClick={handleRowClick}
+      >
+        {/* Checkbox */}
+        {isSelectionMode && (
+          <div className="p-3 w-10 flex-shrink-0 flex items-center justify-center">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onSelectItem(item.id)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Seleccionar ${item.ingredient?.name}`}
+            />
+          </div>
         )}
 
-        {/* Nombre */}
-        <span className="flex-grow font-medium text-sm truncate" title={item.ingredients?.name ?? 'Ingrediente desconocido'}>
-            {item.ingredients?.name ?? 'Ingrediente desconocido'}
-        </span>
-
-        {/* Fecha Vencimiento (Compacta) */}
-        {formattedExpiryDate && (
-            <span className={cn(
-                "text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap",
-                expiryStatus === 'expired' && 'text-red-600 font-medium',
-                expiryStatus === 'soon' && 'text-yellow-600'
-            )} title={`Vence: ${formattedExpiryDate}`}>
-              <CalendarClock className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{formattedExpiryDate}</span> {/* Ocultar texto en móvil? */}
-            </span>
-         )}
-
-        {/* Controles Cantidad */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-             <Button
-                variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={() => handleUpdate(-1)}
-                disabled={isUpdating || isDeleting || (item.quantity ?? 0) <= 0}
-                aria-label="Disminuir cantidad"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="min-w-[2ch] text-center font-medium text-sm">
-                {isUpdating ? <Spinner size="sm"/> : (item.quantity ?? 0)}
-              </span>
-              <Button
-                variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={() => handleUpdate(1)}
-                disabled={isUpdating || isDeleting}
-                aria-label="Aumentar cantidad"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <span className="ml-1 text-xs text-muted-foreground w-8 truncate" title={item.unit ?? 'un.'}>{item.unit ?? 'un.'}</span> {/* Ancho fijo opcional */}
+        {/* Nombre (con Imagen/Icono) */}
+        <div className="flex-1 p-3 flex items-center gap-2 truncate">
+           {!isSelectionMode && VisualRepresentation} {/* Mostrar icono/imagen si no está en modo selección */}
+           <span className="truncate">{item.ingredient?.name || 'N/A'}</span>
         </div>
 
-        {/* Botones Acción */}
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-             <Button
-                variant="ghost" size="icon"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-7 w-7"
-                onClick={() => onEdit(item)}
-                disabled={isDeleting || isUpdating}
-                aria-label="Editar item"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost" size="icon"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7"
-                onClick={handleDelete}
-                disabled={isDeleting || isUpdating}
-                aria-label="Eliminar item"
-              >
-                {isDeleting ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
+
+        {/* Cantidad */}
+        <div className="p-3 w-20 text-center">{item.quantity ?? '-'}</div>
+
+        {/* Unidad */}
+        <div className="p-3 w-24 truncate">{item.unit || '-'}</div>
+
+        {/* Categoría */}
+        <div className="p-3 w-32 truncate">{item.category?.name || 'N/A'}</div>
+
+        {/* Caducidad */}
+        <div className={cn("p-3 w-28 truncate", isExpired && "text-destructive font-medium")}>
+          {item.expiry_date || '-'}
         </div>
-    </div>
+
+        {/* Acciones */}
+        <div className="p-3 w-24 text-right flex justify-end items-center gap-0.5">
+          {!isSelectionMode && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleToggleFavorite}
+                    aria-label={item.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+                  >
+                    <Star
+                      className={cn(
+                        "h-4 w-4",
+                        item.is_favorite ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground"
+                      )}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>{item.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Editar item</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Eliminar item</p></TooltipContent>
+              </Tooltip>
+            </>
+          )}
+        </div>
+      </div>
+    </TooltipProvider>
   );
 }

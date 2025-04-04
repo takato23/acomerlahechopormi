@@ -6,9 +6,13 @@ import { AvatarUpload } from './components/AvatarUpload';
 import { DifficultyPreference as DifficultyPreferenceComponent } from './components/DifficultyPreference'; 
 import { TimePreference } from './components/TimePreference'; 
 import { AllergiesInput } from './components/AllergiesInput'; 
+import { TagsInput } from './components/TagsInput';
+import { EquipmentCheckboxes } from './components/EquipmentCheckboxes';
+import { useAuth } from '../auth/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
-import { Terminal, Save } from 'lucide-react'; 
+import { Terminal, Save, Key, Trash2, Eye, EyeOff } from 'lucide-react';
+
 import { Label } from '@/components/ui/label'; 
 import { Input } from '@/components/ui/input'; 
 import { Button } from '@/components/ui/button'; 
@@ -20,6 +24,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
  * @component
  */
 export function UserProfilePage() {
+  const { user } = useAuth();
   /** @state {UserProfile | null} profile - Datos del perfil del usuario cargados. */
   const [profile, setProfile] = useState<UserProfile | null>(null);
   /** @state {boolean} isLoading - Indica si se están cargando los datos iniciales del perfil. */
@@ -39,6 +44,18 @@ export function UserProfilePage() {
   /** @state {string | null | undefined} avatarUrl - URL actual del avatar del usuario. */
   const [avatarUrl, setAvatarUrl] = useState<string | null | undefined>(undefined);
 
+  /** @state {string | null} geminiApiKey - Clave API de Gemini actual del usuario. */
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+  /** @state {string} newGeminiApiKey - Valor del input para la nueva clave API de Gemini. */
+  const [newGeminiApiKey, setNewGeminiApiKey] = useState('');
+  /** @state {boolean} showApiKey - Controla si la clave API actual se muestra completa. */
+  const [showApiKey, setShowApiKey] = useState(false);
+  /** @state {boolean} isSavingApiKey - Indica si se está guardando/eliminando la clave API. */
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  /** @state {string | null} apiKeyError - Mensaje de error específico para la gestión de la API Key. */
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  /** @state {string | null} apiKeySuccess - Mensaje de éxito específico para la gestión de la API Key. */
+  const [apiKeySuccess, setApiKeySuccess] = useState<string | null>(null);
   /**
    * Carga el perfil del usuario al montar el componente.
    * @function loadProfile
@@ -50,11 +67,18 @@ export function UserProfilePage() {
     setUsernameError(null); 
     setUsernameSuccess(false);
     try {
-      const userProfile = await getUserProfile();
+      if (!user?.id) {
+        setError("No se pudo identificar al usuario para cargar el perfil.");
+        setIsLoading(false);
+        return;
+      }
+
+      const userProfile = await getUserProfile(user.id);
       if (userProfile) {
         setProfile(userProfile);
         setUsernameInput(userProfile.username || ''); 
         setAvatarUrl(userProfile.avatar_url); 
+        setGeminiApiKey(userProfile.gemini_api_key || null); // Cargar la API Key de Gemini
       } else {
         setError("No se pudo cargar el perfil."); 
       }
@@ -91,7 +115,12 @@ export function UserProfilePage() {
          return;
       }
 
-      const success = await updateUserProfile({ username: trimmedUsername || null }); 
+      if (!user?.id) {
+        setUsernameError("No se pudo identificar al usuario para guardar.");
+        setIsSavingUsername(false);
+        return;
+      }
+      const success = await updateUserProfile(user.id, { username: trimmedUsername || null }); 
       if (success) {
         setProfile({ ...profile, username: trimmedUsername || null });
         setUsernameSuccess(true);
@@ -130,7 +159,11 @@ export function UserProfilePage() {
             updateData.allergies_restrictions = null;
         }
 
-        const success = await updateUserProfile(updateData);
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar la preferencia.");
+          return false; // Indicate failure
+        }
+        const success = await updateUserProfile(user.id, updateData);
         if (success && profile) {
           setProfile({ ...profile, ...updateData }); 
           return true;
@@ -146,6 +179,75 @@ export function UserProfilePage() {
   }, [profile]); 
 
   /**
+   * Maneja la actualización de la lista de ingredientes excluidos.
+   * @function handleUpdateExcludedIngredients
+   * @async
+   * @param {string[]} newTags - El nuevo array de ingredientes excluidos.
+   * @returns {Promise<boolean>} `true` si la actualización fue exitosa, `false` si no.
+   */
+  const handleUpdateExcludedIngredients = useCallback(
+    async (newTags: string[]): Promise<boolean> => {
+      setError(null);
+      try {
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar los ingredientes excluidos.");
+          return false;
+        }
+        // Asegurarse de que el array no contenga strings vacíos si viene de un input
+        const cleanedTags = newTags.map(tag => tag.trim()).filter(tag => tag.length > 0);
+        const success = await updateUserProfile(user.id, { excluded_ingredients: cleanedTags });
+        if (success && profile) {
+          setProfile({ ...profile, excluded_ingredients: cleanedTags });
+          return true;
+        } else {
+          setError("Error al guardar los ingredientes excluidos.");
+          return false;
+        }
+      } catch (err) {
+        console.error("Error updating excluded ingredients:", err);
+        setError("Error inesperado al guardar los ingredientes excluidos.");
+        return false;
+      }
+    },
+    [profile, user?.id]
+  );
+
+  /**
+   * Maneja la actualización de la lista de equipamiento disponible.
+   * @function handleUpdateAvailableEquipment
+   * @async
+   * @param {string[]} newEquipment - El nuevo array de equipamiento disponible.
+   * @returns {Promise<boolean>} `true` si la actualización fue exitosa, `false` si no.
+   */
+  const handleUpdateAvailableEquipment = useCallback(
+    async (newEquipment: string[]): Promise<boolean> => {
+      setError(null);
+      try {
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar el equipamiento.");
+          return false;
+        }
+        // Asegurarse de que el array no contenga strings vacíos
+        const cleanedEquipment = newEquipment.map(eq => eq.trim()).filter(eq => eq.length > 0);
+        const success = await updateUserProfile(user.id, { available_equipment: cleanedEquipment });
+        if (success && profile) {
+          setProfile({ ...profile, available_equipment: cleanedEquipment });
+          return true;
+        } else {
+          setError("Error al guardar el equipamiento.");
+          return false;
+        }
+      } catch (err) {
+        console.error("Error updating available equipment:", err);
+        setError("Error inesperado al guardar el equipamiento.");
+        return false;
+      }
+    },
+    [profile, user?.id]
+  );
+
+
+  /**
    * Callback llamado por AvatarUpload cuando se sube un nuevo avatar.
    * Actualiza el estado local del avatar y del perfil.
    * @function handleAvatarUpdate
@@ -157,6 +259,99 @@ export function UserProfilePage() {
       setProfile({ ...profile, avatar_url: newUrl }); 
     }
   };
+
+  /**
+   * Ofusca una API key mostrando solo los últimos 4 caracteres.
+   * @function obfuscateApiKey
+   * @param {string | null} key - La clave a ofuscar.
+   * @returns {string} La clave ofuscada o un string vacío.
+   */
+  const obfuscateApiKey = (key: string | null): string => {
+    if (!key || key.length <= 4) {
+      return '****'; // O un placeholder si es muy corta o no existe
+    }
+    return `****...${key.slice(-4)}`;
+  };
+
+  /**
+   * Maneja la actualización de la API Key de Gemini.
+   * @function handleUpdateApiKey
+   * @async
+   */
+  const handleUpdateApiKey = async () => {
+    if (!user?.id) {
+      setApiKeyError("No se pudo identificar al usuario para guardar la clave.");
+      return;
+    }
+    if (!newGeminiApiKey.trim()) {
+      setApiKeyError("La clave API no puede estar vacía.");
+      return;
+    }
+
+    setIsSavingApiKey(true);
+    setApiKeyError(null);
+    setApiKeySuccess(null);
+    setError(null); // Limpiar error general
+
+    try {
+      const success = await updateUserProfile(user.id, { gemini_api_key: newGeminiApiKey.trim() });
+      if (success) {
+        setGeminiApiKey(newGeminiApiKey.trim());
+        setNewGeminiApiKey(''); // Limpiar input
+        setApiKeySuccess("Clave API de Gemini guardada correctamente.");
+        setShowApiKey(false); // Ocultar la clave después de guardar
+        setTimeout(() => setApiKeySuccess(null), 4000); // Ocultar mensaje de éxito
+      } else {
+        setApiKeyError("No se pudo guardar la clave API.");
+      }
+    } catch (err) {
+      console.error("Error updating Gemini API Key:", err);
+      setApiKeyError("Ocurrió un error al guardar la clave API.");
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  };
+
+  /**
+   * Maneja la eliminación de la API Key de Gemini.
+   * @function handleDeleteApiKey
+   * @async
+   */
+  const handleDeleteApiKey = async () => {
+    // TODO: Añadir confirmación real (ej. un modal)
+    if (!window.confirm("¿Estás seguro de que quieres eliminar tu clave API de Gemini?")) {
+      return;
+    }
+
+    if (!user?.id) {
+      setApiKeyError("No se pudo identificar al usuario para eliminar la clave.");
+      return;
+    }
+
+    setIsSavingApiKey(true);
+    setApiKeyError(null);
+    setApiKeySuccess(null);
+    setError(null); // Limpiar error general
+
+    try {
+      const success = await updateUserProfile(user.id, { gemini_api_key: null });
+      if (success) {
+        setGeminiApiKey(null);
+        setNewGeminiApiKey(''); // Limpiar input por si acaso
+        setApiKeySuccess("Clave API de Gemini eliminada.");
+        setShowApiKey(false);
+        setTimeout(() => setApiKeySuccess(null), 4000);
+      } else {
+        setApiKeyError("No se pudo eliminar la clave API.");
+      }
+    } catch (err) {
+      console.error("Error deleting Gemini API Key:", err);
+      setApiKeyError("Ocurrió un error al eliminar la clave API.");
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  };
+
 
   // Renderizado condicional de carga y error inicial
   if (isLoading) {
@@ -182,7 +377,7 @@ export function UserProfilePage() {
 
   return (
     <div className="container mx-auto max-w-2xl py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6">Tu Perfil</h1>
+      <h1 className="text-3xl font-bold mb-6 text-slate-900">Tu Perfil</h1>
       
       {/* Mostrar error general si existe y no hay error específico de username */}
       {error && !usernameError && ( 
@@ -195,9 +390,9 @@ export function UserProfilePage() {
 
       <div className="space-y-6">
         {/* Sección Avatar */}
-         <Card>
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
            <CardHeader>
-             <CardTitle>Avatar</CardTitle>
+             <CardTitle className="text-slate-900">Avatar</CardTitle>
            </CardHeader>
            <CardContent>
              <AvatarUpload 
@@ -209,24 +404,61 @@ export function UserProfilePage() {
          </Card>
 
         {/* Card para Información Básica */}
-        <Card>
+
+         {/* Card para Ingredientes Excluidos */}
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
+           <CardHeader>
+             <CardTitle className="text-slate-900">Ingredientes Excluidos</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <TagsInput
+               id="excluded-ingredients-input"
+               label="Ingredientes a evitar"
+               placeholder="Añade ingredientes (ej: cilantro) y presiona Enter..."
+               currentTags={profile.excluded_ingredients}
+               onUpdateTags={handleUpdateExcludedIngredients}
+             />
+             <p className="text-xs text-muted-foreground mt-2">
+               Las recetas generadas por IA intentarán evitar estos ingredientes.
+             </p>
+           </CardContent>
+         </Card>
+
+         {/* Card para Equipamiento Disponible */}
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
+           <CardHeader>
+             <CardTitle className="text-slate-900">Equipamiento Disponible</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <EquipmentCheckboxes
+               label="Selecciona el equipamiento que tienes disponible:"
+               currentEquipment={profile.available_equipment}
+               onUpdateEquipment={handleUpdateAvailableEquipment}
+             />
+              <p className="text-xs text-muted-foreground mt-2">
+               Las recetas generadas por IA podrán tener en cuenta tu equipamiento.
+             </p>
+           </CardContent>
+         </Card>
+
+        <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
           <CardHeader>
-            <CardTitle>Información Básica</CardTitle>
+            <CardTitle className="text-slate-900">Información Básica</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Email */}
             <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-700">Email</Label>
               <div 
-                id="email" 
-                className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50"
+                id="email"
+                className="text-sm text-slate-600 p-2 border border-slate-300 rounded-md bg-slate-50"
               >
                 {profile.email || 'No disponible'}
               </div>
             </div>
             {/* Username */}
             <div className="space-y-1">
-              <Label htmlFor="username">Nombre de Usuario</Label>
+              <Label htmlFor="username" className="text-slate-700">Nombre de Usuario</Label>
               <Input 
                 id="username"
                 value={usernameInput}
@@ -237,6 +469,7 @@ export function UserProfilePage() {
                 }}
                 placeholder="Tu nombre público (opcional)"
                 disabled={isSavingUsername}
+                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
               />
                {usernameError && <p className="text-sm text-destructive pt-1">{usernameError}</p>}
                {usernameSuccess && <p className="text-sm text-green-600 pt-1">Nombre de usuario guardado.</p>}
@@ -247,9 +480,9 @@ export function UserProfilePage() {
                onClick={handleUpdateUsername} 
                disabled={!usernameHasChanged || isSavingUsername}
                size="sm"
-               className="ml-auto" 
+               className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white"
              >
-               {isSavingUsername ? <Spinner size="sm" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+               {isSavingUsername ? <Spinner size="sm" className="mr-2 text-white" /> : <Save className="mr-2 h-4 w-4" />}
                Guardar Usuario
              </Button>
            </CardFooter>
@@ -278,6 +511,106 @@ export function UserProfilePage() {
             currentValue={profile.allergies_restrictions}
             onUpdateValue={(value) => handleUpdateSimplePreference({ allergies_restrictions: value })}
          />
+
+         {/* Card para API Key de Gemini */}
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
+           <CardHeader>
+             <CardTitle className="text-slate-900">API Key de Gemini (Opcional)</CardTitle>
+           </CardHeader>
+           <CardContent className="space-y-4">
+             <p className="text-sm text-muted-foreground">
+               Opcionalmente, puedes guardar tu propia API Key de Google AI Studio (Gemini) 
+               para habilitar funcionalidades avanzadas de IA en la aplicación. 
+               Tu clave se almacena de forma segura y solo se usa para interactuar con la API de Gemini en tu nombre.
+               {/* TODO: Reemplazar con enlace real a la guía */}
+               <a href="#" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 hover:underline ml-1">
+                 ¿Cómo obtener una clave?
+               </a>
+             </p>
+
+             {apiKeySuccess && (
+               <Alert>
+                 <Terminal className="h-4 w-4 text-emerald-700" /> {/* Ajustar color icono */}
+                 <AlertTitle className="text-emerald-800">Éxito</AlertTitle> {/* Ajustar color título */}
+                 <AlertDescription className="text-emerald-700">{apiKeySuccess}</AlertDescription> {/* Ajustar color descripción */}
+               </Alert>
+             )}
+             {apiKeyError && (
+               <Alert variant="destructive">
+                 <Terminal className="h-4 w-4" />
+                 <AlertTitle>Error</AlertTitle>
+                 <AlertDescription>{apiKeyError}</AlertDescription>
+               </Alert>
+             )}
+
+             {/* Mostrar Clave Actual (Ofuscada) */}
+             {geminiApiKey && (
+               <div className="space-y-1">
+                 <Label htmlFor="currentApiKey" className="text-slate-700">Clave API Actual</Label>
+                 <div className="flex items-center space-x-2">
+                   <Input 
+                     id="currentApiKey"
+                     type={showApiKey ? 'text' : 'password'}
+                     readOnly
+                     value={showApiKey ? geminiApiKey : obfuscateApiKey(geminiApiKey)}
+                     className="flex-grow bg-slate-100 border-slate-300 text-slate-700" // Estilo deshabilitado
+                   />
+                   <Button 
+                     variant="outline"
+                     size="icon"
+                     onClick={() => setShowApiKey(!showApiKey)}
+                     aria-label={showApiKey ? "Ocultar clave" : "Mostrar clave"}
+                     className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                   >
+                     {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                   </Button>
+                 </div>
+               </div>
+             )}
+
+             {/* Input para Nueva Clave */}
+             <div className="space-y-1">
+               <Label htmlFor="newApiKey" className="text-slate-700">{geminiApiKey ? 'Reemplazar Clave API' : 'Ingresar Nueva Clave API'}</Label>
+               <Input 
+                 id="newApiKey"
+                 type="password" 
+                 value={newGeminiApiKey}
+                 onChange={(e) => {
+                   setNewGeminiApiKey(e.target.value);
+                   setApiKeyError(null);
+                   setApiKeySuccess(null);
+                 }}
+                 placeholder="Pega tu clave API de Gemini aquí"
+                 disabled={isSavingApiKey}
+                 className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+               />
+             </div>
+
+           </CardContent>
+           <CardFooter className="flex justify-end space-x-2">
+             {geminiApiKey && (
+                <Button 
+                  variant="destructive"
+                  onClick={handleDeleteApiKey}
+                  disabled={isSavingApiKey}
+                  size="sm"
+                >
+                  {isSavingApiKey ? <Spinner size="sm" className="mr-2" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Eliminar Clave
+                </Button>
+             )}
+             <Button 
+               onClick={handleUpdateApiKey}
+               disabled={!newGeminiApiKey.trim() || isSavingApiKey}
+               size="sm"
+               className="bg-emerald-600 hover:bg-emerald-700 text-white"
+             >
+               {isSavingApiKey ? <Spinner size="sm" className="mr-2 text-white" /> : <Save className="mr-2 h-4 w-4" />}
+               Guardar Clave
+             </Button>
+           </CardFooter>
+         </Card>
+
         
       </div>
     </div>

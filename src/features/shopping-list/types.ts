@@ -1,18 +1,35 @@
-// Define los tipos relacionados con la lista de compras
-
-// Tipo para un ítem individual en la lista generada
+/**
+ * Representa un ítem individual en la lista de compras generada.
+ */
 export interface ShoppingListItem {
-  id: string; // Podría ser el nombre del ingrediente o un ID generado
-  name: string;
-  quantity: number | null;
-  unit: string | null;
-  is_purchased: boolean; // Para marcar como comprado
-  // Opcional: Podríamos añadir de qué receta(s) proviene
-  // recipeSource?: string[]; 
+  id: string; // Identificador único para el ítem (puede ser el nombre normalizado o un UUID)
+  ingredientName: string; // Nombre del ingrediente
+  quantity: number | null; // Cantidad total calculada (puede ser null si solo se suman ocurrencias)
+  unit: string | null; // Unidad (puede ser null)
+  isChecked: boolean; // Estado para marcar/desmarcar en la UI
+  recipeSources: string[]; // Nombres de las recetas que requieren este ingrediente (opcional)
 }
 
-// Tipo para crear un nuevo ítem manualmente (si se implementa)
-export type NewShoppingListItem = Omit<ShoppingListItem, 'id' | 'is_purchased'>;
+/**
+ * Representa un ingrediente extraído de una receta o comida planificada,
+ * antes de ser agregado y normalizado.
+ */
+export interface RawIngredientInfo {
+    ingredient_id: string | null; // Añadido ID del ingrediente
+    name: string;
+    quantity: string | number | null;
+    unit: string | null;
+    recipeName?: string; // Nombre de la receta de origen
+}
 
-// Tipo para actualizar un ítem (ej. marcar como comprado)
-export type UpdateShoppingListItem = Partial<Pick<ShoppingListItem, 'name' | 'quantity' | 'unit' | 'is_purchased'>>;
+/**
+ * Representa un ingrediente después de ser agregado por ID,
+ * antes de ser filtrado y comparado con la despensa.
+ */
+export interface AggregatedIngredient {
+    ingredient_id: string;
+    name: string; // Nombre (del primer ingrediente encontrado con ese ID)
+    totalQuantity: number | null; // Cantidad total sumada
+    unit: string | null; // Unidad normalizada (la primera encontrada o la más común)
+    recipeSources: string[]; // Nombres de las recetas que lo requieren
+}

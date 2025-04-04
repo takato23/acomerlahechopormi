@@ -1,4 +1,4 @@
-import { NewShoppingListItem } from '../types'; // Corregir ruta de importación
+import { ShoppingListItem } from '../types'; // Usar ShoppingListItem en lugar de NewShoppingListItem
 
 export interface QuickAddSuggestion {
   label: string;
@@ -9,7 +9,7 @@ export interface QuickAddSuggestion {
 export interface QuickAddButtonProps {
   itemName: string;
   suggestions: QuickAddSuggestion[];
-  onAdd: (item: NewShoppingListItem) => Promise<void>; // Usar NewShoppingListItem
+  onAdd: (item: ShoppingListItem) => Promise<void>; // Usar ShoppingListItem
   onCustom?: (itemName: string) => void;
   // isAdding general ya no es necesario aquí, se maneja por botón
 }

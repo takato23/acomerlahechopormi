@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 
 // Definir breakpoints (ajustar según el diseño)
 const breakpoints = {
-  mobile: 767,
-  tablet: 1199,
-  desktop: 1200,
+  mobile: 768,   // < 768px (Tailwind's md breakpoint)
+  tablet: 1024,  // < 1024px (Tailwind's lg breakpoint)
+  desktop: 1024, // >= 1024px
 };
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
@@ -12,9 +12,9 @@ type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 function getDeviceConfig(width: number): Breakpoint {
   if (width < breakpoints.mobile) {
     return 'mobile';
-  } else if (width >= breakpoints.mobile && width < breakpoints.tablet) {
+  } else if (width >= breakpoints.mobile && width < breakpoints.tablet) { // >= 768 and < 1024
     return 'tablet';
-  } else {
+  } else { // >= 1024
     return 'desktop';
   }
 }

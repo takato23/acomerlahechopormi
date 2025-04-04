@@ -1,0 +1,33 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "src": "^/(?:(.+)/)?index(?:\\.html)?/?$",
+      "headers": {
+        "Location": "/$1"
+      },
+      "status": 308
+    },
+    {
+      "src": "^/(.*)\\.html/?$",
+      "headers": {
+        "Location": "/$1"
+      },
+      "status": 308
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/api/get-gemini-key$",
+      "dest": "/api/get-gemini-key",
+      "check": true
+    },
+    {
+      "src": "^/api/tsconfig$",
+      "dest": "/api/tsconfig",
+      "check": true
+    }
+  ],
+  "overrides": {}
+}

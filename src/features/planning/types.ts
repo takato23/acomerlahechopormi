@@ -27,6 +27,7 @@ export interface UpsertPlannedMealData {
   meal_type: MealType;
   recipe_id?: string | null;
   custom_meal_name?: string | null;
+  notes?: string | null; // Añadido para guardar descripción de receta generada
 }
 
 // --- Tipos para Sugerencias de Alternativas ---

@@ -1,99 +1,140 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react'; // Combinar importaciones de React
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox'; 
 import { Spinner } from '@/components/ui/Spinner';
-import { Trash2, RefreshCw, ListChecks, Package } from 'lucide-react'; 
-import { useShoppingListStore } from '@/stores/shoppingListStore'; 
-import { generateShoppingList } from './services/shoppingListService'; 
-import { AddItemForm } from './components/AddItemForm';
-import { PriceResultsDisplay } from './components/PriceResultsDisplay'; // Importar nuevo componente
-import { inferCategory } from './lib/categoryInference';
-import { ParsedShoppingInput } from './lib/inputParser'; // Importar tipo
-import { getCategories } from './services/categoryService';
-import { searchProducts, BuscaPreciosProduct } from './services/buscaPreciosService';
-import { preciosClarosService } from './services/preciosClarosService'; // Importar servicio Precios Claros
-import { toast } from 'sonner';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PriceResultsDisplay } from './components/PriceResultsDisplay'; // Recuperado
+import { SearchPanel } from './components/SearchPanel/SearchPanel'; // Recuperado
+import { ShoppingMap } from './components/Map/ShoppingMap'; // Recuperado
+import { FavoriteStoresInfo } from './components/Map/FavoriteStoresInfo'; // Recuperado
+import { searchProducts, BuscaPreciosProduct, SearchProductsResult } from './services/buscaPreciosService'; // Recuperado y añadido SearchProductsResult
+import { preciosClarosService } from './services/preciosClarosService'; // Recuperado
+import { toast } from 'sonner'; // Asegurar que esté
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Recuperado
+import { Package } from 'lucide-react'; // Recuperado para Accordion
+import useBreakpoint from '@/hooks/useBreakpoint'; // Recuperado
+import { DesktopLayout } from './components/Layout/DesktopLayout'; // Recuperado
+import { TabletLayout } from './components/Layout/TabletLayout'; // Recuperado
+import { MobileLayout } from './components/Layout/MobileLayout'; // Recuperado
+import { Checkbox } from '@/components/ui/checkbox'; // Para marcar items
+import { AddItemForm } from './components/AddItemForm'; // Recuperado
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { ShoppingListItem } from './types'; // Importación original
+import type { Category } from '@/features/pantry/types'; // Importar Category de pantry
+import { generateShoppingList } from './shoppingListService';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
-import useBreakpoint from '@/hooks/useBreakpoint'; // Usar import por defecto
-import { DesktopLayout } from './components/Layout/DesktopLayout'; // Importar layouts
-import { TabletLayout } from './components/Layout/TabletLayout';
-import { MobileLayout } from './components/Layout/MobileLayout';
-import { SearchPanel } from './components/SearchPanel/SearchPanel';
-import { ShoppingMap } from './components/Map/ShoppingMap';
-// Eliminar esta línea duplicada
-import { FavoriteStoresInfo } from './components/Map/FavoriteStoresInfo'; // Importar componente info
-
-// Usar any temporalmente hasta tener los tipos de Supabase
-type ShoppingListItem = any;
-type Category = any;
+import { ListChecks, Terminal } from 'lucide-react'; // Iconos
 
 export function ShoppingListPage() {
-  // Estado global (Zustand)
-  const { 
-    items: persistedItems, 
-    isLoading: isLoadingList, 
-    error: storeError, 
-    fetchItems, 
-    addItem, 
-    updateItem, 
-    deleteItem, 
-    clearPurchased 
-  } = useShoppingListStore();
+  const [listItems, setListItems] = useState<ShoppingListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [generatedRange, setGeneratedRange] = useState<{ start: string; end: string } | null>(null);
 
-  // Estado local
-  const [isGenerating, setIsGenerating] = useState(false); 
-  const [generationError, setGenerationError] = useState<string | null>(null); 
-  const [generatedItems, setGeneratedItems] = useState<ShoppingListItem[] | null>(null); 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [inferredCategories, setInferredCategories] = useState<Record<string, string | null>>({});
-  const [priceResults, setPriceResults] = useState<BuscaPreciosProduct[] | null>(null); // Estado para resultados de precios
+  // Obtener semana actual como rango por defecto
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+  // Estados recuperados para buscador y mapa
+  const [categories, setCategories] = useState<Category[]>([]); // Estado para categorías
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true); // Estado de carga para categorías
+  const [priceResults, setPriceResults] = useState<BuscaPreciosProduct[] | null>(null);
   const [itemForPriceSearch, setItemForPriceSearch] = useState<string | null>(null);
   const [isSearchingPrices, setIsSearchingPrices] = useState(false);
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<Set<string>>(new Set());
-  const [forceShowMap, setForceShowMap] = useState(false); // Estado para forzar mostrar mapa
+  const [forceShowMap, setForceShowMap] = useState(false);
+  const breakpoint = useBreakpoint(); // Recuperado
 
-  // Datos derivados
-  const displayItems = generatedItems !== null ? generatedItems : persistedItems;
-  const purchasedCount = displayItems.filter(i => i.is_purchased).length;
-  const isLoading = isLoadingList || (generatedItems === null && isLoadingCategories);
-  const breakpoint = useBreakpoint(); // Obtener breakpoint actual
 
-  // Efectos
-  useEffect(() => {
-    fetchItems();
-    const loadCats = async () => {
-      setIsLoadingCategories(true);
-      try {
-        const cats = await getCategories();
-        setCategories(cats);
-      } catch (err) {
-        console.error("Error loading categories:", err);
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    };
-    loadCats();
 
-    // Verificar disponibilidad de Precios Claros al montar
-    const checkApi = async () => {
-      const isAvailable = await preciosClarosService.checkServiceAvailability();
-      if (isAvailable) {
-        console.info("API Precios Claros disponible.");
-        // toast.info("API Precios Claros disponible."); // Opcional: mostrar toast
+  const handleGenerateList = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    setListItems([]); // Limpiar lista anterior
+    setGeneratedRange(null);
+
+    const startDateStr = format(weekStart, 'yyyy-MM-dd');
+    const endDateStr = format(weekEnd, 'yyyy-MM-dd');
+
+    try {
+      const items = await generateShoppingList(startDateStr, endDateStr);
+      setListItems(items.map(item => ({ ...item, isChecked: false }))); // Inicializar isChecked
+      setGeneratedRange({ start: startDateStr, end: endDateStr });
+    } catch (err: any) {
+      console.error("Error generating shopping list:", err);
+      setError(err.message || "Error inesperado al generar la lista.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [weekStart, weekEnd]); // Depende de las fechas de la semana
+
+  const handleToggleItem = (itemId: string) => {
+    setListItems(prevItems =>
+      prevItems.map(item =>
+        item.id === itemId ? { ...item, isChecked: !item.isChecked } : item
+      )
+    );
+    // Aquí podríamos añadir lógica para persistir el estado isChecked si fuera necesario
+  };
+
+  const formatRange = (range: { start: string; end: string } | null): string => {
+    if (!range) return '';
+    // Parsear y formatear fechas para mostrarlas amigablemente
+    try {
+        const start = new Date(range.start + 'T00:00:00'); // Asumir zona horaria local
+        const end = new Date(range.end + 'T00:00:00');
+        return `para la semana del ${format(start, 'd MMM', { locale: es })} al ${format(end, 'd MMM yyyy', { locale: es })}`;
+    } catch {
+        return `para ${range.start} a ${range.end}`; // Fallback
+    }
+  };
+
+
+  // Handler para añadir item manualmente y buscar precios (Recuperado y adaptado)
+  const handleAddItem = async (parsedItem: { name: string; quantity: number | null; unit: string | null }) => {
+    // Nota: Este handler asume que viene de un AddItemForm que parsea la entrada.
+    // Necesitaríamos reimplementar AddItemForm o adaptar SearchPanel para llamar esto.
+    setIsSearchingPrices(true);
+    setItemForPriceSearch(parsedItem.name);
+    setPriceResults(null);
+    try {
+      // Añadir item al estado local (adaptado de la lógica de Zustand)
+      // Crear un objeto ShoppingListItem básico
+      const newItem: ShoppingListItem = {
+        id: `temp-${Date.now()}`, // ID temporal
+        ingredientName: parsedItem.name, // Usar ingredientName que sí existe en el tipo
+        quantity: parsedItem.quantity,
+        unit: parsedItem.unit,
+        isChecked: false,
+        recipeSources: [], // Añadir propiedad requerida como array vacío
+      };
+      setListItems(prevItems => [...prevItems, newItem]);
+      toast.success(`"${parsedItem.name}" añadido a la lista.`);
+
+      // Buscar precios después de intentar añadir (o simular éxito)
+      const results: SearchProductsResult = await searchProducts(parsedItem.name); // Añadir tipo explícito
+      if (!results.error) { // Verificar si no hubo error
+        setPriceResults(results.products); // Acceder a la propiedad 'products'
+        if (results.products.length === 0) {
+             toast.info(`No se encontraron precios para "${parsedItem.name}".`);
+        }
       } else {
-        console.warn("API Precios Claros NO disponible o con errores.");
-        toast.warning("El servicio de Precios Claros (para ubicaciones) no está disponible.");
+        // Hubo un error en la búsqueda (ya se logueó en el servicio)
+        toast.error(`Error al buscar precios para "${parsedItem.name}".`);
+        setPriceResults([]); // Indicar error con array vacío
+        // Opcional: Mostrar sugerencias de fallback si existen en results.fallbackSuggestions
       }
-    };
-    checkApi();
+    } catch (err) {
+      console.error('Error adding item or searching prices:', err);
+      toast.error(`Error al procesar "${parsedItem.name}".`);
+      setPriceResults([]); // Indicar error en búsqueda
+    } finally {
+      setIsSearchingPrices(false);
+    }
+  };
 
-  }, [fetchItems]);
 
-  // Handler para seleccionar/deseleccionar tienda favorita
+  // Handler para seleccionar/deseleccionar tienda favorita (Recuperado)
   const handleToggleFavoriteStore = (storeId: string) => {
     setFavoriteStoreIds(prev => {
       const newSet = new Set(prev);
@@ -110,305 +151,7 @@ export function ShoppingListPage() {
     });
   };
 
-  // Inferir categorías para items cuando cambian
-  useEffect(() => {
-    const inferAllCategories = async () => {
-      if (persistedItems.length > 0 && categories.length > 0) {
-        const newInferred: Record<string, string | null> = {};
-        await Promise.all(persistedItems.map(async (item) => {
-          if (inferredCategories[item.id] === undefined) {
-            newInferred[item.id] = await inferCategory(item.name);
-          } else {
-            newInferred[item.id] = inferredCategories[item.id];
-          }
-        }));
-        setInferredCategories(prev => ({ ...prev, ...newInferred }));
-      }
-    };
-    inferAllCategories();
-  }, [persistedItems, categories]);
-
-  // Grupos de items por categoría
-  const groupedItems = useMemo(() => {
-    if (generatedItems !== null || categories.length === 0) return null;
-
-    const groups: Record<string, { name: string; items: ShoppingListItem[] }> = {};
-    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
-    const otherCategoryName = "Otros";
-
-    persistedItems.forEach(item => {
-      const categoryId = inferredCategories[item.id];
-      const categoryName = categoryId ? categoryMap.get(categoryId) || otherCategoryName : otherCategoryName;
-      
-      if (!groups[categoryName]) {
-        groups[categoryName] = { name: categoryName, items: [] };
-      }
-      groups[categoryName].items.push(item);
-      groups[categoryName].items.sort((a, b) => {
-        if (a.is_purchased !== b.is_purchased) return a.is_purchased ? 1 : -1;
-        return a.name.localeCompare(b.name);
-      });
-    });
-
-    return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
-  }, [persistedItems, categories, inferredCategories, generatedItems]);
-
-  // Handlers
-  const handleAddItem = async (parsedItem: ParsedShoppingInput) => { // Recibir objeto parseado
-    try {
-      // Inferir categoría
-      const inferredCategoryId = await inferCategory(parsedItem.name);
-
-      // Preparar datos para añadir
-      const itemData = {
-        name: parsedItem.name,
-        quantity: parsedItem.quantity,
-        unit: parsedItem.unit,
-        category_id: inferredCategoryId, // Usar categoría inferida
-        is_purchased: false,
-      };
-
-      const addedItem = await addItem(itemData); // Añadir item con todos los datos
-      toast.success(`"${parsedItem.name}" añadido a la lista.`);
-
-      // Iniciar búsqueda de precios para el item añadido (si se añadió correctamente)
-      if (addedItem) {
-        setItemForPriceSearch(addedItem.name);
-        setIsSearchingPrices(true);
-        setPriceResults(null); // Limpiar resultados anteriores
-        try {
-          const results = await searchProducts(addedItem.name);
-          setPriceResults(results);
-          console.log(`Resultados de BuscaPrecios para "${addedItem.name}":`, results); // Log temporal
-          if (results.length === 0) {
-               toast.info(`No se encontraron precios para "${addedItem.name}".`);
-          }
-        } catch (priceError) {
-          console.error(`Error searching prices for "${addedItem.name}":`, priceError);
-          toast.error(`Error al buscar precios para "${addedItem.name}".`);
-          setPriceResults([]); // Indicar que hubo error pero no bloquear
-        } finally {
-          setIsSearchingPrices(false);
-        }
-      }
-
-    } catch (err) {
-      console.error('Error adding item:', err);
-      // Asegurarse de que 'name' existe en parsedItem antes de usarlo en el toast de error
-      const errorItemName = parsedItem?.name || 'el ítem';
-      toast.error(`Error al añadir "${errorItemName}".`);
-    }
-  };
-
-  const handleTogglePurchased = async (item: ShoppingListItem) => {
-    try {
-      await updateItem(item.id, { is_purchased: !item.is_purchased });
-    } catch (err) {
-      console.error('Error toggling item:', err);
-      toast.error(`Error al actualizar "${item.name}".`);
-    }
-  };
-
-  const handleDeleteItem = async (itemId: string) => {
-    const item = persistedItems.find(i => i.id === itemId);
-    if (!item) return;
-
-    const confirmDelete = window.confirm(`¿Estás seguro de que quieres eliminar "${item.name}"?`);
-    if (!confirmDelete) return;
-
-    try {
-      await deleteItem(itemId);
-      toast.success(`"${item.name}" eliminado.`);
-    } catch (err) {
-      console.error('Error deleting item:', err);
-      toast.error(`Error al eliminar "${item.name}".`);
-    }
-  };
-
-  const handleClearPurchased = async () => {
-    if (purchasedCount === 0) return;
-
-    const confirmClear = window.confirm(`¿Eliminar los ${purchasedCount} ítems comprados?`);
-    if (!confirmClear) return;
-
-    try {
-      await clearPurchased();
-      toast.success('Ítems comprados eliminados.');
-    } catch (err) {
-      console.error('Error clearing purchased items:', err);
-      toast.error('Error al limpiar los ítems comprados.');
-    }
-  };
-
-  const handleGenerateList = async () => {
-    setIsGenerating(true);
-    setGenerationError(null);
-    try {
-      // Por ahora, generar para la semana actual
-      const today = new Date();
-      const weekStart = format(today, 'yyyy-MM-dd');
-      const weekEnd = format(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-      
-      const items = await generateShoppingList(weekStart, weekEnd);
-      setGeneratedItems(items);
-      
-      if (items.length === 0) {
-        toast.info('No hay comidas planificadas para generar una lista.');
-      } else {
-        toast.success(`Lista generada con ${items.length} ítems.`);
-      }
-    } catch (err) {
-      console.error('Error generating list:', err);
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      setGenerationError(message);
-      toast.error(`Error al generar la lista: ${message}`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Renderizar contenido principal (lista, formulario, resultados de precios)
-  const renderMainContent = () => (
-    <div className="flex flex-col h-full"> {/* Asegurar que ocupe altura */}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 px-4 pt-4">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ListChecks className="h-6 w-6 text-primary"/> Lista de Compras
-        </h1>
-        <Button
-          size="sm"
-          onClick={handleGenerateList}
-          disabled={isGenerating}
-          className="h-9"
-          title="Generar lista basada en la planificación de esta semana"
-        >
-          {isGenerating ? <Spinner size="sm" className="mr-2"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
-          Generar Lista
-        </Button>
-      </div>
-
-      {(storeError || generationError) && (
-        <p className="text-destructive text-sm mb-4 px-4">{storeError || generationError}</p>
-      )}
-
-      {/* Formulario añadir manual */}
-      {generatedItems === null && (
-        <div className="px-4 mb-4">
-           <AddItemForm onAddItem={handleAddItem} />
-        </div>
-      )}
-
-      {/* Mostrar resultados de precios */}
-      <div className="px-4 mb-4">
-        <PriceResultsDisplay
-          results={priceResults}
-          itemName={itemForPriceSearch}
-          isLoading={isSearchingPrices}
-        />
-      </div>
-
-      {/* Lista */}
-      <div className="flex-grow overflow-y-auto px-1 pb-4"> {/* Permitir scroll */}
-        {isLoading ? (
-          <div className="flex justify-center py-10"><Spinner /></div>
-        ) : (
-          <div className="bg-card border rounded-lg shadow-sm p-0">
-            {displayItems.length === 0 && !isGenerating ? (
-              <p className="text-muted-foreground text-center py-6 px-4">
-                {generatedItems !== null
-                  ? "No se generaron ítems para esta semana."
-                  : "Tu lista de compras está vacía."}
-              </p>
-            ) : (
-              <>
-                {groupedItems ? (
-                  <Accordion type="multiple" defaultValue={groupedItems.map(g => g.name)} className="w-full">
-                    {groupedItems.map(group => (
-                      <AccordionItem value={group.name} key={group.name}>
-                        <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline bg-muted/30 hover:bg-muted/40">
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            {group.name} ({group.items.length})
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-4 pt-3 pb-1">
-                          <ul className="space-y-2">
-                            {group.items.map(item => (
-                              <li key={item.id} className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <Checkbox
-                                    id={`item-${item.id}`}
-                                    checked={item.is_purchased}
-                                    onCheckedChange={() => handleTogglePurchased(item)}
-                                  />
-                                  <label
-                                    htmlFor={`item-${item.id}`}
-                                    className={cn(
-                                      "text-sm cursor-pointer",
-                                      item.is_purchased && "line-through text-muted-foreground"
-                                    )}
-                                  >
-                                    {item.name}
-                                    {(item.quantity || item.unit) && (
-                                      <span className="text-xs text-muted-foreground ml-1">
-                                        ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                                      </span>
-                                    )}
-                                  </label>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleDeleteItem(item.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                ) : (
-                  <ul className="space-y-2 p-4">
-                    {displayItems.map((item) => (
-                      <li key={item.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
-                        <span className="text-sm">
-                          {item.name}
-                          {(item.quantity || item.unit) && (
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                
-                {generatedItems === null && purchasedCount > 0 && (
-                  <div className="mt-4 p-4 border-t flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearPurchased}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4"/>
-                      Limpiar Comprados ({purchasedCount})
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // Determinar si mostrar el mapa completo o la info de favoritos
+  // Determinar si mostrar el mapa completo o la info de favoritos (Recuperado)
   const shouldShowFullMap = favoriteStoreIds.size === 0 || forceShowMap;
   const mapContent = shouldShowFullMap
     ? <ShoppingMap
@@ -420,7 +163,110 @@ export function ShoppingListPage() {
         onShowMapClick={() => setForceShowMap(true)}
       />;
 
-  // Renderizar el layout según el breakpoint
+  // Función para renderizar el contenido principal (lista) (Adaptado)
+  // Función para cargar datos iniciales (adaptada de PantryPage)
+  const loadData = useCallback(async () => {
+    console.log("--- Executing loadData to refresh shopping list items ---");
+    setIsLoading(true); // Usar isLoading general
+    setError(null);
+    setIsLoadingCategories(true); // También cargar categorías
+    try {
+      // Cargar categorías y items en paralelo
+      // Asumiendo que getShoppingListItems y getCategories existen en los servicios copiados
+      // const [fetchedCategories, fetchedItems] = await Promise.all([
+      //   getCategories(), // Necesita existir en services/categoryService.ts
+      //   getShoppingListItems() // Necesita existir en shoppingListService.ts
+      // ]);
+      console.warn("Lógica para cargar items y categorías pendiente en loadData");
+      const fetchedCategories: Category[] = []; // Placeholder
+      const fetchedItems: ShoppingListItem[] = []; // Placeholder
+
+      setCategories(fetchedCategories);
+      setListItems(fetchedItems.map(item => ({ ...item, isChecked: item.isChecked ?? false }))); // Asegurar isChecked
+    } catch (err) {
+      console.error("Error loading shopping list data:", err);
+      setError("No se pudo cargar la lista de compras. Intenta de nuevo más tarde.");
+      setListItems([]); // Limpiar items en caso de error
+      setCategories([]);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingCategories(false);
+    }
+  }, []); // Dependencia vacía para ejecutar solo al montar inicialmente
+      {/* Formulario para añadir manualmente (Recuperado) */}
+      <div className="mb-4">
+        <AddItemForm onAddItem={handleAddItem} />
+      </div>
+
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadData();
+  }, [loadData]); // Llamar a loadData al montar
+
+
+  const renderMainContent = () => (
+    // Contenedor principal para la lista y resultados de precios
+    <div className="flex flex-col h-full p-4 gap-4"> {/* Añadido padding y gap */}
+      {/* Resultados de Precios (si existen) */}
+      <PriceResultsDisplay
+        results={priceResults}
+        itemName={itemForPriceSearch}
+        isLoading={isSearchingPrices}
+      />
+
+      {/* Lista de Compras */}
+      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden"> {/* Ajustado shadow */}
+        <CardHeader className="p-4 border-b"> {/* Ajustado padding y borde */}
+          <CardTitle className="text-lg text-slate-800"> {/* Ajustado tamaño y color */}
+            {listItems.length > 0 ? `Lista Generada ${formatRange(generatedRange)}` : 'Genera o añade ítems'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-grow overflow-y-auto p-0"> {/* Quitado padding para lista */}
+          {isLoading && !isSearchingPrices && ( // Mostrar solo si no está buscando precios
+            <div className="flex justify-center items-center h-40"><Spinner /></div>
+          )}
+          {!isLoading && listItems.length === 0 && !error && (
+            <p className="text-center text-slate-500 py-10 px-4">
+              Genera una lista desde tu plan semanal o añade ítems manualmente.
+            </p>
+          )}
+          {!isLoading && listItems.length > 0 && (
+            // Usar Accordion para agrupar (si agrupamos, si no, ul directo)
+            // Por ahora, mantenemos la lista simple como en la versión actual
+            <ul className="space-y-0"> {/* Quitado space-y */}
+              {listItems.map((item) => (
+                <li key={item.id} className="flex items-center space-x-3 p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors"> {/* Ajustado padding y hover */}
+                  <Checkbox
+                    id={`item-${item.id}`}
+                    checked={item.isChecked}
+                    onCheckedChange={() => handleToggleItem(item.id)}
+                    aria-label={`Marcar ${item.ingredientName}`}
+                  />
+                  <div className="flex-grow">
+                    <label
+                      htmlFor={`item-${item.id}`}
+                      className={`text-sm font-medium cursor-pointer ${item.isChecked ? 'text-slate-400 line-through' : 'text-slate-800'}`} // Añadido cursor-pointer
+                    >
+                      {item.ingredientName}
+                    </label>
+                    {(item.quantity !== null || item.unit) && (
+                       <span className={`ml-2 text-xs ${item.isChecked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
+                         ({item.quantity ?? ''} {item.unit ?? ''})
+                       </span>
+                    )}
+                  </div>
+                  {/* TODO: Añadir botón de borrar item si es necesario */}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Renderizar el layout según el breakpoint (Recuperado y adaptado)
   return (
     <div className="h-screen flex flex-col"> {/* Ocupar toda la altura */}
       {breakpoint === 'desktop' && (
@@ -434,7 +280,7 @@ export function ShoppingListPage() {
         <TabletLayout
           listAndSearch={
             <div className="flex flex-col h-full">
-              <div className="p-4"><SearchPanel categories={categories} /></div> {/* Pasar categorías */}
+              <div className="p-4"><SearchPanel categories={categories} /></div>
               <div className="flex-grow overflow-y-auto">{renderMainContent()}</div> {/* Lista abajo */}
             </div>
           }

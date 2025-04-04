@@ -115,3 +115,144 @@ export const getDefaultUnitForIngredient = (name: string): string => {
     if (/\b(huevo|yogur|manzana|banana|naranja|limon|cebolla|palta|lata|botella)\b/.test(lowerName)) return 'unidad';
     return 'unidad';
 };
+
+/**
+ * Normaliza una unidad de medida a una forma estándar en minúsculas.
+ * Maneja plurales simples y variaciones comunes.
+ * @param {string | null} unit La unidad a normalizar.
+ * @returns {string | null} La unidad normalizada o null.
+ */
+export const normalizeUnit = (unit: string | null): string | null => {
+  if (!unit) return null;
+
+  const lowerUnit = unit.toLowerCase().trim();
+
+  // Mapeo de unidades comunes y sus variaciones
+  const unitMap: { [key: string]: string } = {
+    g: 'g',
+    gr: 'g',
+    gramo: 'g',
+    gramos: 'g',
+    kg: 'kg',
+    kilo: 'kg',
+    kilos: 'kg',
+    kilogramo: 'kg',
+    kilogramos: 'kg',
+    l: 'l',
+    litro: 'l',
+    litros: 'l',
+    ml: 'ml',
+    mililitro: 'ml',
+    mililitros: 'ml',
+    taza: 'taza',
+    tazas: 'taza',
+    cucharada: 'cda',
+    cucharadas: 'cda',
+    cda: 'cda',
+    cdas: 'cda',
+    cucharadita: 'cdita',
+    cucharaditas: 'cdita',
+    cdita: 'cdita',
+    cditas: 'cdita',
+    unidad: 'unidad',
+    unidades: 'unidad',
+    diente: 'diente',
+    dientes: 'diente',
+    cabeza: 'cabeza',
+    cabezas: 'cabeza',
+    paquete: 'paquete',
+    paquetes: 'paquete',
+    lata: 'lata',
+    latas: 'lata',
+    botella: 'botella',
+    botellas: 'botella',
+    pizca: 'pizca',
+    pizcas: 'pizca',
+    // Añadir más según sea necesario
+  };
+
+  return unitMap[lowerUnit] || lowerUnit; // Devolver normalizado o el original en minúsculas si no hay mapeo
+};
+
+/**
+ * Intenta convertir una cantidad (string o número) a un número.
+ * Maneja fracciones simples ('1/2') y rangos ('1-2', toma el primer número).
+ * @param {string | number | null} quantity La cantidad a parsear.
+ * @returns {number | null} El valor numérico o null si no se puede parsear.
+ */
+export const parseQuantity = (quantity: string | number | null): number | null => {
+  if (quantity === null || quantity === undefined) return null;
+  if (typeof quantity === 'number') return isNaN(quantity) ? null : quantity;
+  if (typeof quantity !== 'string') return null;
+
+  const trimmedQty = quantity.trim();
+  if (trimmedQty === '') return null;
+
+  // Intentar parseo directo
+  const directParse = parseFloat(trimmedQty);
+  if (!isNaN(directParse)) return directParse;
+
+  // Manejar fracciones 'X/Y'
+  if (trimmedQty.includes('/')) {
+    const parts = trimmedQty.split('/');
+    if (parts.length === 2) {
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+        return numerator / denominator;
+      }
+    }
+  }
+
+  // Manejar rangos 'X-Y' (tomar el primer número)
+  if (trimmedQty.includes('-')) {
+    const parts = trimmedQty.split('-');
+    if (parts.length >= 1) { // Puede ser solo '1-' o '1-2'
+      const firstNum = parseFloat(parts[0]);
+      if (!isNaN(firstNum)) {
+        return firstNum;
+      }
+    }
+  }
+
+  // Si nada funcionó
+  return null;
+};
+
+
+/**
+ * Intenta convertir una cantidad entre unidades compatibles (ej. g y kg).
+ * @param {number | null} quantity La cantidad a convertir.
+ * @param {string | null} fromUnit Unidad original (normalizada).
+ * @param {string | null} toUnit Unidad deseada (normalizada).
+ * @returns {number | null} La cantidad convertida o null si no se puede convertir.
+ */
+export const convertUnits = (
+  quantity: number | null,
+  fromUnit: string | null,
+  toUnit: string | null
+): number | null => {
+  if (quantity === null || !fromUnit || !toUnit || fromUnit === toUnit) {
+    return quantity; // No necesita o no puede convertir
+  }
+
+  const from = normalizeUnit(fromUnit);
+  const to = normalizeUnit(toUnit);
+
+  if (!from || !to) return null; // No se pudieron normalizar
+
+  // Conversión g <-> kg
+  if ((from === 'g' && to === 'kg') || (from === 'kg' && to === 'g')) {
+    return from === 'g' ? quantity / 1000 : quantity * 1000;
+  }
+
+  // Conversión ml <-> l
+  if ((from === 'ml' && to === 'l') || (from === 'l' && to === 'ml')) {
+    return from === 'ml' ? quantity / 1000 : quantity * 1000;
+  }
+
+  // Añadir más conversiones si es necesario (ej. taza a ml, etc.)
+
+  console.warn(`Conversión no soportada de ${from} a ${to}`);
+  return null; // Conversión no soportada
+};

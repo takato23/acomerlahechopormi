@@ -1,151 +1,236 @@
-import { supabase } from '@/lib/supabaseClient';
-// Usar any temporalmente
-// import type { PantryItem, NewPantryItem, UpdatePantryItem } from './types';
-type PantryItem = any;
-type NewPantryItem = any;
-type UpdatePantryItem = any;
-
-/** @constant {string} TABLE_NAME - Nombre de la tabla de despensa en Supabase. */
-const TABLE_NAME = 'pantry_items';
+import { supabase } from '../../lib/supabaseClient';
+import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category } from './types';
+import { findOrCreateIngredient, normalizeIngredientName } from '../ingredients/ingredientService';
+import { inferCategory } from '../shopping-list/lib/categoryInference';
 
 /**
- * Obtiene todos los ítems de la despensa para el usuario actual.
- * @async
- * @function getPantryItems
- * @returns {Promise<PantryItem[]>} Una promesa que resuelve a un array de ítems de la despensa.
- * @throws {Error} Si el usuario no está autenticado o si ocurre un error en la consulta.
+ * Obtiene todos los items de la despensa para el usuario actual.
  */
 export const getPantryItems = async (): Promise<PantryItem[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Usuario no autenticado");
 
   const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .select('*') // Considerar seleccionar explícitamente o incluir JOIN con ingredients si es necesario
+    .from('pantry_items')
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching pantry items:', error);
-    throw new Error('No se pudieron cargar los ítems de la despensa.');
-  }
+  if (error) throw error;
+
+  return (data || []).map(item => ({
+    ...item,
+    // Mapear datos de ingredientes y categorías explícitamente
+    ingredient: item.ingredients ? {
+      id: item.ingredients.id, // Incluir ID si es necesario
+      name: normalizeIngredientName(item.ingredients.name, item.quantity ?? 1),
+      image_url: item.ingredients.image_url // Añadir image_url
+    } : null,
+    category: item.categories ? {
+      id: item.categories.id, // Incluir ID si es necesario
+      name: item.categories.name,
+      icon_name: item.categories.icon_name // Añadir icon_name
+      // Añadir color si se usa en la UI directamente desde aquí
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  }));
+};
+
+/**
+ * Obtiene todas las categorías disponibles.
+ */
+export const getCategories = async (): Promise<Category[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  const orFilter = user ? `is_default.eq.true,user_id.eq.${user.id}` : 'is_default.eq.true';
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*, icon_name') // Añadir icon_name
+    .or(orFilter)
+    .order('is_default', { ascending: false })
+    .order('order', { ascending: true });
+
+  if (error) throw error;
   return data || [];
 };
 
 /**
- * Añade un nuevo ítem a la despensa.
- * Valida y convierte la cantidad a número o null.
- * @async
- * @function addPantryItem
- * @param {NewPantryItem} itemData - Datos del nuevo ítem (sin id, user_id).
- * @returns {Promise<PantryItem>} El ítem recién creado.
- * @throws {Error} Si el usuario no está autenticado o si falla la inserción.
+ * Añade un nuevo item a la despensa.
  */
-export const addPantryItem = async (itemData: NewPantryItem): Promise<PantryItem> => {
+export const addPantryItem = async (itemData: CreatePantryItemData): Promise<PantryItem> => {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  if (!user) throw new Error("Usuario no autenticado");
 
-  const quantity = itemData.quantity === undefined || itemData.quantity === null || isNaN(Number(itemData.quantity)) 
-    ? null 
-    : Number(itemData.quantity);
+  const ingredient = await findOrCreateIngredient(
+    itemData.ingredient_name,
+    itemData.quantity ?? 1
+  );
+  
+  let finalCategoryId = itemData.category_id;
+  if (!finalCategoryId && ingredient?.name) {
+    try {
+      const inferredCategory = await inferCategory(ingredient.name);
+      if (inferredCategory) {
+        finalCategoryId = inferredCategory;
+      }
+    } catch (error) {
+      console.error("Error during category inference:", error);
+    }
+  }
 
-  const newItem = {
-    ...itemData,
-    quantity: quantity,
-    user_id: user.id,
-    // Asegurarse de que otros campos obligatorios tengan valor (ej. ingredient_id si aplica)
+  const { data, error } = await supabase
+    .from('pantry_items')
+    .insert({
+      user_id: user.id,
+      ingredient_id: ingredient.id,
+      quantity: itemData.quantity ?? 1,
+      unit: itemData.unit,
+      category_id: finalCategoryId,
+      expiry_date: itemData.expiry_date,
+      notes: itemData.notes,
+    })
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .single();
+
+  if (error) throw error;
+  if (!data) throw new Error("No se pudo crear el item");
+
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
   };
-
-  const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .insert(newItem)
-    .select()
-    .single();
-
-  if (error || !data) {
-    console.error('Error adding pantry item:', error);
-    throw new Error('No se pudo añadir el ítem a la despensa.');
-  }
-  return data;
 };
 
 /**
- * Actualiza un ítem existente en la despensa.
- * Valida y convierte la cantidad si se incluye en las actualizaciones.
- * @async
- * @function updatePantryItem
- * @param {string} itemId - El ID del ítem a actualizar.
- * @param {UpdatePantryItem} updates - Un objeto con los campos a actualizar.
- * @returns {Promise<PantryItem>} El ítem actualizado.
- * @throws {Error} Si falla la actualización.
+ * Actualiza un item existente.
  */
-export const updatePantryItem = async (itemId: string, updates: UpdatePantryItem): Promise<PantryItem> => {
-   const validatedUpdates = { ...updates };
-   if (validatedUpdates.quantity !== undefined) {
-     const quantity = validatedUpdates.quantity === null || isNaN(Number(validatedUpdates.quantity))
-       ? null
-       : Number(validatedUpdates.quantity);
-     validatedUpdates.quantity = quantity;
-   }
+export const updatePantryItem = async (itemId: string, updateData: UpdatePantryItemData): Promise<PantryItem> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
 
   const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .update(validatedUpdates)
+    .from('pantry_items')
+    .update({
+      ...updateData,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', itemId)
-    // Podríamos añadir .eq('user_id', user.id) si RLS no es suficiente
-    .select()
+    .eq('user_id', user.id)
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
     .single();
 
-  if (error || !data) {
-    console.error('Error updating pantry item:', error);
-    throw new Error('No se pudo actualizar el ítem.');
-  }
-  return data;
+  if (error) throw error;
+  if (!data) throw new Error("Item no encontrado");
+
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  };
 };
 
 /**
- * Elimina un ítem de la despensa.
- * @async
- * @function deletePantryItem
- * @param {string} itemId - El ID del ítem a eliminar.
- * @returns {Promise<void>}
- * @throws {Error} Si falla la eliminación.
+ * Elimina un item de la despensa.
  */
 export const deletePantryItem = async (itemId: string): Promise<void> => {
-  const { error } = await supabase
-    .from(TABLE_NAME)
-    .delete()
-    .eq('id', itemId);
-    // Podríamos añadir .eq('user_id', user.id) si RLS no es suficiente
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
 
-  if (error) {
-    console.error('Error deleting pantry item:', error);
-    throw new Error('No se pudo eliminar el ítem.');
-  }
+  const { error } = await supabase
+    .from('pantry_items')
+    .delete()
+    .eq('id', itemId)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
 };
 
 /**
- * Obtiene ítems de la despensa con cantidad baja o nula.
- * @async
- * @function getLowStockItems
- * @param {number} [threshold=1] - La cantidad máxima para considerar bajo stock (inclusive).
- * @returns {Promise<PantryItem[]>} Una promesa que resuelve a un array de ítems con bajo stock.
- * @throws {Error} Si el usuario no está autenticado o si falla la consulta.
+ * Elimina múltiples items de la despensa.
  */
-export const getLowStockItems = async (threshold: number = 1): Promise<PantryItem[]> => {
+export const deleteMultiplePantryItems = async (itemIds: string[]): Promise<void> => {
+  if (!itemIds?.length) return;
+
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  if (!user) throw new Error("Usuario no autenticado");
+
+  const { error } = await supabase
+    .from('pantry_items')
+    .delete()
+    .in('id', itemIds)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+};
+
+/**
+ * Cambia el estado de favorito de un item.
+ */
+export const toggleFavoritePantryItem = async (itemId: string, isFavorite: boolean): Promise<PantryItem | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
 
   const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .select('*, ingredients ( name )') // Asegurarse de traer el nombre del ingrediente
+    .from('pantry_items')
+    .update({ is_favorite: isFavorite, updated_at: new Date().toISOString() })
+    .eq('id', itemId)
     .eq('user_id', user.id)
-    .lte('quantity', threshold)
-    .order('ingredients(name)', { ascending: true }); // Ordenar por el nombre del ingrediente relacionado
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .single();
 
-  if (error) {
-    console.error('Error fetching low stock items:', error);
-    throw new Error('No se pudieron cargar los ítems con bajo stock.');
-  }
-  return data || [];
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  };
+};
+
+/**
+ * Elimina todos los items de la despensa.
+ */
+export const clearPantry = async (): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
+
+  const { error } = await supabase
+    .from('pantry_items')
+    .delete()
+    .eq('user_id', user.id);
+
+  if (error) throw error;
 };

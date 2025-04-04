@@ -15,62 +15,48 @@ const AVATAR_BUCKET = 'avatars';
  * @function getUserProfile
  * @returns {Promise<UserProfile | null>} Una promesa que resuelve al perfil del usuario o null si no está autenticado o hay un error irrecuperable.
  */
-export async function getUserProfile(): Promise<UserProfile | null> {
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  if (!userId) {
+    console.error('getUserProfile called without userId');
+    return null;
+  }
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError) {
-      console.error('Error getting user:', authError);
-      return null;
-    }
-    if (!user) {
-      // No hay usuario logueado
-      return null;
-    }
-
-    // Intentar obtener el perfil de la tabla 'profiles'
+    // Obtener el perfil de la tabla 'profiles' seleccionando campos específicos
+    // Nota: 'email' no suele estar en 'profiles', se omite aquí. Ajustar si es necesario.
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single(); 
+      .select('id, username, dietary_preference, avatar_url, difficulty_preference, max_prep_time, allergies_restrictions, gemini_api_key, excluded_ingredients, available_equipment') // Seleccionar explícitamente, incluyendo nuevos campos
+      .eq('id', userId) // Usar userId del parámetro
+      .single();
 
     if (profileError) {
-      // Código 'PGRST116' significa "Not Found", lo cual es esperado si el perfil no se ha creado aún.
+      // Código 'PGRST116' significa "Not Found"
       if (profileError.code !== 'PGRST116') {
-         console.warn('Error fetching profile (but not PGRST116):', profileError.message);
+         console.warn(`Error fetching profile for user ${userId} (but not PGRST116):`, profileError.message);
       }
-      // Devolver datos básicos del usuario de auth si no hay perfil en la tabla 'profiles'
-      return { 
-        id: user.id, 
-        email: user.email,
-        // Asegurarse de que los campos opcionales sean null por defecto si no hay perfil
-        username: null,
-        dietary_preference: null,
-        avatar_url: null,
-        difficulty_preference: null,
-        max_prep_time: null,
-        allergies_restrictions: null,
-       }; 
+      // Si no se encuentra el perfil o hay otro error no fatal, devolver null.
+      return null;
     }
 
-    // Combinar datos de auth y profile, asegurando valores null por defecto
-    const combinedProfile: UserProfile = {
-      id: user.id,
-      email: user.email,
-      username: profileData?.username || null,
-      dietary_preference: profileData?.dietary_preference || null,
-      avatar_url: profileData?.avatar_url || null,
-      difficulty_preference: profileData?.difficulty_preference || null,
-      max_prep_time: profileData?.max_prep_time || null,
-      allergies_restrictions: profileData?.allergies_restrictions || null,
-      // Añadir cualquier otro campo de profileData aquí
-      // ...profileData // Cuidado si profileData tiene campos extra no definidos en UserProfile
+    // Si se encontró el perfil, construir el objeto UserProfile
+    // Asignar null a email ya que no se obtiene de 'profiles'
+    const userProfile: UserProfile = {
+      id: profileData.id,
+      email: undefined, // Email no está en la tabla profiles, usar undefined según el tipo.
+      username: profileData.username || null,
+      dietary_preference: profileData.dietary_preference || null,
+      avatar_url: profileData.avatar_url || null,
+      difficulty_preference: profileData.difficulty_preference || null,
+      max_prep_time: profileData.max_prep_time || null,
+      allergies_restrictions: profileData.allergies_restrictions || null,
+      gemini_api_key: profileData.gemini_api_key || null, // Incluir gemini_api_key
+      excluded_ingredients: profileData.excluded_ingredients || [], // Añadir nuevo campo (array)
+      available_equipment: profileData.available_equipment || [], // Añadir nuevo campo (array)
     };
-    return combinedProfile;
+    return userProfile;
 
   } catch (error) {
-    console.error('Unexpected error fetching user profile:', error);
+    console.error(`Unexpected error fetching user profile for user ${userId}:`, error);
     return null;
   }
 }
@@ -83,43 +69,47 @@ export async function getUserProfile(): Promise<UserProfile | null> {
  * @param {Partial<Omit<UserProfile, 'id' | 'email'>>} profileData - Un objeto con los campos a actualizar.
  * @returns {Promise<boolean>} Una promesa que resuelve a `true` si la actualización fue exitosa, `false` en caso contrario.
  */
-export async function updateUserProfile(profileData: Partial<Omit<UserProfile, 'id' | 'email'>>): Promise<boolean> {
+// Ajustamos la firma para ser más flexible y permitir actualizar otros campos como avatar_url
+export async function updateUserProfile(userId: string, profileData: Partial<Omit<UserProfile, 'id' | 'email'>>): Promise<boolean> {
+   if (!userId) {
+     console.error('updateUserProfile called without userId');
+     return false;
+   }
+   // Validar que profileData no esté vacío
+   if (!profileData || Object.keys(profileData).length === 0) {
+       console.warn(`updateUserProfile called for user ${userId} with empty profileData.`);
+       // Devolver true si no hay nada que hacer.
+       return true;
+   }
+   // No necesitamos la validación estricta de 'gemini_api_key' aquí
+   // ya que Omit<> maneja los campos no permitidos (id, email).
+
    try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Usar el userId proporcionado.
+    // Asegurarse de no intentar actualizar id o email (Omit ya lo hace)
+    const updateData = { ...profileData }; // Copia para seguridad
 
-    if (authError || !user) {
-      console.error('Error getting user or no user logged in:', authError);
-      return false;
-    }
-
-    // Asegurarse de no intentar actualizar id o email directamente en profiles
-    // Usamos una copia para no modificar el objeto original si se reutiliza
-    const updateData = { ...profileData };
-    // delete (updateData as any).id; // No necesario por Omit, pero como doble seguro
-    // delete (updateData as any).email;
-
-    // Si no hay datos para actualizar después de quitar id/email (aunque Omit ya lo hace)
+    // Si no hay datos para actualizar (esto no debería pasar por la validación anterior, pero por si acaso)
     if (Object.keys(updateData).length === 0) {
-        console.warn("updateUserProfile called with no data to update.");
-        return true; // Considerar éxito si no hay nada que hacer? O false? True parece más seguro.
+        console.warn(`updateUserProfile called for user ${userId} with effectively no data to update after potential filtering.`);
+        return true;
     }
-
 
     const { error: updateError } = await supabase
       .from('profiles')
       .update(updateData)
-      .eq('id', user.id);
+      .eq('id', userId); // Usar el userId del parámetro
 
     if (updateError) {
-      console.error('Error updating profile:', updateError);
+      console.error(`Error updating profile for user ${userId}:`, updateError);
       return false;
     }
 
-    console.log('Profile updated successfully for user:', user.id, updateData);
+    console.log(`Profile updated successfully for user ${userId}:`, updateData);
     return true;
 
   } catch (error) {
-    console.error('Unexpected error updating user profile:', error);
+    console.error(`Unexpected error updating user profile for user ${userId}:`, error);
     return false;
   }
 }
@@ -172,7 +162,8 @@ export async function uploadAvatar(file: File): Promise<string | null> {
     const publicUrl = urlData.publicUrl;
 
     // Actualizar perfil
-    const profileUpdated = await updateUserProfile({ avatar_url: publicUrl });
+    // Pasar userId a updateUserProfile
+    const profileUpdated = await updateUserProfile(user.id, { avatar_url: publicUrl });
 
     if (!profileUpdated) {
       console.warn('Avatar uploaded but failed to update profile URL.');
