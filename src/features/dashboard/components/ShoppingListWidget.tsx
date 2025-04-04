@@ -24,8 +24,21 @@ const contentVariants = {
 export function ShoppingListWidget({ itemCount, isLoading, error }: ShoppingListWidgetProps) { 
   const { addItem } = useShoppingListStore();
 
-  const handleAddItem = async (itemName: string) => {
-    const success = await addItem({ name: itemName });
+  // Modificar handleAddItem para aceptar ParsedShoppingInput
+  const handleAddItem = async (parsedItem: ParsedShoppingInput) => {
+    // Extraer el nombre del objeto parseado
+    const itemName = parsedItem.name;
+    if (!itemName) {
+        toast.error("No se pudo identificar el nombre del ítem.");
+        throw new Error("Parsed item name is missing");
+    }
+    // Usar el nombre extraído y potencialmente otros datos de parsedItem si addItem los necesita
+    const success = await addItem({
+        name: itemName,
+        // Podríamos pasar quantity y unit si addItem los soporta
+        // quantity: parsedItem.quantity,
+        // unit: parsedItem.unit,
+     });
     if (success) {
       toast.success(`"${itemName}" añadido a la lista.`);
     } else {

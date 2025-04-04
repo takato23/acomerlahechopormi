@@ -1,4 +1,5 @@
 import { SearchTermRecord } from './types';
+export type { SearchTermRecord }; // Re-exportar el tipo
 
 const SEARCH_HISTORY_KEY = 'app_search_history';
 const MAX_HISTORY_ENTRIES = 50; // Límite para no llenar localStorage

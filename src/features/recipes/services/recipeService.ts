@@ -1,5 +1,5 @@
 // src/features/recipes/services/recipeService.ts
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '../../../lib/supabaseClient'; // Corregir ruta relativa
 import type { Recipe, RecipeIngredient } from '@/types/recipeTypes';
 
 type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients'> & {
@@ -19,6 +19,7 @@ export const getRecipes = async (userId: string): Promise<Recipe[]> => {
     .from('recipes')
     .select(`
       *,
+      is_favorite,
       recipe_ingredients (
         id,
         ingredient_name,
@@ -26,7 +27,7 @@ export const getRecipes = async (userId: string): Promise<Recipe[]> => {
         unit,
         ingredient_id
       )
-    `)
+    `) // Sintaxis correcta: is_favorite al mismo nivel que *
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -36,7 +37,8 @@ export const getRecipes = async (userId: string): Promise<Recipe[]> => {
   }
 
   // Mapear los ingredientes al formato esperado por el tipo Recipe
-  const recipesWithMappedIngredients = data.map(recipe => ({
+  // Añadir tipo explícito al parámetro del map
+  const recipesWithMappedIngredients = data.map((recipe: any) => ({
     ...recipe,
     // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
     ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[], // Renombrar y asegurar tipo
@@ -56,6 +58,7 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
     .from('recipes')
     .select(`
       *,
+      is_favorite,
       recipe_ingredients (
         id,
         ingredient_name,
@@ -63,7 +66,7 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
         unit,
         ingredient_id
       )
-    `)
+    `) // Sintaxis correcta: is_favorite al mismo nivel que *
     .eq('id', recipeId)
     .single();
 
@@ -79,7 +82,9 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
    if (!data) return null;
 
    // Mapear ingredientes
+   // Añadir aserción de tipo a 'data'
    const recipeWithMappedIngredients = {
+     ...(data as any), // Usar 'any' temporalmente o un tipo más específico si es posible
      ...data,
      // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
      ingredients: (data.recipe_ingredients || []) as RecipeIngredient[],
@@ -228,8 +233,44 @@ export const deleteRecipe = async (recipeId: string): Promise<void> => {
         throw new Error(`Error al eliminar la receta: ${error.message}`);
     }
 
-    console.log(`Receta ${recipeId} eliminada.`);
+    console.log(`Receta ${recipeId} eliminada.`); // Mover console.log aquí
+}; // Llave de cierre correcta para deleteRecipe
+
+/**
+ * Actualiza el estado 'is_favorite' de una receta específica.
+ */
+export const updateRecipeFavoriteStatus = async (
+  recipeId: string,
+  isFavorite: boolean
+): Promise<{ id: string; is_favorite: boolean } | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    console.error("User not authenticated to update favorite status.");
+    throw new Error("Usuario no autenticado");
+  }
+
+  const { data, error } = await supabase
+    .from('recipes')
+    .update({ is_favorite: isFavorite })
+    .eq('id', recipeId)
+    .eq('user_id', user.id) // Ensure only the owner can update
+    .select('id, is_favorite')
+    .single();
+
+  if (error) {
+    console.error(`Error updating favorite status for recipe ${recipeId}:`, error);
+    // Handle specific errors like 'No rows found' if needed
+    if (error.code === 'PGRST116') {
+        console.warn(`Recipe ${recipeId} not found or permission denied.`);
+        return null; // Or throw a more specific error
+    }
+    throw new Error(`Error al actualizar favorito: ${error.message}`);
+  }
+
+  console.log(`Recipe ${recipeId} favorite status updated to ${isFavorite}`);
+  return data;
 };
+// Eliminar llave extra
 
 
 // TODO: Añadir función para updateRecipe

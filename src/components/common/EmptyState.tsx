@@ -1,4 +1,3 @@
-// src/components/common/EmptyState.tsx
 import React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -10,31 +9,37 @@ interface EmptyStateProps {
   className?: string;
 }
 
+/**
+ * Componente reutilizable para mostrar un estado vacío o sin resultados.
+ * Permite incluir un icono, título, descripción y un botón de acción opcional.
+ */
 export function EmptyState({
   icon,
   title,
   description,
   action,
-  className,
+  className
 }: EmptyStateProps) {
   return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center text-center gap-4 py-16 px-4", // Aumentar padding vertical
-        className
-      )}
-    >
+    <div className={cn(
+      "flex flex-col items-center text-center gap-4 py-16 px-4",
+      className // Permite añadir clases desde fuera
+    )}>
       {icon && (
-        <div className="text-muted-foreground/50 mb-4"> {/* Ajustar color y margen */}
-          {/* Clonar el icono para poder aplicarle clases de tamaño */}
-          {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement, { className: 'h-16 w-16' }) : icon}
+        <div className="text-muted-foreground/70 mb-2">
+          {/* Asumimos que el icono ya tiene tamaño, ej. h-12 w-12 */}
+          {icon}
         </div>
       )}
-      <h3 className="text-xl font-semibold">{title}</h3>
+      <h3 className="text-xl font-semibold text-foreground">{title}</h3>
       {description && (
-        <p className="text-muted-foreground max-w-xs">{description}</p> // Limitar ancho descripción
+        <p className="text-sm text-muted-foreground max-w-xs mx-auto">{description}</p>
       )}
-      {action && <div className="mt-4">{action}</div>} {/* Añadir margen superior a la acción */}
+      {action && (
+        <div className="mt-4">
+          {action}
+        </div>
+      )}
     </div>
   );
 }

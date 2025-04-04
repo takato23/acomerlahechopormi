@@ -28,6 +28,7 @@ export interface Recipe {
   cook_time_minutes: number | null; // Tiempo de cocción en minutos (opcional)
   servings: number | null; // Número de porciones (opcional)
   tags?: string[] | null; // Etiquetas o categorías de la receta (opcional)
+  is_favorite: boolean; // Indica si la receta está marcada como favorita
   ingredients: RecipeIngredient[]; // Lista de ingredientes de la receta
 }
 

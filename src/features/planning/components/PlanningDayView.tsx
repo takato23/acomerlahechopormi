@@ -61,18 +61,19 @@ export function PlanningDayView({
       {mealTypes.map(mealType => {
         const mealsForType = mealsByType[mealType] || [];
         return (
-          // Renderizar MealCard directamente. En desktop, PlanningPage lo coloca en la celda correcta.
-          // En móvil, se apilarán gracias al flex-col del div padre.
-          <MealCard
-            key={mealType}
-            date={date}
-            mealType={mealType}
-            plannedMeals={mealsForType}
-            onAddClick={onAddClick}
-            onEditClick={onEditClick}
-            onDeleteClick={onDeleteClick}
-            // No necesita className="h-full" si las filas del grid son 'auto'
-          />
+          // Envolver cada MealCard en un div estilizado como tarjeta para la vista móvil
+          <div key={mealType} className="bg-card border border-border/20 rounded-lg shadow-sm p-3">
+            <MealCard
+              date={date}
+              mealType={mealType}
+              plannedMeals={mealsForType}
+              onAddClick={onAddClick}
+              onEditClick={onEditClick}
+              onDeleteClick={onDeleteClick}
+              // Quitar estilos de borde/fondo de MealCard si los tuviera internamente
+              // para evitar duplicidad con el div contenedor.
+            />
+          </div>
         );
       })}
     </div>

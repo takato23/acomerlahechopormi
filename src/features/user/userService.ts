@@ -25,7 +25,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     // Nota: 'email' no suele estar en 'profiles', se omite aquí. Ajustar si es necesario.
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('id, username, dietary_preference, avatar_url, difficulty_preference, max_prep_time, allergies_restrictions, gemini_api_key') // Seleccionar explícitamente
+      .select('id, username, dietary_preference, avatar_url, difficulty_preference, max_prep_time, allergies_restrictions, gemini_api_key, excluded_ingredients, available_equipment') // Seleccionar explícitamente, incluyendo nuevos campos
       .eq('id', userId) // Usar userId del parámetro
       .single();
 
@@ -50,6 +50,8 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       max_prep_time: profileData.max_prep_time || null,
       allergies_restrictions: profileData.allergies_restrictions || null,
       gemini_api_key: profileData.gemini_api_key || null, // Incluir gemini_api_key
+      excluded_ingredients: profileData.excluded_ingredients || [], // Añadir nuevo campo (array)
+      available_equipment: profileData.available_equipment || [], // Añadir nuevo campo (array)
     };
     return userProfile;
 

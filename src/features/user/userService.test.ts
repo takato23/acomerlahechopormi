@@ -61,12 +61,12 @@ describe('userService', () => {
   describe('getUserProfile', () => {
      it('should return null if user is not authenticated', async () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null });
-      await expect(getUserProfile()).resolves.toBeNull();
+      await expect(getUserProfile(mockUser.id)).resolves.toBeNull(); // Añadir userId
     });
 
     it('should return null if there is an auth error', async () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: new Error('Auth Error') });
-      await expect(getUserProfile()).resolves.toBeNull();
+      await expect(getUserProfile(mockUser.id)).resolves.toBeNull(); // Añadir userId
       expect(console.error).toHaveBeenCalledWith('Error getting user:', expect.any(Error));
     });
 
@@ -74,7 +74,7 @@ describe('userService', () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
       mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'DB Error', code: 'XYZ' } });
       
-      await expect(getUserProfile()).resolves.toEqual(expect.objectContaining({ 
+      await expect(getUserProfile(mockUser.id)).resolves.toEqual(expect.objectContaining({ // Añadir userId
          id: mockUser.id, 
          email: mockUser.email,
          username: null, 
@@ -90,7 +90,7 @@ describe('userService', () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
       mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not Found', code: 'PGRST116' } });
       
-       await expect(getUserProfile()).resolves.toEqual(expect.objectContaining({ 
+       await expect(getUserProfile(mockUser.id)).resolves.toEqual(expect.objectContaining({ // Añadir userId
          id: mockUser.id, 
          email: mockUser.email,
          username: null,
@@ -104,7 +104,7 @@ describe('userService', () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
       mockSingle.mockResolvedValueOnce({ data: mockProfileData, error: null });
 
-      await expect(getUserProfile()).resolves.toEqual(expect.objectContaining({
+      await expect(getUserProfile(mockUser.id)).resolves.toEqual(expect.objectContaining({ // Añadir userId
         id: mockUser.id,
         email: mockUser.email,
         username: 'tester',
@@ -115,14 +115,14 @@ describe('userService', () => {
 
      it('should return null on unexpected error during auth', async () => {
       mockGetUser.mockRejectedValueOnce(new Error('Unexpected Auth'));
-      await expect(getUserProfile()).resolves.toBeNull();
+      await expect(getUserProfile(mockUser.id)).resolves.toBeNull(); // Añadir userId
       expect(console.error).toHaveBeenCalledWith('Unexpected error fetching user profile:', expect.any(Error));
     });
     
      it('should return null on unexpected error during profile fetch', async () => {
        mockGetUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
        mockSingle.mockRejectedValueOnce(new Error('Unexpected DB'));
-       await expect(getUserProfile()).resolves.toBeNull();
+       await expect(getUserProfile(mockUser.id)).resolves.toBeNull(); // Añadir userId
        expect(console.error).toHaveBeenCalledWith('Unexpected error fetching user profile:', expect.any(Error));
     });
   });
@@ -131,19 +131,19 @@ describe('userService', () => {
   describe('updateUserProfile', () => {
      it('should throw error if user is not authenticated', async () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null }); 
-      await expect(updateUserProfile({ username: 'new' })).rejects.toThrow('Usuario no autenticado');
+      await expect(updateUserProfile(mockUser.id, { username: 'new' })).rejects.toThrow('Usuario no autenticado'); // Añadir userId
     });
     
      it('should throw error if auth error occurs', async () => {
       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: new Error('Auth Error') }); 
-      await expect(updateUserProfile({ username: 'new' })).rejects.toThrow('Usuario no autenticado'); 
+      await expect(updateUserProfile(mockUser.id, { username: 'new' })).rejects.toThrow('Usuario no autenticado'); // Añadir userId
     });
 
     it('should call supabase.update with correct data and return true on success', async () => {
       const updateData = { username: 'new_username', dietary_preference: 'vegetarian' as const };
       mockThen.mockResolvedValueOnce({ error: null }); // update().eq().then()
 
-      await expect(updateUserProfile(updateData)).resolves.toBe(true);
+      await expect(updateUserProfile(mockUser.id, updateData)).resolves.toBe(true); // Añadir userId
       expect(mockFrom).toHaveBeenCalledWith('profiles');
       expect(mockUpdate).toHaveBeenCalledWith(updateData);
       expect(mockEq).toHaveBeenCalledWith('id', mockUser.id); // update().eq()
@@ -157,13 +157,13 @@ describe('userService', () => {
            then: jest.fn((callback) => Promise.resolve(callback({ error: new Error('Update Failed') })))
        }));
 
-       await expect(updateUserProfile(updateData)).resolves.toBe(false);
+       await expect(updateUserProfile(mockUser.id, updateData)).resolves.toBe(false); // Añadir userId
        expect(console.error).toHaveBeenCalledWith('Error updating profile:', expect.any(Error));
     });
     
      it('should throw error on unexpected error during auth', async () => {
       mockGetUser.mockRejectedValueOnce(new Error('Unexpected'));
-      await expect(updateUserProfile({ username: 'new' })).rejects.toThrow('Usuario no autenticado');
+      await expect(updateUserProfile(mockUser.id, { username: 'new' })).rejects.toThrow('Usuario no autenticado'); // Añadir userId
     });
   });
 

@@ -112,9 +112,9 @@ export function PantryAccordionList({
   const handleDelete = async (itemId: string) => {
     setDeletingItemId(itemId);
     try {
-      const success = await deletePantryItem(itemId);
-      if (success) onItemDeleted(itemId);
-      else onError('No se pudo eliminar el item.');
+      await deletePantryItem(itemId); // Llamar a delete
+      onItemDeleted(itemId); // Asumir éxito si no hay error y llamar al callback
+      // Quitar el else, el error se maneja en el catch
     } catch (error) {
       onError('Ocurrió un error al eliminar el item.');
     } finally {
@@ -174,11 +174,15 @@ export function PantryAccordionList({
                        >
                          <PantryListItemRow
                            item={item}
-                           onUpdateQuantity={handleUpdateQuantity}
+                           // onUpdateQuantity no existe
                            onDelete={handleDelete}
                            onEdit={onEditClick}
-                           isUpdating={updatingItemId === item.id}
-                           isDeleting={deletingItemId === item.id}
+                           // isUpdating no existe
+                           // isDeleting no existe
+                           // Añadir props faltantes con valores por defecto
+                           isSelectionMode={false}
+                           isSelected={false}
+                           onSelectItem={() => {}} // Función vacía
                          />
                        </motion.div>
                     ))}

@@ -5,198 +5,150 @@ import { inferCategory } from '../shopping-list/lib/categoryInference';
 
 /**
  * Obtiene todos los items de la despensa para el usuario actual.
- * Incluye información básica del ingrediente y la categoría.
  */
 export const getPantryItems = async (): Promise<PantryItem[]> => {
-  try {
-    // 1. Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) {
-      console.error("Error getting auth user:", authError);
-      throw new Error("Error de autenticación");
-    }
-    if (!user) {
-      console.error("No user found in session");
-      throw new Error("Usuario no autenticado");
-    }
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Usuario no autenticado");
 
-    console.log("Auth check passed. User ID:", user.id);
+  const { data, error } = await supabase
+    .from('pantry_items')
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
 
-    // 2. Verificar que la tabla existe y los permisos
-    const { error: tableCheckError } = await supabase
-      .from('pantry_items')
-      .select('id')
-      .limit(1);
+  if (error) throw error;
 
-    if (tableCheckError) {
-      console.error("Error checking pantry_items table:", tableCheckError);
-      throw new Error("Error accediendo a la tabla pantry_items");
-    }
+  return (data || []).map(item => ({
+    ...item,
+    // Mapear datos de ingredientes y categorías explícitamente
+    ingredient: item.ingredients ? {
+      id: item.ingredients.id, // Incluir ID si es necesario
+      name: normalizeIngredientName(item.ingredients.name, item.quantity ?? 1),
+      image_url: item.ingredients.image_url // Añadir image_url
+    } : null,
+    category: item.categories ? {
+      id: item.categories.id, // Incluir ID si es necesario
+      name: item.categories.name,
+      icon_name: item.categories.icon_name // Añadir icon_name
+      // Añadir color si se usa en la UI directamente desde aquí
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  }));
+};
 
-    console.log("Table check passed. Fetching items...");
+/**
+ * Obtiene todas las categorías disponibles.
+ */
+export const getCategories = async (): Promise<Category[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  const orFilter = user ? `is_default.eq.true,user_id.eq.${user.id}` : 'is_default.eq.true';
 
-    // 3. Obtener items (solo datos básicos inicialmente)
-    const { data, error: fetchError } = await supabase
-      .from('pantry_items')
-      .select('*, ingredients(*), categories(*)') // Incluir datos de ingredientes y categorías
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*, icon_name') // Añadir icon_name
+    .or(orFilter)
+    .order('is_default', { ascending: false })
+    .order('order', { ascending: true });
 
-    if (fetchError) {
-      console.error("Error fetching pantry items:", fetchError);
-      throw fetchError;
-    }
-
-    console.log(`Successfully fetched ${data?.length ?? 0} items`);
-    // Mapear la respuesta de Supabase a la estructura esperada
-    const mappedData = (data || []).map(item => ({
-      ...item,
-      ingredient: item.ingredients ? {
-        name: normalizeIngredientName(item.ingredients.name, item.quantity ?? 1)
-      } : null,
-      category: item.categories,
-      // Limpiar propiedades de Supabase que no necesitamos
-      ingredients: undefined,
-      categories: undefined
-    }));
-    console.log("Mapped pantry items:", mappedData); // DEBUG
-    return mappedData;
-  } catch (error) {
-    console.error("getPantryItems failed:", error);
-    throw error;
-  }
+  if (error) throw error;
+  return data || [];
 };
 
 /**
  * Añade un nuevo item a la despensa.
- * Busca o crea el ingrediente asociado.
  */
 export const addPantryItem = async (itemData: CreatePantryItemData): Promise<PantryItem> => {
-   const { data: { user } } = await supabase.auth.getUser();
-   if (!user) throw new Error("Usuario no autenticado");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
 
-   console.log("Adding pantry item:", itemData);
-
-   // Buscar o crear el ingrediente, pasando la cantidad para singular/plural
-   const ingredient = await findOrCreateIngredient(
-     itemData.ingredient_name,
-     itemData.quantity ?? 1
-   );
-   if (!ingredient) {
-       throw new Error(`No se pudo crear/encontrar el ingrediente "${itemData.ingredient_name}"`);
-   }
-// Inferir categoría si no se proporcionó una explícitamente
-let finalCategoryId = itemData.category_id; // Usar la explícita si existe
-if (!finalCategoryId && ingredient?.name) { // Solo inferir si no hay explícita y tenemos nombre de ingrediente
+  const ingredient = await findOrCreateIngredient(
+    itemData.ingredient_name,
+    itemData.quantity ?? 1
+  );
+  
+  let finalCategoryId = itemData.category_id;
+  if (!finalCategoryId && ingredient?.name) {
     try {
-        console.log(`Attempting to infer category for: "${ingredient.name}"`);
-        const inferredCategoryId = await inferCategory(ingredient.name);
-        if (inferredCategoryId) {
-            finalCategoryId = inferredCategoryId;
-            console.log(`Successfully inferred category ${finalCategoryId} for "${ingredient.name}"`);
-        } else {
-            console.log(`Could not infer category for "${ingredient.name}", leaving as null.`);
-        }
-    } catch (inferenceError) {
-        console.error("Error during category inference:", inferenceError);
-        // Continuar sin categoría inferida si falla la inferencia, finalCategoryId ya es null o el explícito
+      const inferredCategory = await inferCategory(ingredient.name);
+      if (inferredCategory) {
+        finalCategoryId = inferredCategory;
+      }
+    } catch (error) {
+      console.error("Error during category inference:", error);
     }
-}
+  }
 
-const newItemData = {
-  user_id: user.id,
-  ingredient_id: ingredient.id,
-  quantity: itemData.quantity ?? 1, // Usar 1 como default si es null
-  unit: itemData.unit,
-  expiry_date: itemData.expiry_date,
-  category_id: finalCategoryId, // Usar la categoría inferida o la explícita
-  price: itemData.price, // Fase 2
-  notes: itemData.notes, // Fase 2
-  min_stock: itemData.min_stock, // Fase 2
-  target_stock: itemData.target_stock, // Fase 2
-  tags: itemData.tags, // Fase 2
-};
+  const { data, error } = await supabase
+    .from('pantry_items')
+    .insert({
+      user_id: user.id,
+      ingredient_id: ingredient.id,
+      quantity: itemData.quantity ?? 1,
+      unit: itemData.unit,
+      category_id: finalCategoryId,
+      expiry_date: itemData.expiry_date,
+      notes: itemData.notes,
+    })
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .single();
 
-   const { data, error } = await supabase
-     .from('pantry_items')
-     .insert(newItemData)
-     .select('*, ingredients(*), categories(*)') // Devolver datos relacionados
-     .single(); // Esperamos un solo resultado
+  if (error) throw error;
+  if (!data) throw new Error("No se pudo crear el item");
 
-   if (error) {
-     console.error("Error adding pantry item:", error);
-     throw error;
-   }
-
-   console.log("Raw pantry item added:", data);
-   // Mapear al formato esperado
-   const mappedData = {
-       ...data,
-       // Usar el nombre normalizado del ingrediente basado en la cantidad actual
-       ingredient: data.ingredients ? {
-         name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1)
-       } : null,
-       category: data.categories,
-       // Limpiar propiedades de Supabase
-       ingredients: undefined,
-       categories: undefined
-   };
-   console.log("Mapped pantry item:", mappedData); // DEBUG
-   return mappedData as PantryItem;
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  };
 };
 
 /**
- * Actualiza un item existente en la despensa.
+ * Actualiza un item existente.
  */
 export const updatePantryItem = async (itemId: string, updateData: UpdatePantryItemData): Promise<PantryItem> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Usuario no autenticado");
 
-  console.log(`Updating pantry item ${itemId} for user ${user.id}:`, updateData);
-
-  // Asegurarse de que solo el dueño pueda actualizar (aunque RLS debería manejar esto)
   const { data, error } = await supabase
     .from('pantry_items')
     .update({
-        quantity: updateData.quantity,
-        unit: updateData.unit,
-        expiry_date: updateData.expiry_date,
-        category_id: updateData.category_id,
-        location: updateData.location, // Fase 2
-        price: updateData.price, // Fase 2
-        notes: updateData.notes, // Fase 2
-        min_stock: updateData.min_stock, // Fase 2
-        target_stock: updateData.target_stock, // Fase 2
-        updated_at: new Date().toISOString(),
-        tags: updateData.tags, // Fase 2
+      ...updateData,
+      updated_at: new Date().toISOString(),
     })
     .eq('id', itemId)
-    .eq('user_id', user.id) // Doble chequeo por seguridad
-    .select('*, ingredients(*), categories(*)') // Devolver datos relacionados
+    .eq('user_id', user.id)
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
     .single();
 
-  if (error) {
-    console.error("Error updating pantry item:", error);
-    throw error;
-  }
-  if (!data) {
-      throw new Error("Item no encontrado o permiso denegado para actualizar.");
-  }
+  if (error) throw error;
+  if (!data) throw new Error("Item no encontrado");
 
-  console.log("Raw pantry item updated:", data);
-  // Mapear al formato esperado
-  const mappedData = {
-      ...data,
-      ingredient: data.ingredients ? {
-        name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1)
-      } : null,
-      category: data.categories,
-      // Limpiar propiedades de Supabase
-      ingredients: undefined,
-      categories: undefined
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
   };
-  console.log("Mapped updated item:", mappedData); // DEBUG
-  return mappedData as PantryItem;
 };
 
 /**
@@ -206,75 +158,79 @@ export const deletePantryItem = async (itemId: string): Promise<void> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Usuario no autenticado");
 
-  console.log(`Deleting pantry item ${itemId} for user ${user.id}`);
-
   const { error } = await supabase
     .from('pantry_items')
     .delete()
     .eq('id', itemId)
-    .eq('user_id', user.id); // Asegurar que solo el dueño borre
+    .eq('user_id', user.id);
 
-  if (error) {
-    console.error("Error deleting pantry item:", error);
-    throw error;
-  }
-  console.log("Pantry item deleted successfully:", itemId);
+  if (error) throw error;
 };
 
 /**
- * Obtiene todas las categorías disponibles (por defecto y del usuario).
- */
-export const getCategories = async (): Promise<Category[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    // No requerimos usuario para categorías por defecto, pero sí para las personalizadas
-
-    console.log("Fetching categories...");
-
-    // Construir el filtro OR dinámicamente para evitar errores si user es null
-    const orFilter = user ? `is_default.eq.true,user_id.eq.${user.id}` : 'is_default.eq.true';
-
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .or(orFilter) // Obtener default O las del usuario (si está logueado)
-        .order('is_default', { ascending: false }) // Default primero
-        .order('order', { ascending: true }); // Luego por orden
-
-    if (error) {
-        console.error("Error fetching categories:", error);
-        throw error;
-    }
-    console.log(`Categories fetched: ${data?.length ?? 0}`);
-    return (data || []) as Category[];
-};
-
-
-/**
- * Elimina múltiples items de la despensa basados en sus IDs.
+ * Elimina múltiples items de la despensa.
  */
 export const deleteMultiplePantryItems = async (itemIds: string[]): Promise<void> => {
-  if (!itemIds || itemIds.length === 0) {
-    console.log("No item IDs provided for deletion.");
-    return; // No hacer nada si no hay IDs
-  }
+  if (!itemIds?.length) return;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Usuario no autenticado");
 
-  console.log(`Deleting ${itemIds.length} pantry items for user ${user.id}:`, itemIds);
+  const { error } = await supabase
+    .from('pantry_items')
+    .delete()
+    .in('id', itemIds)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+};
+
+/**
+ * Cambia el estado de favorito de un item.
+ */
+export const toggleFavoritePantryItem = async (itemId: string, isFavorite: boolean): Promise<PantryItem | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
+
+  const { data, error } = await supabase
+    .from('pantry_items')
+    .update({ is_favorite: isFavorite, updated_at: new Date().toISOString() })
+    .eq('id', itemId)
+    .eq('user_id', user.id)
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .single();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    ...data,
+    ingredient: data.ingredients ? {
+      id: data.ingredients.id,
+      name: normalizeIngredientName(data.ingredients.name, data.quantity ?? 1),
+      image_url: data.ingredients.image_url
+    } : null,
+    category: data.categories ? {
+      id: data.categories.id,
+      name: data.categories.name,
+      icon_name: data.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  };
+};
+
+/**
+ * Elimina todos los items de la despensa.
+ */
+export const clearPantry = async (): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
 
   const { error } = await supabase
     .from('pantry_items')
     .delete()
-    .in('id', itemIds) // Usar 'in' para borrar múltiples IDs
-    .eq('user_id', user.id); // Asegurar que solo el dueño borre
+    .eq('user_id', user.id);
 
-  if (error) {
-    console.error("Error deleting multiple pantry items:", error);
-    throw error;
-  }
-  console.log("Multiple pantry items deleted successfully:", itemIds);
+  if (error) throw error;
 };
-
-// TODO: Implementar ingredientService para buscar/crear ingredientes
-// export const ingredientService = { ... }

@@ -6,6 +6,8 @@ import { AvatarUpload } from './components/AvatarUpload';
 import { DifficultyPreference as DifficultyPreferenceComponent } from './components/DifficultyPreference'; 
 import { TimePreference } from './components/TimePreference'; 
 import { AllergiesInput } from './components/AllergiesInput'; 
+import { TagsInput } from './components/TagsInput';
+import { EquipmentCheckboxes } from './components/EquipmentCheckboxes';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
@@ -177,6 +179,75 @@ export function UserProfilePage() {
   }, [profile]); 
 
   /**
+   * Maneja la actualización de la lista de ingredientes excluidos.
+   * @function handleUpdateExcludedIngredients
+   * @async
+   * @param {string[]} newTags - El nuevo array de ingredientes excluidos.
+   * @returns {Promise<boolean>} `true` si la actualización fue exitosa, `false` si no.
+   */
+  const handleUpdateExcludedIngredients = useCallback(
+    async (newTags: string[]): Promise<boolean> => {
+      setError(null);
+      try {
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar los ingredientes excluidos.");
+          return false;
+        }
+        // Asegurarse de que el array no contenga strings vacíos si viene de un input
+        const cleanedTags = newTags.map(tag => tag.trim()).filter(tag => tag.length > 0);
+        const success = await updateUserProfile(user.id, { excluded_ingredients: cleanedTags });
+        if (success && profile) {
+          setProfile({ ...profile, excluded_ingredients: cleanedTags });
+          return true;
+        } else {
+          setError("Error al guardar los ingredientes excluidos.");
+          return false;
+        }
+      } catch (err) {
+        console.error("Error updating excluded ingredients:", err);
+        setError("Error inesperado al guardar los ingredientes excluidos.");
+        return false;
+      }
+    },
+    [profile, user?.id]
+  );
+
+  /**
+   * Maneja la actualización de la lista de equipamiento disponible.
+   * @function handleUpdateAvailableEquipment
+   * @async
+   * @param {string[]} newEquipment - El nuevo array de equipamiento disponible.
+   * @returns {Promise<boolean>} `true` si la actualización fue exitosa, `false` si no.
+   */
+  const handleUpdateAvailableEquipment = useCallback(
+    async (newEquipment: string[]): Promise<boolean> => {
+      setError(null);
+      try {
+        if (!user?.id) {
+          setError("No se pudo identificar al usuario para guardar el equipamiento.");
+          return false;
+        }
+        // Asegurarse de que el array no contenga strings vacíos
+        const cleanedEquipment = newEquipment.map(eq => eq.trim()).filter(eq => eq.length > 0);
+        const success = await updateUserProfile(user.id, { available_equipment: cleanedEquipment });
+        if (success && profile) {
+          setProfile({ ...profile, available_equipment: cleanedEquipment });
+          return true;
+        } else {
+          setError("Error al guardar el equipamiento.");
+          return false;
+        }
+      } catch (err) {
+        console.error("Error updating available equipment:", err);
+        setError("Error inesperado al guardar el equipamiento.");
+        return false;
+      }
+    },
+    [profile, user?.id]
+  );
+
+
+  /**
    * Callback llamado por AvatarUpload cuando se sube un nuevo avatar.
    * Actualiza el estado local del avatar y del perfil.
    * @function handleAvatarUpdate
@@ -333,6 +404,43 @@ export function UserProfilePage() {
          </Card>
 
         {/* Card para Información Básica */}
+
+         {/* Card para Ingredientes Excluidos */}
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
+           <CardHeader>
+             <CardTitle className="text-slate-900">Ingredientes Excluidos</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <TagsInput
+               id="excluded-ingredients-input"
+               label="Ingredientes a evitar"
+               placeholder="Añade ingredientes (ej: cilantro) y presiona Enter..."
+               currentTags={profile.excluded_ingredients}
+               onUpdateTags={handleUpdateExcludedIngredients}
+             />
+             <p className="text-xs text-muted-foreground mt-2">
+               Las recetas generadas por IA intentarán evitar estos ingredientes.
+             </p>
+           </CardContent>
+         </Card>
+
+         {/* Card para Equipamiento Disponible */}
+         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
+           <CardHeader>
+             <CardTitle className="text-slate-900">Equipamiento Disponible</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <EquipmentCheckboxes
+               label="Selecciona el equipamiento que tienes disponible:"
+               currentEquipment={profile.available_equipment}
+               onUpdateEquipment={handleUpdateAvailableEquipment}
+             />
+              <p className="text-xs text-muted-foreground mt-2">
+               Las recetas generadas por IA podrán tener en cuenta tu equipamiento.
+             </p>
+           </CardContent>
+         </Card>
+
         <Card className="bg-white border border-slate-200 shadow-md rounded-lg">
           <CardHeader>
             <CardTitle className="text-slate-900">Información Básica</CardTitle>

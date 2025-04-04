@@ -10,10 +10,11 @@ import { Label } from '@/components/ui/label'; // Importar Label
 import { Category } from '@/features/pantry/types'; // Corregir ruta de importación para Category
 
 interface SearchPanelProps {
-  categories: Category[]; // Añadir prop para categorías
+  categories: Category[];
+  // onItemAdded?: () => void; // Eliminado - SearchPanel solo busca, no añade
 }
 
-export function SearchPanel({ categories }: SearchPanelProps) {
+export function SearchPanel({ categories }: SearchPanelProps) { // Quitado onItemAdded
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<BuscaPreciosProduct[] | null>(null); // Mantiene solo resultados exitosos
   const [isLoading, setIsLoading] = useState(false);

@@ -38,6 +38,14 @@ const buildRecipePrompt = (
      if (preferences.max_prep_time) {
         prompt += `- Tiempo máximo de preparación: ${preferences.max_prep_time} minutos\n`;
     }
+    // Añadir ingredientes excluidos si existen
+    if (preferences.excluded_ingredients && preferences.excluded_ingredients.length > 0) {
+       prompt += `- Ingredientes a evitar estrictamente: ${preferences.excluded_ingredients.join(', ')}\n`;
+    }
+    // Añadir equipamiento disponible si existe
+    if (preferences.available_equipment && preferences.available_equipment.length > 0) {
+       prompt += `- Equipamiento de cocina disponible: ${preferences.available_equipment.join(', ')}\n`;
+    }
     prompt += "\n";
   }
 
@@ -160,6 +168,77 @@ const callGeminiApi = async (apiKey: string, prompt: string): Promise<GeneratedR
     return { error: error.message || "Error inesperado durante la llamada a la API." };
   }
 };
+
+/**
+ * Genera una única receta utilizando ingredientes de la despensa y preferencias del usuario.
+ *
+ * @param userId ID del usuario para obtener perfil y despensa.
+ * @param context Opcional: Contexto adicional para el prompt (ej. "algo rápido para hoy").
+ * @returns Una promesa que resuelve a la receta generada o un objeto de error.
+ */
+export const generateSingleRecipe = async (
+  userId: string,
+  context?: string
+): Promise<GeneratedRecipeData | { error: string }> => {
+  console.log(`Iniciando generación de una receta para el usuario ${userId}`);
+
+  // 1. Obtener API Key y Preferencias (similar a generateRecipesFromPantry)
+  let apiKey: string | undefined;
+  let userProfile: UserProfile | null = null;
+  try {
+    userProfile = await getUserProfile(userId);
+    apiKey = userProfile?.gemini_api_key ?? undefined;
+    if (apiKey) console.log("[generateSingleRecipe] API Key obtenida del perfil.");
+  } catch (profileError) {
+    console.warn("[generateSingleRecipe] No se pudo obtener el perfil del usuario:", profileError);
+  }
+  if (!apiKey) {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (apiKey) console.log("[generateSingleRecipe] API Key obtenida de VITE_GEMINI_API_KEY.");
+  }
+  if (!apiKey) {
+    console.error('[generateSingleRecipe] No API key available.');
+    return { error: 'No se encontró API Key para Gemini.' };
+  }
+  const userPreferences = userProfile; // Puede ser null
+
+  // 2. Obtener Ingredientes de la Despensa (similar a generateRecipesFromPantry)
+  let pantryIngredientNames: string[] = [];
+  try {
+    const pantryItems: PantryItem[] = await getPantryItems(); // Asume que usa usuario autenticado
+    if (pantryItems && pantryItems.length > 0) {
+      pantryIngredientNames = pantryItems
+        .map((item: PantryItem) => item.ingredient?.name)
+        .filter((name?: string | null): name is string => !!name && name.trim() !== '');
+
+      if (pantryIngredientNames.length === 0) {
+        console.warn("[generateSingleRecipe] La despensa tiene items pero sin nombres válidos. Generando receta más genérica.");
+        pantryIngredientNames = []; // Continuar sin ingredientes de despensa
+      }
+       console.log(`[generateSingleRecipe] Ingredientes de despensa (${pantryIngredientNames.length}):`, pantryIngredientNames);
+    } else {
+      console.log("[generateSingleRecipe] La despensa está vacía. Generando receta genérica.");
+      pantryIngredientNames = []; // Continuar sin ingredientes de despensa
+    }
+  } catch (pantryError: any) {
+    console.error("[generateSingleRecipe] Error al obtener ingredientes de la despensa:", pantryError);
+    // No devolver error aquí, intentar generar receta genérica
+    pantryIngredientNames = [];
+  }
+
+  // 3. Construir Prompt
+  // Usar pantryIngredientNames (puede estar vacío) y preferencias
+  const prompt = buildRecipePrompt(
+    pantryIngredientNames, // Pasamos el array (puede estar vacío)
+    userPreferences ?? undefined,
+    context ?? "una sugerencia de receta para hoy" // Contexto por defecto
+  );
+
+  // 4. Llamar a la API
+  console.log("[generateSingleRecipe] Llamando a callGeminiApi...");
+  return callGeminiApi(apiKey, prompt);
+};
+
 
 /**
  * Resultado de la generación de múltiples recetas.

@@ -1,31 +1,21 @@
 {
   "compilerOptions": {
-    // Inherit settings from the root tsconfig if desired, or define explicitly
-    // "extends": "../tsconfig.json", // Optional: inherit base settings
-
-    // Settings specific to Supabase Edge Functions (Deno environment)
     "target": "esnext",
     "module": "esnext",
-    "moduleResolution": "node", // Or "bundler" depending on setup
-    "lib": ["esnext", "dom", "dom.iterable", "deno"], // Add Deno library types
-    "jsx": "react-jsx", // Keep if you might share types/code with frontend, otherwise remove
+    "moduleResolution": "node",
+    "lib": ["esnext", "dom", "dom.iterable", "deno"],
+    "jsx": "react-jsx",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "isolatedModules": true, // Often needed for bundlers used with Edge Functions
-    "noEmit": true, // Usually true for Edge Functions as Supabase CLI handles bundling/emitting
-
-    // Remove the previous attempt with 'types', 'lib' should handle Deno types now
-
-    // Adjust baseUrl and paths if needed for imports within the api directory
+    "isolatedModules": true,
+    "noEmit": true,
     "baseUrl": ".",
-    "paths": {
-      // Define paths relative to this tsconfig.json if necessary
-    }
+    "paths": {}
   },
-  "include": ["./**/*.ts"], // Include all TypeScript files within the 'api' directory
-  "exclude": ["node_modules"] // Standard exclusion
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
 }

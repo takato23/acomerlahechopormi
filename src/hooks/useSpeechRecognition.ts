@@ -1,3 +1,62 @@
+// Declaraciones de tipo para la API Web Speech (si no están disponibles globalmente)
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+  // Definir un tipo básico para SpeechRecognition si no existe
+  // eslint-disable-next-line no-var
+  var SpeechRecognition: {
+    prototype: SpeechRecognition;
+    new(): SpeechRecognition;
+  };
+  interface SpeechRecognition extends EventTarget {
+    // Añadir propiedades y métodos necesarios aquí si se usan
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    maxAlternatives: number;
+    start(): void;
+    stop(): void;
+    abort(): void;
+    onaudiostart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onaudioend: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+    onnomatch: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+    onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  }
+  interface SpeechRecognitionEvent extends Event {
+    readonly resultIndex: number;
+    readonly results: SpeechRecognitionResultList;
+  }
+  interface SpeechRecognitionResultList {
+    readonly length: number;
+    item(index: number): SpeechRecognitionResult;
+    [index: number]: SpeechRecognitionResult;
+  }
+   interface SpeechRecognitionResult {
+    readonly isFinal: boolean;
+    readonly length: number;
+    item(index: number): SpeechRecognitionAlternative;
+    [index: number]: SpeechRecognitionAlternative;
+  }
+  interface SpeechRecognitionAlternative {
+    readonly transcript: string;
+    readonly confidence: number;
+  }
+   interface SpeechRecognitionErrorEvent extends Event {
+    readonly error: string; // Simplificado, podría ser un tipo más específico
+    readonly message: string;
+  }
+}
+
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface SpeechRecognitionHook {
@@ -22,6 +81,8 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
 
   const SpeechRecognitionAPI = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : undefined;
   const isSupported = !!SpeechRecognitionAPI;
+  console.log('[useSpeechRecognition] SpeechRecognitionAPI found:', SpeechRecognitionAPI ? 'Yes' : 'No'); // Log para verificar API
+  console.log('[useSpeechRecognition] isSupported:', isSupported); // Log para verificar soporte
 
   useEffect(() => {
     if (!isSupported) {

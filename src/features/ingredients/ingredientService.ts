@@ -19,13 +19,17 @@ const SINGULAR_RULES: [RegExp, string][] = [
   [/^(.+)$/i, '$1s'],         // regla general: añadir 's'
 ];
 
+// Mover la interfaz a types/ingredientTypes.ts si no está ya allí
+// y asegurarse de que incluya image_url
+// import type { Ingredient } from '@/types/ingredientTypes';
+// Por ahora, asumimos que está definida localmente o importada correctamente con image_url
 export interface Ingredient {
   id: string;
   name: string;
+  image_url?: string | null; // Añadido
   created_at?: string;
   updated_at?: string;
-  user_id?: string;
-  // Otros campos que puedas necesitar
+  // user_id?: string; // Comentado si no existe en BD
 }
 
 const TABLE_NAME = 'ingredients';
@@ -43,7 +47,7 @@ export const searchIngredients = async (query: string, limit: number = 10): Prom
 
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('*')
+    .select('*, image_url') // Añadir image_url
     .ilike('name', `%${query}%`)
     .limit(limit);
 
@@ -63,16 +67,18 @@ export const searchIngredients = async (query: string, limit: number = 10): Prom
 const findIngredientByExactName = async (name: string): Promise<Ingredient | null> => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('*')
+    .select('*, image_url') // Añadir image_url
     .ilike('name', name.trim())
-    .maybeSingle();
+    .limit(1); // Limitar a 1 resultado
 
   if (error) {
     console.error('Error finding ingredient:', error);
     return null;
   }
 
-  return data;
+  // Si no hay error y data es un array con al menos un elemento, devolver el primero.
+  // Si data es null o vacío, devuelve null.
+  return data && data.length > 0 ? data[0] : null;
 };
 
 /**
@@ -90,7 +96,7 @@ const createIngredient = async (name: string): Promise<Ingredient> => {
       name: name.trim(),
       // user_id: user.id, // Eliminar user_id ya que la columna no existe en la tabla
     })
-    .select()
+    .select('*, image_url') // Añadir image_url
     .single();
 
   if (error) {

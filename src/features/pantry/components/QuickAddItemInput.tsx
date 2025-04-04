@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { parsePantryInput } from '../lib/pantryParser';
-import { suggestCategoryByKeywords } from '../lib/categorySuggestor';
+import { suggestCategory } from '../lib/categorySuggestor'; // Corregir nombre de función importada
 import { addPantryItem } from '../pantryService';
 import { PantryItem, CreatePantryItemData } from '../types';
 import { toast } from 'sonner';
@@ -35,16 +35,20 @@ export function QuickAddItemInput({
 
     const parsed = parsePantryInput(trimmedInput);
 
-    if (!parsed || !parsed.ingredientName) {
+    // Verificar el éxito y acceder a 'data'
+    if (!parsed || !parsed.success || !parsed.data.ingredientName) {
       toast.error('No se pudo entender la entrada. Intenta "Cantidad Unidad Nombre" o "Nombre Cantidad Unidad".');
       return;
     }
 
     // Sugerir categoría y guardar en preview
-    const suggestedCategoryId = suggestCategoryByKeywords(parsed.ingredientName);
+    // Usar la función importada correctamente
+    // Asegurarse de que parsed sea exitoso antes de acceder a data
+    const suggestedCategoryId = parsed.success ? suggestCategory(parsed.data.ingredientName) : null;
     setParsedPreview({
       ...parsed,
-      suggestedCategoryId,
+      // Añadir suggestedCategoryId solo al objeto 'data' si el parseo fue exitoso
+      ...(parsed.success ? { data: { ...parsed.data, suggestedCategoryId } } : parsed)
     });
   };
 
@@ -54,10 +58,11 @@ export function QuickAddItemInput({
     setIsAdding(true);
     try {
       const itemData: CreatePantryItemData = {
-        ingredient_name: parsedPreview.ingredientName,
-        quantity: parsedPreview.quantity,
-        unit: parsedPreview.unit,
-        category_id: parsedPreview.suggestedCategoryId,
+        // Acceder a través de 'data' si parsedPreview es exitoso
+        ingredient_name: parsedPreview.success ? parsedPreview.data.ingredientName : '', // Valor por defecto si no es exitoso
+        quantity: parsedPreview.success ? parsedPreview.data.quantity : null,
+        unit: parsedPreview.success ? parsedPreview.data.unit : null,
+        category_id: parsedPreview.success ? parsedPreview.data.suggestedCategoryId : null,
       };
 
       const newItem = await addPantryItem(itemData);
@@ -65,7 +70,8 @@ export function QuickAddItemInput({
       if (newItem) {
         toast.success(
           <div className="flex flex-col gap-1">
-            <span>{`"${newItem.ingredients?.name ?? parsedPreview.ingredientName}" añadido.`}</span>
+            {/* Corregir ingredients a ingredient y acceder a data */}
+            <span>{`"${newItem.ingredient?.name ?? (parsedPreview.success ? parsedPreview.data.ingredientName : '')}" añadido.`}</span>
             {onEditRequest && (
               <button
                 onClick={() => {
@@ -99,10 +105,11 @@ export function QuickAddItemInput({
     if (!parsedPreview || !onEditRequest) return;
 
     const itemData: CreatePantryItemData = {
-      ingredient_name: parsedPreview.ingredientName,
-      quantity: parsedPreview.quantity,
-      unit: parsedPreview.unit,
-      category_id: parsedPreview.suggestedCategoryId,
+      // Acceder a través de 'data' si parsedPreview es exitoso
+      ingredient_name: parsedPreview.success ? parsedPreview.data.ingredientName : '',
+      quantity: parsedPreview.success ? parsedPreview.data.quantity : null,
+      unit: parsedPreview.success ? parsedPreview.data.unit : null,
+      category_id: parsedPreview.success ? parsedPreview.data.suggestedCategoryId : null,
     };
 
     onEditRequest(itemData);
@@ -128,8 +135,10 @@ export function QuickAddItemInput({
   };
 
   // Encontrar el nombre de la categoría sugerida si existe
-  const suggestedCategoryName = parsedPreview?.suggestedCategoryId
-    ? availableCategories.find(cat => cat.id === parsedPreview.suggestedCategoryId)?.name
+  // Acceder a través de 'data' si parsedPreview es exitoso
+  const suggestedCategoryId = parsedPreview?.success ? parsedPreview.data.suggestedCategoryId : null;
+  const suggestedCategoryName = suggestedCategoryId
+    ? availableCategories.find(cat => cat.id === suggestedCategoryId)?.name
     : null;
 
   return (
@@ -161,7 +170,8 @@ export function QuickAddItemInput({
       <AnimatePresence>
         {parsedPreview && (
           <PreviewAndConfirm
-            parsedData={parsedPreview}
+            // Pasar parsedPreview.data si es exitoso, sino un objeto vacío o manejarlo en PreviewAndConfirm
+            parsedData={parsedPreview.success ? parsedPreview.data : { quantity: null, unit: null, ingredientName: '' }}
             onConfirm={handleConfirmAdd}
             onEdit={handleEditDetails}
             onCancel={handleCancelPreview}

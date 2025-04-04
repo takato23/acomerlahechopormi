@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, PlusCircle } from 'lucide-react';
+import { Sparkles, PlusCircle, ClipboardList } from 'lucide-react'; // Mantener una sola importación
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner'; // Asumiendo ruta correcta
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Asumiendo ruta correcta
@@ -21,8 +21,10 @@ import { getPantryItems } from '@/features/pantry/pantryService'; // Corregido: 
 import { useAuth } from '@/features/auth/AuthContext'; // Corregida ruta
 import { getUserProfile } from '@/features/user/userService'; // Importación corregida
 import type { GeneratedRecipeData } from '@/types/recipeTypes'; // Asumiendo ruta correcta para GeneratedRecipeData
-import type { UserProfile } from '@/features/user/userTypes'; // Corregida ruta para UserProfile
+import type { UserProfile } from '@/features/user/userTypes';
+import type { PantryItem } from '@/features/pantry/types'; // Importar PantryItem
 import RecipeCard from '../components/RecipeCard'; // Importar RecipeCard (default export)
+import { EmptyState } from '@/components/common/EmptyState'; // Importar EmptyState
 
 // --- Helper Functions ---
 
@@ -72,7 +74,7 @@ const buildRecipePrompt = (
 
   // Instrucciones de formato JSON (actualizadas para coincidir con GeneratedRecipeData)
   // Asegúrate que GeneratedRecipeData tenga prepTimeMinutes, cookTimeMinutes, etc.
-  prompt += "Formatea la respuesta completa como un único objeto JSON válido contenido dentro de un bloque de código JSON (\`\`\`json ... \`\`\`). El objeto JSON debe tener las siguientes claves: 'title' (string), 'description' (string), 'prepTimeMinutes' (number), 'cookTimeMinutes' (number), 'servings' (number), 'ingredients' (array of objects with 'quantity' (string o number), 'unit' (string, puede ser null o vacío), 'name' (string)), y 'instructions' (array of strings).";
+  prompt += "Formatea la respuesta completa como un único objeto JSON válido contenido dentro de un bloque de código JSON (\`\`\`json ... \`\`\`). El objeto JSON debe tener las siguientes claves: 'title' (string), 'description' (string), 'prepTimeMinutes' (number), 'cookTimeMinutes' (number), 'servings' (number), 'ingredients' (array of objects with 'quantity' (número decimal, sin fracciones como 1/2), 'unit' (string, puede ser null o vacío), 'name' (string)), y 'instructions' (array of strings). Importante: las cantidades deben ser números decimales (ej: 0.5 en lugar de 1/2).";
 
 
   return prompt;
@@ -126,7 +128,8 @@ const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null
 export const RecipeListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
-  const { recipes, isLoading, error, fetchRecipes } = useRecipeStore();
+  // Obtener acciones y estado del store
+  const { recipes, isLoading, error, fetchRecipes, toggleFavorite, deleteRecipe, showOnlyFavorites, toggleFavoriteFilter } = useRecipeStore();
 
   const [usePantryIngredients, setUsePantryIngredients] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -190,11 +193,11 @@ export const RecipeListPage: React.FC = () => {
           const pantryItems: PantryItem[] = await getPantryItems();
           if (pantryItems && pantryItems.length > 0) {
             // Extraer solo los nombres, asegurándose de que no sean nulos o vacíos
-            pantryIngredientNames = pantryItems
+            // Asegurar que pantryItems sea del tipo correcto
+            pantryIngredientNames = (pantryItems as PantryItem[])
               // Corregido: Acceder a item.ingredient.name y añadir tipo explícito
-              .map((item: PantryItem) => item.ingredient?.name)
-              // Corregido: Añadir tipo explícito a name y filtrar undefined/null/vacío
-              .filter((name?: string | null): name is string => !!name && name.trim() !== '');
+              .map((item) => item.ingredient?.name) // No es necesario el tipo explícito aquí si el map anterior funciona
+              .filter((name): name is string => !!name && name.trim() !== ''); // Simplificar filtro
 
             // Corregido: Asegurar que pantryIngredientNames es array antes de .length
             if (pantryIngredientNames && pantryIngredientNames.length === 0) {
@@ -224,7 +227,8 @@ export const RecipeListPage: React.FC = () => {
 
       // --- Tarea 2.4: Construir el Prompt ---
       console.log(`Construyendo prompt ${usePantry && pantryIngredientNames ? 'con' : 'sin'} ingredientes de despensa.`);
-      const fullPrompt = buildRecipePrompt(promptText, userPreferences, pantryIngredientNames);
+      // Pasar userPreferences asegurando que sea Partial<UserProfile> o undefined
+      const fullPrompt = buildRecipePrompt(promptText, userPreferences ?? undefined, pantryIngredientNames);
       console.log("Prompt final para Gemini:", fullPrompt); // Log para depuración
       // --- Fin Tarea 2.4 ---
 
@@ -275,12 +279,22 @@ export const RecipeListPage: React.FC = () => {
 
       // --- Tarea 2.6: Procesar Respuesta y Navegar (Lógica existente adaptada) ---
       const responseText = geminiResult.candidates[0].content.parts[0].text;
-      console.log("Texto JSON recibido:", responseText); // Log para depuración
+      console.log("Texto JSON original:", responseText);
 
       let recipeData: GeneratedRecipeData | null = null;
       try {
-          recipeData = JSON.parse(responseText);
-          // Validación más robusta (ejemplo)
+          // Reemplazar fracciones comunes por decimales antes de parsear
+          const sanitizedText = responseText
+              .replace(/"quantity":\s*1\/2\b/g, '"quantity": 0.5')
+              .replace(/"quantity":\s*1\/3\b/g, '"quantity": 0.33')
+              .replace(/"quantity":\s*2\/3\b/g, '"quantity": 0.67')
+              .replace(/"quantity":\s*1\/4\b/g, '"quantity": 0.25')
+              .replace(/"quantity":\s*3\/4\b/g, '"quantity": 0.75');
+          
+          console.log("Texto JSON sanitizado:", sanitizedText);
+          recipeData = JSON.parse(sanitizedText);
+          console.log("Receta parseada exitosamente:", recipeData);
+          // Validación más robusta
           if (!recipeData || typeof recipeData.title !== 'string' || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions) || typeof recipeData.prepTimeMinutes !== 'number' || typeof recipeData.cookTimeMinutes !== 'number' || typeof recipeData.servings !== 'number') {
               console.error("JSON parseado pero con formato inválido o tipos incorrectos:", recipeData);
               throw new Error("Formato JSON de receta inválido o incompleto.");
@@ -319,9 +333,9 @@ export const RecipeListPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold">Mis Recetas</h1>
+    <div className="container mx-auto p-4 md:p-6 lg:p-8"> {/* Revertido a container mx-auto */}
+      <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200"> {/* Añadir padding y borde inferior */}
+        <h1 className="text-3xl md:text-4xl font-bold mb-8">Mis Recetas</h1> {/* Aumentar tamaño y margen inferior */}
         <div className="flex gap-2">
            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -390,19 +404,51 @@ export const RecipeListPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Controles de Filtro/Ordenación */}
+      <div className="flex justify-end items-center mb-4 gap-4">
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="favorites-filter"
+            checked={showOnlyFavorites} // Usar estado obtenido del store
+            onCheckedChange={toggleFavoriteFilter} // Usar acción obtenida del store
+          />
+          <Label htmlFor="favorites-filter">Mostrar solo favoritos</Label>
+        </div>
+        {/* Aquí irían los controles de ordenación y búsqueda en Fase 2 */}
+      </div>
+
+
       {isLoading && <div className="flex justify-center mt-10"><Spinner size="lg" /></div>}
 
       {error && <p className="text-red-500 text-center mt-10">Error al cargar recetas: {error}</p>}
 
       {!isLoading && !error && recipes.length === 0 && (
-        <p className="text-center text-gray-500 mt-10">Aún no tienes recetas guardadas.</p>
+        <EmptyState
+          icon={<ClipboardList className="h-16 w-16" />} // Icono más grande
+          title="Aún no has añadido ninguna receta"
+          description="¡Empieza creando una manualmente o generando una con IA!"
+          action={
+            <Link to="/app/recipes/new">
+              <Button>
+                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Receta Manualmente
+              </Button>
+            </Link>
+          }
+          className="mt-10" // Mantener margen superior
+        />
       )}
 
       {!isLoading && !error && recipes.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Reducido número de columnas en XL */}
           {/* Mapeo de recetas usando RecipeCard */}
-          {recipes.map((recipe) => (
-            <RecipeCard recipe={recipe} key={recipe.id} />
+          {/* Filtrar recetas localmente basado en showOnlyFavorites */}
+          {recipes.filter(recipe => showOnlyFavorites ? recipe.is_favorite : true).map((recipe) => (
+            <RecipeCard
+              recipe={recipe}
+              key={recipe.id}
+              onToggleFavorite={toggleFavorite} // Pasar acción del store
+              onDelete={deleteRecipe} // Pasar acción del store
+            />
           ))}
         </div>
       )}

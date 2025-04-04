@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/Spinner'; // Importar Spinner
 import { Sparkles } from 'lucide-react'; // Importar icono Sparkles
 import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from '../types'; // Importar tipos
-import type { Recipe } from '../../recipes/recipeTypes';
+import type { Recipe } from '../../../types/recipeTypes'; // Corregir ruta de importación
 import { format } from 'date-fns'; // Importar format
 import { es } from 'date-fns/locale'; // Importar locale español
 

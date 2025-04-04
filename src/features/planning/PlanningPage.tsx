@@ -38,7 +38,7 @@ const getWeekInterval = (date: Date): { start: Date; end: Date } => {
  * Permite añadir, editar y eliminar comidas planificadas (recetas o personalizadas).
  * @component
  */
-export function PlanningPage() {
+const PlanningPage: React.FC = (): JSX.Element => { // Asegurar tipo de retorno explícito
   // --- Estados del Componente ---
   /** @state {Date} currentDate - Fecha utilizada para determinar la semana mostrada/seleccionada. */
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -266,7 +266,18 @@ export function PlanningPage() {
    * @param {MealAlternativeRequestContext} context - Contexto para la solicitud.
    * @returns {Promise<MealAlternative[] | null>} Alternativas o null.
    */
-  const handleRequestAlternatives = async (context: MealAlternativeRequestContext): Promise<MealAlternative[] | null> => { 
+  /**
+   * (Placeholder) Maneja la solicitud de alternativas de comida usando IA.
+   * @async
+   * @function handleRequestAlternatives
+   * @param {MealAlternativeRequestContext} context - Contexto para la solicitud.
+   * @returns {Promise<MealAlternative[] | null>} Alternativas o null.
+   */
+  const handleRequestAlternatives = async (context: MealAlternativeRequestContext): Promise<MealAlternative[] | null> => {
+     console.log('[PlanningPage] Requesting alternatives for:', context);
+     // const alternatives = await getMealAlternatives(context, userProfile);
+     return null;
+  };
 
   /**
    * Maneja la acción de autocompletar la semana con recetas generadas por IA.
@@ -346,9 +357,9 @@ export function PlanningPage() {
           const updatedMeals = [
             // Mantener comidas que NO son las que acabamos de intentar añadir/sobrescribir
             ...plannedMeals.filter(meal => {
-              const isTargetSlot = weekDays.some((day, idx) => 
-                format(day, 'yyyy-MM-dd') === meal.plan_date && 
-                meal.meal_type === mealTypeToAssign && 
+              const isTargetSlot = weekDays.some((day, idx) =>
+                format(day, 'yyyy-MM-dd') === meal.plan_date &&
+                meal.meal_type === mealTypeToAssign &&
                 idx < result.successfulRecipes.length
               );
               return !isTargetSlot;
@@ -379,11 +390,6 @@ export function PlanningPage() {
       console.log('[PlanningPage] Proceso de autocompletado finalizado.');
     }
   };
-
-     console.log('[PlanningPage] Requesting alternatives for:', context);
-     // const alternatives = await getMealAlternatives(context, userProfile); 
-     return null; 
-  }; 
 
   /** @constant {MealType[]} mealTypes - Array con los tipos de comida en orden. */
   const mealTypes: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
@@ -422,7 +428,8 @@ export function PlanningPage() {
    * @returns {React.ReactElement}
    */
   const renderDesktopLayout = () => (
-    <div className="grid grid-cols-7 grid-rows-[auto_repeat(4,auto)] gap-1 w-full max-w-[1200px] border border-border/20 rounded-lg overflow-hidden shadow-sm"> 
+    <div className="overflow-x-auto w-full max-w-[1200px]"> {/* Contenedor para scroll horizontal */}
+      <div className="grid grid-cols-7 grid-rows-[auto_repeat(4,auto)] gap-1 min-w-[900px] border border-border/20 rounded-lg overflow-hidden shadow-sm"> {/* Aumentado min-w */}
       {/* Encabezados */}
       {weekDays.map((day) => (
         <div key={`header-${day.toISOString()}`} className={cn(
@@ -465,8 +472,9 @@ export function PlanningPage() {
           );
         });
       })}
+      </div>
     </div>
-  );
+   ); // Fin del renderDesktopLayout
 
   // --- Renderizado Principal ---
   return (
@@ -509,7 +517,8 @@ export function PlanningPage() {
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
       ) : (
-         isDesktop ? renderDesktopLayout() : renderMobileLayout()
+         // Usar directamente la comparación del breakpoint
+         breakpoint === 'mobile' ? renderMobileLayout() : renderDesktopLayout()
       )}
 
       {/* Modal */}
@@ -525,4 +534,6 @@ export function PlanningPage() {
       />
     </div>
   );
-}
+}; // Fin de la definición del componente PlanningPage
+
+export default PlanningPage; // Exportación por defecto

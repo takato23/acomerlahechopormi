@@ -16,8 +16,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Ingredient } from "../types";
-import { searchIngredients } from "@/features/ingredients/ingredientService"; // Corregir ruta de importación
+// Importar Ingredient desde el servicio que lo devuelve
+import { searchIngredients, Ingredient } from "@/features/ingredients/ingredientService";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Spinner } from "@/components/ui/Spinner"; // Importar Spinner
 
@@ -52,7 +52,8 @@ export function IngredientCombobox({
       try {
         const results = await searchIngredients(debouncedSearchQuery);
         if (isMounted) {
-          setSearchResults(results);
+          // Asegurar que el tipo coincida con el estado (ambos son ahora Ingredient de ingredientService)
+          setSearchResults(results as Ingredient[]);
         }
       } catch (error) {
         console.error("Error searching ingredients:", error);

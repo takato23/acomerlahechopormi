@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'; // Para interacciones más 
 import '@testing-library/jest-dom';
 import { InteractivePreview } from '../InteractivePreview';
 import { ParsedPantryInput } from '../../lib/pantryParser';
-import { jest } from '@jest/globals'; // Re-añadir import explícito
+import { CreatePantryItemData } from '../../types'; // Importar tipo necesario
+import { jest } from '@jest/globals';
 
 // Mockear dependencias que no son relevantes para el test del componente en sí
 jest.mock('../../lib/categorySuggestor', () => ({
@@ -45,13 +46,16 @@ const mockCategories = [
 ];
 
 describe('InteractivePreview', () => {
-  let mockOnConfirm: jest.Mock;
+  // Añadir tipo explícito a la declaración del mock
+  // Corregir tipo de mock para usar solo la firma de la función
+  let mockOnConfirm: jest.Mock<(itemData: CreatePantryItemData, addAnother: boolean) => Promise<void>>;
   let mockOnCancel: jest.Mock;
   let mockOnEditDetails: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockOnConfirm = jest.fn(async () => {}); // Definir como async para que devuelva Promise<void>
+    // Volver a la definición async y confiar en el tipo explícito de arriba
+    mockOnConfirm = jest.fn(async () => {});
     mockOnCancel = jest.fn(); // Mantener jest.fn aquí
     mockOnEditDetails = jest.fn(); // Mantener jest.fn aquí
   });
@@ -61,7 +65,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails}
       />
@@ -80,7 +84,7 @@ describe('InteractivePreview', () => {
         initialData={{ ...mockInitialData, ingredientName: 'Algo Raro' }}
         usedFallback={true}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
       />
     );
@@ -92,7 +96,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails}
       />
@@ -114,7 +118,7 @@ describe('InteractivePreview', () => {
        <InteractivePreview
          initialData={mockInitialData}
          availableCategories={mockCategories}
-         onConfirm={mockOnConfirm}
+         onConfirm={mockOnConfirm} // Eliminar cast
          onCancel={mockOnCancel}
          onEditDetails={mockOnEditDetails}
        />
@@ -137,7 +141,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails}
       />
@@ -176,7 +180,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails}
       />
@@ -201,7 +205,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails}
       />
@@ -216,7 +220,7 @@ describe('InteractivePreview', () => {
       <InteractivePreview
         initialData={mockInitialData}
         availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
+        onConfirm={mockOnConfirm} // Eliminar cast
         onCancel={mockOnCancel}
         onEditDetails={mockOnEditDetails} // Pasar el mock
       />

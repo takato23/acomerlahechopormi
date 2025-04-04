@@ -39,30 +39,48 @@ export function InteractivePreview({
   const [userManuallySetExpiry, setUserManuallySetExpiry] = useState(false);
   const [location, setLocation] = useState<string>(''); // Estado para ubicación
   const [price, setPrice] = useState<number | ''>(''); // Estado para precio
+  // Efecto para sugerir categoría inicial y manejar cambios
   useEffect(() => {
-    // Sugerir categoría inicial al montar o si cambia initialData
-    const suggestedId = suggestCategory(itemData.ingredientName); // Usar la función importada correcta
-    setSelectedCategoryId(suggestedId);
-    // Pre-rellenar categoría en itemData si se sugiere una
-    // Esto es importante para que onConfirm tenga la categoría correcta si no se cambia
-    if (suggestedId) {
-        setItemData(prev => ({ ...prev, suggestedCategoryId: suggestedId }));
-    }
-    // Resetear fecha de caducidad si cambia el item inicial
+    const suggestCategoryForItem = async () => {
+      console.log('[InteractivePreview] Sugiriendo categoría para:', itemData.ingredientName);
+      try {
+        const suggestedId = await suggestCategory(itemData.ingredientName);
+        console.log('[InteractivePreview] Categoría sugerida:', suggestedId);
+        
+        if (suggestedId) {
+          setSelectedCategoryId(suggestedId);
+          setItemData(prev => ({ ...prev, suggestedCategoryId: suggestedId }));
+          console.log('[InteractivePreview] Categoría actualizada:', suggestedId);
+        } else {
+          console.log('[InteractivePreview] No se encontró categoría sugerida');
+        }
+      } catch (error) {
+        console.error('[InteractivePreview] Error al sugerir categoría:', error);
+      }
+    };
+
+    suggestCategoryForItem();
     setExpiryDate('');
-  }, [initialData, itemData.ingredientName]); // Depender de initialData para resetear
+  }, [initialData, itemData.ingredientName]);
 
   const handleConfirm = async (addAnother: boolean) => {
     setIsSubmitting(true);
-    const finalData: CreatePantryItemData = {
-      ingredient_name: itemData.ingredientName,
+    console.log('[InteractivePreview] Confirmando ítem con datos:', {
+      name: itemData.ingredientName,
       quantity: itemData.quantity,
       unit: itemData.unit,
-      category_id: selectedCategoryId,
+      category: selectedCategoryId,
+      suggestedCategory: itemData.suggestedCategoryId
+    });
+
+    const finalData: CreatePantryItemData = {
+      ingredient_name: itemData.ingredientName.toLowerCase(), // Normalizar a minúsculas
+      quantity: itemData.quantity ?? 1,
+      unit: itemData.unit ?? 'u',
+      category_id: selectedCategoryId, // Usar la categoría seleccionada o sugerida
       expiry_date: expiryDate || null,
-      location: location || null, // Añadir ubicación
-      price: price === '' ? null : Number(price), // Añadir precio
-      // Otros campos (notes, min_stock, etc.) podrían añadirse de forma similar si se decide
+      location: location || null,
+      price: price === '' ? null : Number(price),
     };
 
     try {
