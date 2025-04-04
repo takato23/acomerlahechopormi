@@ -18,10 +18,11 @@ const navigation = [
 interface SidebarProps {
   isCollapsed: boolean;
   toggleSidebar: () => void;
-  onOpenFavorites: () => void; // Nueva prop para abrir el sheet
+  onOpenFavoriteItems: () => void; // Renombrado para items
+  onOpenFavoriteRecipes: () => void; // Añadido para recetas
 }
 
-export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavorites }: SidebarProps) {
+export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavoriteItems, onOpenFavoriteRecipes }: SidebarProps) {
   return (
     <aside className={cn(
       "hidden md:flex relative flex-shrink-0 border-r border-border bg-card p-4 flex-col transition-all duration-300 ease-in-out",
@@ -75,25 +76,36 @@ export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavorites }: Sidebar
           );
         })}
 
-        {/* Botón de Favoritos */}
+        {/* Botón de Items Favoritos (Despensa) */}
         <motion.button
-          onClick={onOpenFavorites}
+          onClick={onOpenFavoriteItems} // Usar handler renombrado
           className={cn(
-            'flex items-center gap-3 rounded-md py-2 text-sm font-medium w-full text-left', // w-full para ocupar espacio
+            'flex items-center gap-3 rounded-md py-2 text-sm font-medium w-full text-left',
             isCollapsed ? "px-1 justify-center" : "px-3",
-            'text-muted-foreground' // Estilo base
+            'text-muted-foreground'
           )}
-          whileHover={{
-            scale: 1.03,
-            backgroundColor: "hsl(var(--muted))",
-            color: "hsl(var(--foreground))",
-            transition: { duration: 0.15 }
-          }}
+          whileHover={{ scale: 1.03, backgroundColor: "hsl(var(--muted))", color: "hsl(var(--foreground))", transition: { duration: 0.15 } }}
           whileTap={{ scale: 0.98 }}
-          aria-label="Abrir favoritos"
+          aria-label="Abrir items favoritos"
         >
           <Star className="h-5 w-5 flex-shrink-0" />
-          <span className={cn(isCollapsed ? "sr-only" : "")}>Favoritos</span>
+          <span className={cn(isCollapsed ? "sr-only" : "")}>Items Favoritos</span>
+        </motion.button>
+
+        {/* Botón de Recetas Favoritas */}
+        <motion.button
+          onClick={onOpenFavoriteRecipes} // Usar nuevo handler
+          className={cn(
+            'flex items-center gap-3 rounded-md py-2 text-sm font-medium w-full text-left',
+            isCollapsed ? "px-1 justify-center" : "px-3",
+            'text-muted-foreground'
+          )}
+          whileHover={{ scale: 1.03, backgroundColor: "hsl(var(--muted))", color: "hsl(var(--foreground))", transition: { duration: 0.15 } }}
+          whileTap={{ scale: 0.98 }}
+          aria-label="Abrir recetas favoritas"
+        >
+          <Star className="h-5 w-5 flex-shrink-0" /> {/* Reutilizar icono Star por ahora */}
+          <span className={cn(isCollapsed ? "sr-only" : "")}>Recetas Favoritas</span>
         </motion.button>
       </nav>
     </aside>

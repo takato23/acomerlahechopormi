@@ -218,3 +218,41 @@ export const parseQuantity = (quantity: string | number | null): number | null =
   // Si nada funcionó
   return null;
 };
+
+
+/**
+ * Intenta convertir una cantidad entre unidades compatibles (ej. g y kg).
+ * @param {number | null} quantity La cantidad a convertir.
+ * @param {string | null} fromUnit Unidad original (normalizada).
+ * @param {string | null} toUnit Unidad deseada (normalizada).
+ * @returns {number | null} La cantidad convertida o null si no se puede convertir.
+ */
+export const convertUnits = (
+  quantity: number | null,
+  fromUnit: string | null,
+  toUnit: string | null
+): number | null => {
+  if (quantity === null || !fromUnit || !toUnit || fromUnit === toUnit) {
+    return quantity; // No necesita o no puede convertir
+  }
+
+  const from = normalizeUnit(fromUnit);
+  const to = normalizeUnit(toUnit);
+
+  if (!from || !to) return null; // No se pudieron normalizar
+
+  // Conversión g <-> kg
+  if ((from === 'g' && to === 'kg') || (from === 'kg' && to === 'g')) {
+    return from === 'g' ? quantity / 1000 : quantity * 1000;
+  }
+
+  // Conversión ml <-> l
+  if ((from === 'ml' && to === 'l') || (from === 'l' && to === 'ml')) {
+    return from === 'ml' ? quantity / 1000 : quantity * 1000;
+  }
+
+  // Añadir más conversiones si es necesario (ej. taza a ml, etc.)
+
+  console.warn(`Conversión no soportada de ${from} a ${to}`);
+  return null; // Conversión no soportada
+};

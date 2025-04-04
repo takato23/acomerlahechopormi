@@ -6,6 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card as UICard, CardContent as UICardContent, CardHeader as UICardHeader, CardTitle as UICardTitle } from "@/components/ui/card"; // Renombrar
 import { Edit, Trash2, Clock, Users, AlertCircle, Image as ImageIcon, ChefHat, Tag } from 'lucide-react'; // Añadir iconos
+import { Wand2 } from 'lucide-react'; // Icono para variación
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner'; // Asumiendo que sonner está instalado para toasts
+import { generateRecipeVariation, GeneratedRecipeData } from '@/features/recipes/generationService'; // Ajustar path si es necesario
 import { getRecipeById, deleteRecipe } from '@/features/recipes/services/recipeService';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
@@ -20,6 +26,9 @@ const RecipeDetailPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isVariationModalOpen, setIsVariationModalOpen] = useState<boolean>(false);
+  const [variationRequestText, setVariationRequestText] = useState<string>('');
+  const [isGeneratingVariation, setIsGeneratingVariation] = useState<boolean>(false);
   useEffect(() => {
     const fetchRecipe = async () => {
       if (!recipeId) {
@@ -64,6 +73,41 @@ const RecipeDetailPage: React.FC = () => {
     }
   };
 
+  const handleRequestVariation = async () => {
+    if (!recipe || !variationRequestText.trim()) return;
+
+    setIsGeneratingVariation(true);
+    setError(null); // Limpiar errores previos
+
+    try {
+      const generatedRecipe = await generateRecipeVariation(recipe, variationRequestText);
+
+      if (generatedRecipe) {
+        // Navegar a la página de creación/edición con la receta generada
+        navigate('/app/recipes/new', {
+          state: {
+            generatedRecipe: {
+              ...generatedRecipe,
+              // Sugerir un título para la variación
+              title: `[Variación] ${recipe.title}`.substring(0, 100), // Limitar longitud si es necesario
+            }
+          }
+        });
+        setIsVariationModalOpen(false); // Cerrar modal al éxito
+        setVariationRequestText(''); // Limpiar texto
+      } else {
+        toast.error('No se pudo generar la variación. La IA no devolvió una receta válida.');
+      }
+    } catch (err) {
+      console.error('Error generating recipe variation:', err);
+      toast.error('Ocurrió un error al generar la variación. Inténtalo de nuevo.');
+      // Podríamos usar setError aquí también si preferimos mostrarlo en la página en lugar de un toast
+      // setError('Ocurrió un error al generar la variación. Inténtalo de nuevo.');
+    } finally {
+      setIsGeneratingVariation(false);
+    }
+  };
+
   // --- Renderizado ---
 
   if (isLoading && !recipe) {
@@ -98,12 +142,11 @@ const RecipeDetailPage: React.FC = () => {
     );
   }
 
+  // Formatear instrucciones directamente desde el array
   const formattedInstructions = recipe.instructions
-    ?.split('\n')
-    .map(step => step.trim())
-    .filter(step => step.length > 0)
-    .map((step, index) => (
-      <li key={index} className="mb-2 leading-relaxed">{step}</li>
+    ?.filter((step: string) => step && step.trim().length > 0) // Filtrar pasos vacíos o nulos
+    .map((step: string, index: number) => (
+      <li key={index} className="mb-2 leading-relaxed">{step.trim()}</li> // Asegurar trim en el renderizado
   ));
 
   const totalTime = (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
@@ -167,6 +210,46 @@ const RecipeDetailPage: React.FC = () => {
               <Link to={`/app/recipes/${recipeId}/edit`}>
                 <Edit className="mr-2 h-4 w-4" /> Editar
               </Link>
+            <Dialog open={isVariationModalOpen} onOpenChange={setIsVariationModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Wand2 className="mr-2 h-4 w-4" /> Pedir Variación
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Pedir Variación de Receta</DialogTitle>
+                  <DialogDescription>
+                    Describe qué tipo de variación quieres para "{recipe?.title}". Por ejemplo: "vegetariana", "para 6 personas", "sin gluten y más picante".
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="variation-request" className="text-right">
+                      Petición
+                    </Label>
+                    <Textarea
+                      id="variation-request"
+                      value={variationRequestText}
+                      onChange={(e) => setVariationRequestText(e.target.value)}
+                      placeholder="Ej: Hazla vegetariana y para 2 personas..."
+                      className="col-span-3"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    onClick={handleRequestVariation}
+                    disabled={isGeneratingVariation || !variationRequestText.trim()}
+                  >
+                    {isGeneratingVariation ? <Spinner size="sm" className="mr-2" /> : null}
+                    Generar Variación
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             </Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isLoading}>
               {isLoading ? (

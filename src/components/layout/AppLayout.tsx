@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { usePantryStore } from '@/stores/pantryStore';
 import { FavoriteItemsSheet } from '@/features/pantry/components/FavoriteItemsSheet';
-// import { MobileNavSheet } from './MobileNavSheet'; // Ya no se usa
+import { FavoriteRecipesSheet } from '@/features/recipes/components/FavoriteRecipesSheet'; // Añadir import
 import { BottomNavBar } from './BottomNavBar'; // Importar BottomNavBar
 // import { Button } from '@/components/ui/button'; // Ya no se usa para el menú
 // import { Menu } from 'lucide-react'; // Ya no se usa
@@ -13,8 +13,8 @@ import type { PantryItem } from '@/features/pantry/types';
 
 export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
-  // const [isMobileNavOpen, setIsMobileNavOpen] = useState(false); // Ya no se usa
+  const [isFavoriteItemsSheetOpen, setIsFavoriteItemsSheetOpen] = useState(false); // Renombrar para items
+  const [isFavoriteRecipesSheetOpen, setIsFavoriteRecipesSheetOpen] = useState(false); // Añadir estado para recetas
   const location = useLocation();
   const { user } = useAuth();
 
@@ -39,13 +39,20 @@ export function AppLayout() {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  const handleOpenFavorites = useCallback(() => {
-    // setIsMobileNavOpen(false); // Ya no existe
-    setIsFavoritesSheetOpen(true);
+  const handleOpenFavoriteItems = useCallback(() => { // Renombrar para items
+    setIsFavoriteItemsSheetOpen(true);
   }, []);
 
-  const handleFavoritesSheetOpenChange = (open: boolean) => {
-    setIsFavoritesSheetOpen(open);
+  const handleOpenFavoriteRecipes = useCallback(() => { // Añadir handler para recetas
+    setIsFavoriteRecipesSheetOpen(true);
+  }, []);
+
+  const handleFavoriteItemsSheetOpenChange = (open: boolean) => { // Renombrar para items
+    setIsFavoriteItemsSheetOpen(open);
+  };
+
+  const handleFavoriteRecipesSheetOpenChange = (open: boolean) => { // Añadir handler para recetas
+    setIsFavoriteRecipesSheetOpen(open);
   };
 
   // Ya no se necesitan handlers para MobileNavSheet
@@ -54,7 +61,7 @@ export function AppLayout() {
 
   const handleEditItemFromSheet = useCallback((item: PantryItem) => {
     toast.info(`Editar ${item.ingredient?.name} (funcionalidad pendiente)`);
-    setIsFavoritesSheetOpen(false);
+    setIsFavoriteItemsSheetOpen(false); // Usar estado renombrado
   }, []);
 
   const handleDeleteItemFromSheet = useCallback(async (itemId: string) => {
@@ -72,7 +79,8 @@ export function AppLayout() {
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         toggleSidebar={toggleSidebar}
-        onOpenFavorites={handleOpenFavorites}
+        onOpenFavoriteItems={handleOpenFavoriteItems} // Usar handler renombrado
+        onOpenFavoriteRecipes={handleOpenFavoriteRecipes} // Pasar nuevo handler
       />
 
       {/* Contenido Principal */}
@@ -94,14 +102,20 @@ export function AppLayout() {
 
       {/* Sheet de Favoritos (se mantiene) */}
       <FavoriteItemsSheet
-        isOpen={isFavoritesSheetOpen}
-        onOpenChange={handleFavoritesSheetOpenChange}
+        isOpen={isFavoriteItemsSheetOpen} // Usar estado renombrado y prop 'isOpen'
+        onOpenChange={handleFavoriteItemsSheetOpenChange} // Usar handler renombrado
         onEditItem={handleEditItemFromSheet}
         onDeleteItem={handleDeleteItemFromSheet}
       />
 
+      {/* Sheet de Recetas Favoritas */}
+      <FavoriteRecipesSheet
+        open={isFavoriteRecipesSheetOpen}
+        onOpenChange={handleFavoriteRecipesSheetOpenChange}
+      />
+
       {/* Barra de Navegación Inferior (solo móvil) */}
-      <BottomNavBar />
+      <BottomNavBar onOpenFavoriteRecipes={handleOpenFavoriteRecipes} />
     </div>
   );
 }

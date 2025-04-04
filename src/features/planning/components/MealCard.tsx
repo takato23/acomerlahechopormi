@@ -3,7 +3,7 @@ import type { PlannedMeal, MealType } from '../types';
 import type { Recipe } from '@/types/recipeTypes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, Pencil, Eye } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, BookOpen } from 'lucide-react'; // Añadir BookOpen
 import { RecipePreviewDialog } from './RecipePreviewDialog';
 
 const mealVisuals: { [key in MealType]: { emoji: string; label: string } } = {
@@ -69,7 +69,8 @@ export function MealCard({
                       )}
                       onClick={() => onEditClick(meal)}
                     >
-                      <div className="flex items-center gap-2 pr-10">
+                      <div className="flex items-center gap-1.5 pr-10"> {/* Ajustar gap si es necesario */}
+                         {meal.recipe_id && <BookOpen className="h-3 w-3 text-muted-foreground flex-shrink-0" />} {/* Icono Receta */}
                          <p className="text-xs text-foreground line-clamp-1 flex-grow">
                            {meal.recipes?.title || meal.custom_meal_name || 'Comida'}
                          </p>

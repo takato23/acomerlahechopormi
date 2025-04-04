@@ -7,7 +7,7 @@ type UUID = string;
 export interface RecipeIngredient {
   id: UUID; // ID único de la entrada en la tabla recipe_ingredients
   recipe_id: UUID; // ID de la receta a la que pertenece
-  ingredient_id: UUID; // ID del ingrediente general (de la tabla ingredients)
+  ingredient_id: UUID | null; // ID del ingrediente general (de la tabla ingredients), puede ser null
   quantity: number | null; // Cantidad del ingrediente
   unit: string | null; // Unidad de medida (ej. "gramos", "tazas", "unidades")
   ingredient_name?: string; // Nombre del ingrediente (opcional, para UI después de join)
@@ -21,8 +21,9 @@ export interface Recipe {
   user_id: UUID; // ID del usuario que creó la receta
   title: string; // Título de la receta
   description: string | null; // Descripción opcional de la receta
-  instructions: string; // Instrucciones de preparación
+  instructions: string[]; // Instrucciones como array de pasos
   created_at: string | Date; // Fecha de creación (puede ser string ISO o Date)
+  updated_at?: string | Date | null; // Fecha de última actualización (opcional)
   image_url: string | null; // URL de la imagen de la receta (opcional)
   prep_time_minutes: number | null; // Tiempo de preparación en minutos (opcional)
   cook_time_minutes: number | null; // Tiempo de cocción en minutos (opcional)

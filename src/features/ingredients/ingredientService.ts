@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabaseClient';
+import type { Ingredient } from '../../types/ingredientTypes';
 
 // Reglas básicas de singularización en español
 const PLURAL_RULES: [RegExp, string][] = [
@@ -19,18 +20,7 @@ const SINGULAR_RULES: [RegExp, string][] = [
   [/^(.+)$/i, '$1s'],         // regla general: añadir 's'
 ];
 
-// Mover la interfaz a types/ingredientTypes.ts si no está ya allí
-// y asegurarse de que incluya image_url
-// import type { Ingredient } from '@/types/ingredientTypes';
-// Por ahora, asumimos que está definida localmente o importada correctamente con image_url
-export interface Ingredient {
-  id: string;
-  name: string;
-  image_url?: string | null; // Añadido
-  created_at?: string;
-  updated_at?: string;
-  // user_id?: string; // Comentado si no existe en BD
-}
+// La interfaz Ingredient se importa ahora desde ../../types/ingredientTypes
 
 const TABLE_NAME = 'ingredients';
 

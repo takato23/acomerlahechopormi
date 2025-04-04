@@ -15,8 +15,21 @@ export interface ShoppingListItem {
  * antes de ser agregado y normalizado.
  */
 export interface RawIngredientInfo {
+    ingredient_id: string | null; // Añadido ID del ingrediente
     name: string;
     quantity: string | number | null;
     unit: string | null;
     recipeName?: string; // Nombre de la receta de origen
+}
+
+/**
+ * Representa un ingrediente después de ser agregado por ID,
+ * antes de ser filtrado y comparado con la despensa.
+ */
+export interface AggregatedIngredient {
+    ingredient_id: string;
+    name: string; // Nombre (del primer ingrediente encontrado con ese ID)
+    totalQuantity: number | null; // Cantidad total sumada
+    unit: string | null; // Unidad normalizada (la primera encontrada o la más común)
+    recipeSources: string[]; // Nombres de las recetas que lo requieren
 }

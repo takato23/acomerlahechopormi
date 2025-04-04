@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Filter } from 'lucide-react';
 import { Sparkles, PlusCircle, ClipboardList } from 'lucide-react'; // Mantener una sola importación
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/Spinner'; // Asumiendo ruta correcta
+import { Spinner } from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/input'; // Importar Input
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Asumiendo ruta correcta
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'; // Importar componentes Select
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +25,16 @@ import {
 } from '@/components/ui/dialog'; // Asumiendo ruta correcta
 import { Textarea } from '@/components/ui/textarea'; // Asumiendo ruta correcta
 import { Label } from '@/components/ui/label'; // Asumiendo ruta correcta
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { useRecipeStore } from '@/stores/recipeStore'; // Asumiendo ruta correcta
 import { getPantryItems } from '@/features/pantry/pantryService'; // Corregido: Importar función específica
@@ -24,6 +44,8 @@ import type { GeneratedRecipeData } from '@/types/recipeTypes'; // Asumiendo rut
 import type { UserProfile } from '@/features/user/userTypes';
 import type { PantryItem } from '@/features/pantry/types'; // Importar PantryItem
 import RecipeCard from '../components/RecipeCard'; // Importar RecipeCard (default export)
+import { toast } from 'sonner'; // Asumiendo que se usa sonner para toasts
+import { suggestSingleRecipeFromPantry } from '../generationService'; // Importar la nueva función (ruta corregida)
 import { EmptyState } from '@/components/common/EmptyState'; // Importar EmptyState
 
 // --- Helper Functions ---
@@ -129,7 +151,28 @@ export const RecipeListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   // Obtener acciones y estado del store
-  const { recipes, isLoading, error, fetchRecipes, toggleFavorite, deleteRecipe, showOnlyFavorites, toggleFavoriteFilter } = useRecipeStore();
+  // Obtener estado y acciones del store, incluyendo filtros
+  const {
+    recipes,
+    isLoading,
+    error,
+    fetchRecipes,
+    toggleFavorite,
+    deleteRecipe,
+    showOnlyFavorites,
+    toggleFavoriteFilter,
+    searchTerm,
+    setSearchTerm,
+    fetchNextPage, // Añadir acción para cargar más
+    hasMore, // Añadir estado para saber si hay más páginas
+    isLoadingMore, // Añadir estado para carga de siguientes páginas
+    sortOption, // Añadir estado de ordenamiento
+    setSortOption, // Añadir acción para cambiar ordenamiento
+    selectedIngredients, // Filtro ingredientes
+    selectedTags, // Filtro tags
+    setSelectedIngredients, // Acción filtro ingredientes
+    setSelectedTags, // Acción filtro tags
+  } = useRecipeStore();
 
   const [usePantryIngredients, setUsePantryIngredients] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -137,11 +180,83 @@ export const RecipeListPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const [tempSelectedIngredients, setTempSelectedIngredients] = useState<string[]>([]);
+  const [tempSelectedTags, setTempSelectedTags] = useState<string[]>([]);
+
+  // Datos de ejemplo (reemplazar con datos reales de la API)
+  const availableIngredients = ['Pollo', 'Arroz', 'Tomate', 'Cebolla', 'Ajo', 'Pimiento', 'Carne Picada', 'Pasta'];
+  const availableTags = ['Rápido', 'Fácil', 'Vegetariano', 'Vegano', 'Sin Gluten', 'Postre', 'Principal'];
+// Opciones de ordenamiento disponibles
+const sortOptions = [
+  { value: 'created_at_desc', label: 'Más recientes' },
+  { value: 'created_at_asc', label: 'Más antiguas' },
+  { value: 'title_asc', label: 'Título (A-Z)' },
+  { value: 'title_desc', label: 'Título (Z-A)' },
+];
+
+// --- Funciones para manejar el Sheet de Filtros ---
+
+const handleIngredientChange = (ingredient: string, checked: boolean) => {
+  setTempSelectedIngredients(prev =>
+    checked ? [...prev, ingredient] : prev.filter(item => item !== ingredient)
+  );
+};
+
+const handleTagChange = (tag: string, checked: boolean) => {
+  setTempSelectedTags(prev =>
+    checked ? [...prev, tag] : prev.filter(item => item !== tag)
+  );
+};
+
+const handleApplyFilters = () => {
+  if (user?.id) {
+    setSelectedIngredients(tempSelectedIngredients, user.id);
+    setSelectedTags(tempSelectedTags, user.id);
+    setIsFilterSheetOpen(false);
+  }
+};
+
+const handleClearFilters = () => {
+  setTempSelectedIngredients([]);
+  setTempSelectedTags([]);
+  // Opcionalmente, aplicar inmediatamente o esperar a 'Aplicar'
+  if (user?.id) {
+    setSelectedIngredients([], user.id);
+    setSelectedTags([], user.id);
+    // No cerrar el sheet automáticamente al limpiar
+    // setIsFilterSheetOpen(false);
+  }
+};
+
+// Sincronizar estado temporal con el global al abrir el sheet
+useEffect(() => {
+  if (isFilterSheetOpen) {
+    setTempSelectedIngredients(selectedIngredients);
+    setTempSelectedTags(selectedTags);
+  }
+}, [isFilterSheetOpen, selectedIngredients, selectedTags]);
+
   useEffect(() => {
     if (user?.id) {
-      fetchRecipes(user.id);
+      // Cargar la primera página al montar o cuando cambian filtros/usuario
+      // Usar reset: true para limpiar recetas anteriores al cambiar filtros/usuario
+      fetchRecipes({
+        userId: user.id,
+        filters: { searchTerm, showOnlyFavorites, sortOption, selectedIngredients, selectedTags }, // Incluir todos los filtros
+        page: 1,
+        reset: true
+      });
     }
-  }, [user?.id, fetchRecipes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, fetchRecipes]); // Depender solo de user.id y fetchRecipes para la carga inicial/cambio de usuario
+                                // Los filtros se aplican a través de sus propias acciones (setSearchTerm, toggleFavoriteFilter, setSortOption, etc.)
+                                // que ya llaman a fetchRecipes con reset=true.
+                                // Esto evita recargas múltiples si varios filtros cambian a la vez.
+                                // Si se quiere recargar al cambiar CUALQUIER filtro desde fuera (ej. URL), se añadirían aquí.
 
   const handleGenerateRecipe = async () => {
     // Tarea 2.2: Verificar si se debe usar la despensa
@@ -332,6 +447,41 @@ export const RecipeListPage: React.FC = () => {
     }
   };
 
+
+
+  // --- Nueva Función Handler: Sugerir desde Despensa ---
+  const handleSuggestFromPantry = async () => {
+    if (!user?.id || !session) {
+      toast.error("Necesitas iniciar sesión para obtener sugerencias.");
+      return;
+    }
+
+    setIsSuggesting(true);
+    setSuggestionError(null);
+
+    try {
+      console.log("Solicitando sugerencia de receta desde la despensa...");
+      const suggestedRecipe = await suggestSingleRecipeFromPantry(user.id);
+
+      if (suggestedRecipe) {
+        console.log("Receta sugerida recibida, navegando a edición:", suggestedRecipe);
+        navigate('/app/recipes/new', { state: { generatedRecipe: suggestedRecipe } });
+      } else {
+        console.log("No se pudo obtener una sugerencia de receta.");
+        // Podríamos mostrar un toast más específico si el servicio devuelve null intencionalmente
+        toast.info("No pudimos generar una sugerencia con tus ingredientes actuales.");
+        setSuggestionError("No se pudo generar una sugerencia con los ingredientes de tu despensa.");
+      }
+    } catch (error: any) {
+      console.error("Error al sugerir receta desde la despensa:", error);
+      const errorMessage = error.message || "Ocurrió un error inesperado al obtener la sugerencia.";
+      setSuggestionError(errorMessage);
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+  // --- Fin Nueva Función Handler ---
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8"> {/* Revertido a container mx-auto */}
       <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200"> {/* Añadir padding y borde inferior */}
@@ -340,14 +490,20 @@ export const RecipeListPage: React.FC = () => {
            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="default">
-                <Sparkles className="mr-2 h-4 w-4" /> Generar con IA
+                <Sparkles className="mr-2 h-4 w-4" /> Generar desde Descripción
               </Button>
             </DialogTrigger>
+          {/* --- Nuevo Botón: Sugerir desde Despensa --- */}
+          <Button variant="secondary" onClick={handleSuggestFromPantry} disabled={isSuggesting || isLoading || isGenerating}>
+            {isSuggesting ? <Spinner size="sm" className="mr-2" /> : <ClipboardList className="mr-2 h-4 w-4" />}
+            Sugerir desde Despensa
+          </Button>
+          {/* --- Fin Nuevo Botón --- */}
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Generar Receta con IA</DialogTitle>
+                <DialogTitle>Generar Receta desde Descripción</DialogTitle>
                 <DialogDescription>
-                  Describe qué tipo de receta te gustaría crear (ingredientes, tipo de plato, etc.).
+                  Describe la receta que buscas o activa la opción para usar tu despensa.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -404,17 +560,112 @@ export const RecipeListPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Controles de Filtro/Ordenación */}
-      <div className="flex justify-end items-center mb-4 gap-4">
-        <div className="flex items-center space-x-2">
+      {/* Controles de Filtro/Búsqueda */}
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+        {/* Input de Búsqueda */}
+        <div className="w-full sm:w-auto sm:flex-grow sm:max-w-xs">
+          <Input
+            placeholder="Buscar por título..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)} // Actualizar store
+            className="w-full"
+          />
+        </div>
+        {/* Filtro Favoritos */}
+        {/* Filtro Favoritos */}
+        <div className="flex items-center space-x-2 flex-shrink-0">
           <Switch
             id="favorites-filter"
-            checked={showOnlyFavorites} // Usar estado obtenido del store
-            onCheckedChange={toggleFavoriteFilter} // Usar acción obtenida del store
+            checked={showOnlyFavorites}
+            onCheckedChange={() => user?.id && toggleFavoriteFilter(user.id)} // Pasar userId
           />
-          <Label htmlFor="favorites-filter">Mostrar solo favoritos</Label>
+          <Label htmlFor="favorites-filter">Solo Favoritos</Label>
         </div>
-        {/* Aquí irían los controles de ordenación y búsqueda en Fase 2 */}
+        {/* Selector de Ordenamiento */}
+        <div className="w-full sm:w-auto">
+          <Select
+            value={sortOption}
+            onValueChange={(value) => {
+              if (user?.id) {
+                setSortOption(value, user.id);
+              }
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Ordenar por..." />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* --- Botón y Sheet para Filtros Avanzados --- */}
+        <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
+          <SheetTrigger asChild>
+            {/* Ajustar clase para que no se pegue a la derecha si hay espacio */}
+            <Button variant="outline" className="flex-shrink-0">
+              <Filter className="mr-2 h-4 w-4" /> Filtros
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Filtros Avanzados</SheetTitle>
+              <SheetDescription>
+                Selecciona ingredientes y tags para refinar tu búsqueda.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="grid gap-6 py-4">
+              {/* Filtro por Ingredientes */}
+              <div>
+                <h4 className="mb-2 font-medium text-sm">Por Ingredientes (contiene al menos uno)</h4>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2"> {/* Scroll si hay muchos */}
+                  {availableIngredients.map((ingredient) => (
+                    <div key={ingredient} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`ingredient-${ingredient}`}
+                        checked={tempSelectedIngredients.includes(ingredient)}
+                        onCheckedChange={(checked) => handleIngredientChange(ingredient, !!checked)}
+                      />
+                      <Label htmlFor={`ingredient-${ingredient}`} className="text-sm font-normal">
+                        {ingredient}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filtro por Tags */}
+              <div>
+                <h4 className="mb-2 font-medium text-sm">Por Tags (contiene todos)</h4>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2"> {/* Scroll si hay muchos */}
+                  {availableTags.map((tag) => (
+                    <div key={tag} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`tag-${tag}`}
+                        checked={tempSelectedTags.includes(tag)}
+                        onCheckedChange={(checked) => handleTagChange(tag, !!checked)}
+                      />
+                      <Label htmlFor={`tag-${tag}`} className="text-sm font-normal">
+                        {tag}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <SheetFooter className="mt-4">
+              <Button variant="outline" onClick={handleClearFilters}>Limpiar</Button>
+              <SheetClose asChild>
+                <Button type="button" onClick={handleApplyFilters}>Aplicar Filtros</Button>
+              </SheetClose>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+        {/* --- Fin Sheet Filtros --- */}
       </div>
 
 
@@ -430,6 +681,7 @@ export const RecipeListPage: React.FC = () => {
           action={
             <Link to="/app/recipes/new">
               <Button>
+      {/* Grid de Recetas */}
                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Receta Manualmente
               </Button>
             </Link>
@@ -442,7 +694,8 @@ export const RecipeListPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Reducido número de columnas en XL */}
           {/* Mapeo de recetas usando RecipeCard */}
           {/* Filtrar recetas localmente basado en showOnlyFavorites */}
-          {recipes.filter(recipe => showOnlyFavorites ? recipe.is_favorite : true).map((recipe) => (
+          {/* El filtrado ahora se hace en el store/fetch, no aquí */}
+          {recipes.map((recipe) => (
             <RecipeCard
               recipe={recipe}
               key={recipe.id}
@@ -452,6 +705,27 @@ export const RecipeListPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Botón Cargar Más y Spinner */}
+      {!isLoading && hasMore && (
+        <div className="flex justify-center mt-8">
+          <Button
+            onClick={() => user?.id && fetchNextPage(user.id)}
+            disabled={isLoadingMore}
+            variant="outline"
+          >
+            {isLoadingMore ? <Spinner size="sm" className="mr-2" /> : null}
+            Cargar más recetas
+          </Button>
+        </div>
+      )}
+      {/* Mostrar spinner general si isLoadingMore es true pero no hay botón (caso raro) */}
+      {isLoadingMore && !hasMore && (
+         <div className="flex justify-center mt-8">
+             <Spinner size="lg" />
+         </div>
+      )}
+
     </div>
   );
 };
