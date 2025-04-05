@@ -13,17 +13,32 @@ import type { Recipe } from '@/types/recipeTypes';
 const buildRecipePrompt = (
   pantryIngredients: string[],
   preferences?: Partial<UserProfile>,
-  requestContext?: string // Ej. "para la cena del lunes", "una opción diferente"
+  requestContext?: string, // Ej. "para la cena del lunes", "una opción diferente"
+  mealType?: string, // Añadir mealType como parámetro opcional
+  mode: 'optimize' | 'flexible' = 'flexible' // Añadir modo con valor por defecto
 ): string => {
-  let prompt = `Genera una receta de cocina creativa utilizando principalmente los siguientes ingredientes que tengo disponibles: ${pantryIngredients.join(', ')}. `;
+  let prompt = '';
+  const ingredientsList = pantryIngredients.length > 0 ? pantryIngredients.join(', ') : 'ninguno especificado';
 
-  if (requestContext) {
-    prompt += `Contexto adicional: ${requestContext}. Intenta que sea algo diferente a otras recetas generadas recientemente si es posible. `;
-  } else {
-    prompt += "Intenta que sea una receta interesante y variada. ";
+  if (mode === 'optimize') {
+    prompt = `Genera una receta de cocina utilizando **estrictamente y únicamente** los siguientes ingredientes disponibles: ${ingredientsList}. **No uses ningún otro ingrediente que no esté en esta lista.** Si no es posible crear una receta coherente solo con estos ingredientes, indica que no es posible en lugar de inventar una receta con otros. `;
+  } else { // mode === 'flexible'
+    prompt = `Genera una receta de cocina creativa. **Inspírate** en los siguientes ingredientes que tengo disponibles: ${ingredientsList}, pero **no te limites estrictamente** a ellos si necesitas otros ingredientes comunes para completar la receta. `;
   }
 
-  prompt += "Puedes usar otros ingredientes comunes si es necesario.\n\n";
+  if (requestContext) {
+    prompt += `Contexto adicional: ${requestContext}. `;
+  }
+  // Añadir el tipo de comida al contexto si se proporciona
+  // Instrucciones más específicas sobre el tipo de comida y variedad
+  if (mealType) {
+    prompt += `Genera una receta **típica y apropiada** para un **${mealType}**. Considera que un desayuno suele ser más ligero que un almuerzo o cena. `;
+  } else {
+     prompt += "Intenta que sea una receta interesante. ";
+  }
+  prompt += "Intenta **variar los ingredientes principales** y el tipo de plato respecto a otras recetas que podrías haber generado recientemente. ";
+
+  prompt += "Si los ingredientes disponibles no son suficientes o adecuados para crear una receta variada y apropiada para el tipo de comida, **siéntete libre de usar otros ingredientes comunes**.\n\n";
 
   if (preferences) {
     prompt += "Considera las siguientes preferencias del usuario:\n";
@@ -61,47 +76,121 @@ const buildRecipePrompt = (
  * Realiza validaciones básicas.
  */
 const parseGeminiResponse = (responseText: string): GeneratedRecipeData | null => {
-  try {
-    const recipeData = JSON.parse(responseText);
+  let recipeData: any;
+  let cleanedText = responseText;
+  console.log("Texto original recibido:", responseText);
 
-    // Validación más robusta
+  // 1. Extraer JSON de bloques de código si existen
+  const jsonBlockMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonBlockMatch) {
+    cleanedText = jsonBlockMatch[1].trim();
+    console.log("JSON extraído del bloque de código:", cleanedText);
+  }
+
+  // Función para intentar parsear
+  const tryParse = (text: string): any | null => {
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      console.log("Error de parseo:", (error as Error).message);
+      return null;
+    }
+  };
+
+  // 2. Primer intento de parseo con el texto limpio
+  recipeData = tryParse(cleanedText);
+
+  // 3. Si falla, intentar limpiar el texto
+  if (!recipeData) {
+    console.log("Primer parseo falló, iniciando limpieza...");
+    try {
+      // Eliminar espacios extra y caracteres no imprimibles
+      cleanedText = cleanedText.trim().replace(/\s+/g, ' ');
+
+      // Asegurar que las comillas sean correctas
+      cleanedText = cleanedText.replace(/[""]/g, '"');
+
+      // Reemplazar fracciones con formato "X/Y"
+      cleanedText = cleanedText.replace(/"quantity"\s*:\s*"?(\d+)\s*\/\s*(\d+)"?/g, (match, num, den) => {
+        const numerator = parseInt(num, 10);
+        const denominator = parseInt(den, 10);
+        return `"quantity": ${denominator !== 0 ? (numerator / denominator).toFixed(2) : 0}`;
+      });
+
+      // Reemplazar fracciones mixtas como "1 1/2"
+      cleanedText = cleanedText.replace(/"quantity"\s*:\s*"?(\d+)\s+(\d+)\s*\/\s*(\d+)"?/g, (match, whole, num, den) => {
+        const wholeNum = parseInt(whole, 10);
+        const numerator = parseInt(num, 10);
+        const denominator = parseInt(den, 10);
+        return `"quantity": ${denominator !== 0 ? (wholeNum + numerator / denominator).toFixed(2) : wholeNum}`;
+      });
+
+      console.log("Texto después de limpieza:", cleanedText);
+      recipeData = tryParse(cleanedText);
+    } catch (cleanError) {
+      console.error("Error durante la limpieza:", cleanError);
+    }
+  }
+
+  // 4. Si sigue sin funcionar, último intento con escape agresivo
+  if (!recipeData) {
+    try {
+      // Escapar caracteres problemáticos en strings
+      cleanedText = cleanedText.replace(/(?<=:\s*")(.*?)(?=")/g, (match) => {
+        return match.replace(/[\\/"]/g, '\\$&');
+      });
+      
+      console.log("Texto después de escape agresivo:", cleanedText);
+      recipeData = tryParse(cleanedText);
+    } catch (escapeError) {
+      console.error("Error durante escape agresivo:", escapeError);
+    }
+  }
+
+  // 5. Si todavía no tenemos datos válidos, reportar error
+  if (!recipeData) {
+    console.error("No se pudo parsear el JSON después de múltiples intentos. Texto final:", cleanedText);
+    return null;
+  }
+
+  // 6. Validación y limpieza de datos
+  try {
     if (
       !recipeData ||
       typeof recipeData.title !== 'string' ||
       !Array.isArray(recipeData.ingredients) ||
-      !Array.isArray(recipeData.instructions) ||
-      typeof recipeData.prepTimeMinutes !== 'number' ||
-      typeof recipeData.cookTimeMinutes !== 'number' ||
-      typeof recipeData.servings !== 'number'
+      !Array.isArray(recipeData.instructions)
     ) {
-      console.error("JSON parseado pero con formato inválido o tipos incorrectos:", recipeData);
-      return null; // Formato inválido
+      console.error("JSON parseado pero con estructura inválida:", recipeData);
+      return null;
     }
 
-    // Limpiar ingredientes (asegurar que quantity/unit no sean undefined y name exista)
+    // Asegurar tipos numéricos
+    recipeData.prepTimeMinutes = Number(recipeData.prepTimeMinutes) || 30;
+    recipeData.cookTimeMinutes = Number(recipeData.cookTimeMinutes) || 30;
+    recipeData.servings = Number(recipeData.servings) || 4;
+
+    // Limpiar ingredientes
     recipeData.ingredients = recipeData.ingredients.map((ing: any) => ({
-        quantity: ing.quantity ?? '', // Default a string vacía si es null/undefined
-        unit: ing.unit ?? '',       // Default a string vacía si es null/undefined
-        name: ing.name ?? 'Ingrediente desconocido' // Default si falta el nombre
-    })).filter((ing: { name: string; }) => ing.name !== 'Ingrediente desconocido' && ing.name.trim() !== ''); // Opcional: filtrar ingredientes sin nombre
+      quantity: ing.quantity ?? '',
+      unit: ing.unit ?? '',
+      name: ing.name ?? 'Ingrediente desconocido'
+    })).filter((ing: { name: string; }) => ing.name !== 'Ingrediente desconocido' && ing.name.trim() !== '');
 
-     // Asegurar que las instrucciones sean strings
-     recipeData.instructions = recipeData.instructions
-        .map((inst: any) => typeof inst === 'string' ? inst : String(inst))
-        .filter((inst: string) => inst.trim() !== '');
+    // Limpiar instrucciones
+    recipeData.instructions = recipeData.instructions
+      .map((inst: any) => typeof inst === 'string' ? inst : String(inst))
+      .filter((inst: string) => inst.trim() !== '');
 
-
-    // Validar que aún tengamos ingredientes e instrucciones después de limpiar
     if (recipeData.ingredients.length === 0 || recipeData.instructions.length === 0) {
-        console.error("Receta parseada pero sin ingredientes o instrucciones válidos después de limpiar:", recipeData);
-        return null;
+      console.error("Receta sin ingredientes o instrucciones después de limpiar:", recipeData);
+      return null;
     }
-
 
     return recipeData as GeneratedRecipeData;
-  } catch (parseError) {
-    console.error("Error al parsear la respuesta JSON de la API:", parseError, responseText);
-    return null; // Error de parseo
+  } catch (validationError) {
+    console.error("Error durante la validación final:", validationError);
+    return null;
   }
 };
 
@@ -339,6 +428,82 @@ export const generateRecipesFromPantry = async (count: number, userId: string): 
 
   console.log(`Generación completada. Éxitos: ${result.successfulRecipes.length}, Errores: ${result.errors.length}`);
   return result;
+};
+
+
+/**
+ * Genera una única receta para un slot específico (día/tipo de comida).
+ * Utiliza ingredientes de la despensa y preferencias del usuario.
+ *
+ * @param userId ID del usuario.
+ * @param mealType Tipo de comida para el que se genera la receta.
+ * @param context Contexto adicional (ej. día de la semana).
+ * @returns Una promesa que resuelve a la receta generada o un objeto de error.
+ */
+export const generateRecipeForSlot = async (
+  userId: string,
+  mealType: string, // Usar string genérico por si acaso
+  context: string,
+  mode: 'optimize' | 'flexible' // Añadir parámetro mode
+): Promise<GeneratedRecipeData | { error: string }> => {
+  console.log(`[generateRecipeForSlot] Iniciando generación para usuario ${userId}, Slot: ${context}, MealType: ${mealType}`);
+
+  // 1. Obtener API Key y Preferencias (similar a generateSingleRecipe)
+  let apiKey: string | undefined;
+  let userProfile: UserProfile | null = null;
+  try {
+    userProfile = await getUserProfile(userId);
+    apiKey = userProfile?.gemini_api_key ?? undefined;
+    if (apiKey) console.log("[generateRecipeForSlot] API Key obtenida del perfil.");
+  } catch (profileError) {
+    console.warn("[generateRecipeForSlot] No se pudo obtener el perfil del usuario:", profileError);
+  }
+  if (!apiKey) {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (apiKey) console.log("[generateRecipeForSlot] API Key obtenida de VITE_GEMINI_API_KEY.");
+  }
+  if (!apiKey) {
+    console.error('[generateRecipeForSlot] No API key available.');
+    return { error: 'No se encontró API Key para Gemini.' };
+  }
+  const userPreferences = userProfile; // Puede ser null
+
+  // 2. Obtener Ingredientes de la Despensa (similar a generateSingleRecipe)
+  let pantryIngredientNames: string[] = [];
+  try {
+    const pantryItems: PantryItem[] = await getPantryItems(); // Asume que usa usuario autenticado
+    if (pantryItems && pantryItems.length > 0) {
+      pantryIngredientNames = pantryItems
+        .map((item: PantryItem) => item.ingredient?.name)
+        .filter((name?: string | null): name is string => !!name && name.trim() !== '');
+
+      if (pantryIngredientNames.length === 0) {
+        console.warn("[generateRecipeForSlot] La despensa tiene items pero sin nombres válidos. Generando receta más genérica.");
+        pantryIngredientNames = [];
+      }
+       console.log(`[generateRecipeForSlot] Ingredientes de despensa (${pantryIngredientNames.length}):`, pantryIngredientNames);
+    } else {
+      console.log("[generateRecipeForSlot] La despensa está vacía. Generando receta genérica.");
+      pantryIngredientNames = [];
+    }
+  } catch (pantryError: any) {
+    console.error("[generateRecipeForSlot] Error al obtener ingredientes de la despensa:", pantryError);
+    // No devolver error aquí, intentar generar receta genérica
+    pantryIngredientNames = [];
+  }
+
+  // 3. Construir Prompt específico para el slot
+  const prompt = buildRecipePrompt(
+    pantryIngredientNames,
+    userPreferences ?? undefined,
+    context, // Usar el contexto proporcionado (ej. "Receta para lunes - Desayuno")
+    mealType, // Pasar el tipo de comida explícitamente
+    mode // Pasar el modo
+  );
+
+  // 4. Llamar a la API
+  console.log("[generateRecipeForSlot] Llamando a callGeminiApi...");
+  return callGeminiApi(apiKey, prompt);
 };
 
 

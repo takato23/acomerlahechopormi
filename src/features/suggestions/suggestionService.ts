@@ -1,118 +1,353 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-import type { MealAlternativeRequestContext, MealAlternative } from '../planning/types';
-import type { MealType } from '../planning/types'; // Importar MealType
-import type { UserProfile } from '../user/userTypes'; // Asumiendo que necesitaremos el perfil
-
-// Leer la API Key desde las variables de entorno (Vite)
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!API_KEY) {
-  console.error("VITE_GEMINI_API_KEY no está definida en las variables de entorno.");
-  // Podríamos lanzar un error o tener un modo fallback
-}
-
-const genAI = new GoogleGenerativeAI(API_KEY || "MISSING_API_KEY"); // Usar || para evitar error si falta
-
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash", // O el modelo que prefieras/tengas acceso
-});
-
-const generationConfig = {
-  temperature: 0.8, // Un poco más creativo
-  topP: 0.95,
-  topK: 64,
-  maxOutputTokens: 150, // Limitar tokens para respuestas cortas
-  responseMimeType: "text/plain", // Esperamos texto plano por ahora
-};
-
-// Configuraciones de seguridad (ajustar según necesidad)
-const safetySettings = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-];
+import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
+import { SuggestionContext, Suggestion, SuggestionResponse } from './types';
+import { MealAlternative } from '@/features/planning/types';
+import { supabase } from '@/lib/supabaseClient';
 
 /**
- * Llama a la IA de Gemini para obtener alternativas de comida.
+ * Estructura de palabras clave para cada tipo de comida
  */
-export async function getMealAlternatives(
-  context: MealAlternativeRequestContext,
-  userProfile: UserProfile | null // Añadir perfil de usuario para contexto
-): Promise<MealAlternative[] | null> {
-  if (!API_KEY) {
-    console.warn("No se puede llamar a Gemini sin API Key. Devolviendo null.");
-    return null; // O devolver un error o alternativas dummy si prefieres
+interface MealTypeKeywords {
+  required: string[];
+  any: string[];
+  not?: string[]; // Palabras clave que NO deberían aparecer
+}
+
+/**
+ * Mapeo refinado de palabras clave por tipo de comida
+ */
+const MEAL_TYPE_KEYWORDS: Record<string, MealTypeKeywords> = {
+  'Desayuno': {
+    required: ['desayuno', 'breakfast'],
+    any: ['tostada', 'huevo', 'café', 'cereal', 'avena', 'yogur', 'fruta', 'panqueque', 'batido', 'leche', 'mermelada', 'manteca', 'pan', 'medialunas', 'té'],
+    not: ['almuerzo', 'cena', 'lunch', 'dinner']
+  },
+  'Almuerzo': {
+    required: ['almuerzo', 'lunch', 'plato principal'],
+    any: ['arroz', 'carne', 'pollo', 'pasta', 'pescado', 'guiso', 'milanesa', 'hamburguesa', 'tarta', 'verduras', 'ensalada', 'sopa', 'legumbres'],
+    not: ['desayuno', 'merienda', 'breakfast']
+  },
+  'Merienda': {
+    required: ['merienda', 'tea', 'snack'],
+    any: ['té', 'galletas', 'budín', 'torta', 'mate', 'yogur', 'fruta', 'batido', 'café', 'sandwich', 'tostada', 'magdalenas', 'scones'],
+    not: ['almuerzo', 'cena', 'lunch', 'dinner']
+  },
+  'Cena': {
+    required: ['cena', 'dinner', 'plato principal'],
+    any: ['sopa', 'pasta', 'carne', 'pollo', 'pescado', 'arroz', 'verduras', 'ensalada', 'guiso', 'milanesa', 'liviano', 'ligero'],
+    not: ['desayuno', 'merienda', 'breakfast']
+  }
+};
+
+/**
+ * Determina si una receta es adecuada para un tipo de comida específico
+ * basado en palabras clave en su título y descripción
+ */
+function isRecipeSuitableForMealType(recipe: Recipe, mealType: string): boolean {
+  const keywordSet = MEAL_TYPE_KEYWORDS[mealType as keyof typeof MEAL_TYPE_KEYWORDS];
+  if (!keywordSet) return false;
+
+  const searchText = `${recipe.title} ${recipe.description || ''}`.toLowerCase();
+
+  // 1. Verificar palabras clave prohibidas
+  if (keywordSet.not?.some(keyword => searchText.includes(keyword.toLowerCase()))) {
+    return false;
   }
 
-  // Usar los valores exactos del enum como claves y valores
-  const mealTypeLabels: { [key in MealType]: string } = {
-    'Desayuno': 'desayuno', // Usar valor DB como clave, valor en minúscula para prompt
-    'Almuerzo': 'almuerzo',
-    'Merienda': 'merienda',
-    'Cena': 'cena'
-  };
+  // 2. Debe tener al menos una palabra clave requerida
+  const hasRequiredKeyword = keywordSet.required.some(keyword => searchText.includes(keyword.toLowerCase()));
+  if (!hasRequiredKeyword) return false;
 
-  // --- Construcción del Prompt Mejorado ---
-  // Usar el label en minúscula o el valor original si no se encuentra
-  const mealTypePrompt = mealTypeLabels[context.meal_type] ?? context.meal_type;
-  let prompt = `Actúa como un experto en gastronomía argentina y latina.
-Necesito sugerencias de platos alternativos para ${mealTypePrompt}.`;
+  // 3. Debe tener al menos una palabra clave adicional
+  const hasAnyKeyword = keywordSet.any.some(keyword => searchText.includes(keyword.toLowerCase()));
 
-  if (context.recipe_id) {
-    prompt += ` La comida actual es una receta específica.`;
-  } else if (context.custom_meal_name) {
-    prompt += `\n\nLa comida actual es "${context.custom_meal_name}".
-Sugiere 3 alternativas similares que:
-- Sean apropiadas para ${mealTypePrompt}
-- Tengan un nivel de elaboración similar
-- Usen ingredientes parecidos o complementarios`;
-  }
+  const result = hasRequiredKeyword && hasAnyKeyword;
+  
+  console.log(`[isRecipeSuitableForMealType]
+    Recipe: "${recipe.title}"
+    MealType: ${mealType}
+    Text: "${searchText.substring(0, 50)}..."
+    Required (${keywordSet.required.join(', ')}): ${hasRequiredKeyword}
+    Any (matched): ${hasAnyKeyword}
+    No prohibidas: ${!keywordSet.not?.some(k => searchText.includes(k.toLowerCase()))}
+    Result: ${result}
+  `);
 
-  // Añadir contexto del perfil (si existe)
-  if (userProfile?.dietary_preference) {
-    prompt += `\nConsidera que la preferencia dietética es: ${userProfile.dietary_preference}.`;
-  }
+  return result;
+}
 
-  prompt += `\n\nResponde SOLO con los nombres de los platos, separados por punto y coma (;).
-Por ejemplo: "Pollo al horno con papas; Carne al horno con vegetales; Pescado a la parrilla con puré"`;
-  // --- Fin Construcción del Prompt ---
+/**
+ * Encuentra la mejor receta utilizando ingredientes de la despensa
+ */
+async function findBestPantryRecipe(
+  pantryItems: Array<{ ingredient_id: string; name: string }>,
+  relevantRecipes: Recipe[], // Recibe recetas propias + base
+  userId: string // Para priorizar las del usuario
+): Promise<Suggestion | undefined> {
+  // Usar relevantRecipes en la comprobación
+  if (!pantryItems?.length || !relevantRecipes?.length) return undefined;
 
-  console.log("[suggestionService] Prompt para Gemini:", prompt);
+  const pantryIngredientIds = new Set(pantryItems.map(item => item.ingredient_id));
+  let bestRecipe: { recipe: Recipe; matchCount: number } | undefined;
 
-  try {
-    const chatSession = model.startChat({
-      generationConfig,
-      safetySettings,
-      history: [], // Podríamos añadir historial si quisiéramos una conversación
-    });
+  let bestUserRecipe: { recipe: Recipe; matchCount: number } | undefined;
+  let bestBaseRecipe: { recipe: Recipe; matchCount: number } | undefined;
 
-    const result = await chatSession.sendMessage(prompt);
-    const responseText = result.response.text().trim();
+  for (const recipe of relevantRecipes) {
+    if (!recipe.ingredients?.length) continue;
 
-    console.log("[suggestionService] Respuesta de Gemini:", responseText);
+    const matchCount = recipe.ingredients.reduce((count, ingredient) => {
+      if (!ingredient) return count;
+      if (ingredient.ingredient_id && pantryIngredientIds.has(ingredient.ingredient_id)) {
+        return count + 1;
+      }
+      return count;
+    }, 0);
 
-    if (!responseText) {
-      return []; // No hubo respuesta o estaba vacía
+    if (matchCount === 0) continue;
+
+    // Separar y actualizar la mejor receta propia y la mejor receta base
+    if (recipe.user_id === userId) {
+      if (!bestUserRecipe || matchCount > bestUserRecipe.matchCount) {
+        bestUserRecipe = { recipe, matchCount };
+      }
+    } else if (recipe.is_generated_base) {
+      if (!bestBaseRecipe || matchCount > bestBaseRecipe.matchCount) {
+        bestBaseRecipe = { recipe, matchCount };
+      }
     }
+  }
 
-    // Parsear la respuesta (asumiendo nombres separados por ';')
-    const suggestions = responseText.split(';').map(s => s.trim()).filter(Boolean);
+  // Priorizar la mejor receta del usuario, si existe
+  bestRecipe = bestUserRecipe || bestBaseRecipe;
 
-    // Convertir a formato MealAlternative (asumiendo todas son 'custom' por ahora)
-    const alternatives: MealAlternative[] = suggestions.map(text => ({
-      type: 'custom',
-      text: text,
+  if (!bestRecipe) return undefined;
+
+  return {
+    type: 'recipe',
+    id: bestRecipe.recipe.id,
+    title: bestRecipe.recipe.title,
+    reason: `✨ Usa ${bestRecipe.matchCount} de ${bestRecipe.recipe.ingredients.length} ingredientes de tu despensa`
+  };
+}
+
+/**
+ * Encuentra una receta "descubrimiento" diferente a la de despensa
+ */
+async function findDiscoveryRecipe(
+  relevantRecipes: Recipe[], // Recibe recetas propias + base
+  userId: string, // Para filtrar las propias si es necesario
+  excludeRecipeId?: string,
+): Promise<Suggestion | undefined> {
+   // Usar relevantRecipes en la comprobación
+  if (!relevantRecipes?.length) return undefined;
+
+  // Filtrar la receta excluida y mezclar aleatoriamente
+  // 1. Intentar encontrar recetas BASE que no sean la excluida
+  let availableRecipes = relevantRecipes
+    .filter(recipe => recipe.is_generated_base && recipe.id !== excludeRecipeId)
+    .sort(() => Math.random() - 0.5);
+
+  // 2. Si no hay recetas BASE, buscar recetas PROPIAS del usuario que no sean la excluida
+  if (availableRecipes.length === 0) {
+    console.log("[findDiscoveryRecipe] No base recipes found, trying user's own recipes...");
+    availableRecipes = relevantRecipes
+      .filter(recipe => recipe.user_id === userId && recipe.id !== excludeRecipeId)
+      .sort(() => Math.random() - 0.5);
+  }
+
+  if (!availableRecipes.length) return undefined;
+
+  const recipe = availableRecipes[0];
+  return {
+    type: 'recipe',
+    id: recipe.id,
+    title: recipe.title,
+    reason: '🔍 Prueba algo diferente'
+  };
+}
+
+/**
+ * Sugiere recetas favoritas
+ */
+async function suggestFromFavorites(
+  favoriteRecipeIds: string[],
+  allRecipes: Recipe[],
+  mealType: string
+): Promise<Suggestion[]> {
+  if (!favoriteRecipeIds?.length || !allRecipes?.length) return [];
+
+  // Ya recibimos suitableRecipes filtradas
+  const suggestions: Suggestion[] = allRecipes // Usar la lista ya filtrada
+    .filter(recipe => favoriteRecipeIds.includes(recipe.id)) // Solo filtrar por ID favorito
+    .map(recipe => ({
+      type: 'recipe' as const,
+      id: recipe.id,
+      title: recipe.title,
+      reason: '⭐ De tus favoritos'
     }));
 
-    // TODO: Mejorar el parsing si la IA devuelve recetas existentes o más estructura
+  return suggestions.slice(0, 2);
+}
+
+/**
+ * Sugiere recetas basadas en el historial de planificación
+ */
+async function suggestFromHistory(
+  planningHistory: Array<{ recipe_id: string; count: number }>,
+  allRecipes: Recipe[],
+  mealType: string
+): Promise<Suggestion[]> {
+  if (!planningHistory?.length || !allRecipes?.length) return [];
+
+  const suggestions: Suggestion[] = [];
+  // Ya recibimos suitableRecipes filtradas
+  const recipeMap = new Map(allRecipes.map(r => [r.id, r])); // Usar la lista ya filtrada
+
+  // Ordenar historial por frecuencia
+  for (const history of planningHistory.sort((a, b) => b.count - a.count)) {
+    const recipe = recipeMap.get(history.recipe_id);
+    // El filtro por tipo ya se hizo antes de llamar a esta función
+    if (recipe) {
+      suggestions.push({
+        type: 'recipe' as const,
+        id: recipe.id,
+        title: recipe.title,
+        reason: `🕒 Planificado ${history.count} veces`
+      });
+      if (suggestions.length >= 2) break;
+    }
+  }
+
+  return suggestions;
+}
+
+/**
+ * Obtiene sugerencias de comidas basadas en el contexto proporcionado
+ */
+export async function getSuggestions(context: SuggestionContext): Promise<SuggestionResponse> {
+  try {
+    console.log('[getSuggestions] Starting with context:', {
+      date: context.date,
+      mealType: context.mealType,
+      userId: context.userId,
+      hasPantryItems: !!context.currentPantryItems?.length
+    });
+
+    // 1. Obtener todas las recetas una sola vez
+    // Modificar consulta para traer recetas propias Y recetas base
+    const { data: recipes, error } = await supabase
+      .from('recipes')
+      .select('*, recipe_ingredients(*)')
+      .or(`user_id.eq.${context.userId},is_generated_base.eq.true`);
+
+    if (error) {
+      console.error('[getSuggestions] Error fetching recipes:', error);
+      throw error;
+    }
+
+    // Mapear y filtrar recetas adecuadas para el tipo de comida
+    // Mapear incluyendo el nuevo flag y user_id nullable
+    const mappedRecipes: Recipe[] = (recipes || []).map(recipe => ({
+      ...recipe,
+      user_id: recipe.user_id, // Asegurar que se mapea
+      is_generated_base: recipe.is_generated_base, // Asegurar que se mapea
+      ingredients: recipe.recipe_ingredients || [],
+    }));
+
+    const suitableRecipes = mappedRecipes.filter(recipe =>
+      isRecipeSuitableForMealType(recipe, context.mealType)
+    );
+
+    console.log(`[getSuggestions] Found ${suitableRecipes.length} recipes suitable for ${context.mealType}`);
+
+    // 2. Buscar la mejor receta usando ingredientes de la despensa
+    // Pasar userId a findBestPantryRecipe para priorizar
+    const pantrySuggestion = await findBestPantryRecipe(
+      context.currentPantryItems || [],
+      suitableRecipes,
+      context.userId
+    );
+
+    // 3. Buscar una receta "descubrimiento" diferente
+    // Pasar userId a findDiscoveryRecipe
+    const discoverySuggestion = await findDiscoveryRecipe(
+      suitableRecipes,
+      context.userId,
+      pantrySuggestion?.id
+    );
+
+    const response: SuggestionResponse = {
+      pantrySuggestion,
+      discoverySuggestion
+    };
+
+    console.log('[getSuggestions] Response:', {
+      hasPantrySuggestion: !!pantrySuggestion,
+      hasDiscoverySuggestion: !!discoverySuggestion
+    });
+
+    return response;
+  } catch (error) {
+    console.error('[getSuggestions] Error:', error);
+    // Devolver objeto vacío en caso de error, compatible con SuggestionResponse
+    return { pantrySuggestion: undefined, discoverySuggestion: undefined };
+  }
+}
+
+/**
+ * Obtiene alternativas de comidas basadas en el contexto y perfil del usuario
+ * Esta función actúa como un wrapper sobre getSuggestions para mantener compatibilidad
+ * con el código existente que espera getMealAlternatives
+ */
+/**
+ * Obtiene alternativas de comidas basadas en el contexto y perfil del usuario
+ */
+export async function getMealAlternatives(
+  context: import('@/features/planning/types').MealAlternativeRequestContext,
+  userProfile?: { id: string } | null // Hacer userProfile opcional
+): Promise<import('@/features/planning/types').MealAlternative[]> {
+  try {
+    // Si no hay perfil de usuario, retornar array vacío
+    if (!userProfile?.id) {
+      console.log('[getMealAlternatives] No user profile provided, returning empty array');
+      return [];
+    }
+
+    // 1. Convertir MealAlternativeRequestContext a SuggestionContext
+    const suggestionContext: SuggestionContext = {
+      date: new Date().toISOString().split('T')[0],
+      mealType: context.meal_type,
+      userId: userProfile.id
+      // Estos campos son opcionales en SuggestionContext
+    };
+
+    // 2. Obtener sugerencias usando el sistema actualizado
+    const response = await getSuggestions(suggestionContext);
+    
+    // 3. Transformar SuggestionResponse a MealAlternative[]
+    const alternatives: MealAlternative[] = [];
+    const suggestions = [response.pantrySuggestion, response.discoverySuggestion];
+
+    suggestions.forEach(suggestion => {
+      if (suggestion && suggestion.type === 'recipe' && suggestion.id) {
+        alternatives.push({
+          type: 'recipe',
+          id: suggestion.id,
+          title: suggestion.title
+        });
+      } else if (suggestion) {
+        // Manejar sugerencias 'custom' si las hubiera, aunque ahora no se generan
+        alternatives.push({
+          type: 'custom',
+          text: suggestion.title
+        });
+      }
+    });
 
     return alternatives;
-
+    
   } catch (error) {
-    console.error("Error llamando a la API de Gemini:", error);
-    // Podríamos intentar extraer información del error si es específico de Gemini (ej. bloqueo de seguridad)
-    // if (error instanceof GoogleGenerativeAIError) { ... } 
-    return null; // Devolver null en caso de error
+    console.error('Error en getMealAlternatives:', error);
+    return [];
   }
 }

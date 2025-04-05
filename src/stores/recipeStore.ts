@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { Recipe } from '@/types/recipeTypes';
-import { getRecipes, toggleRecipeFavorite, deleteRecipe as deleteRecipeService } from '@/features/recipes/services/recipeService';
+import { Recipe } from '@/types/recipeTypes'; // Asegúrate que la ruta sea correcta
+import { getRecipes, toggleRecipeFavorite, deleteRecipe as deleteRecipeService } from '@/features/recipes/services/recipeService'; // Asegúrate que la ruta sea correcta
 import { toast } from 'sonner';
+import { PREDEFINED_RECIPE_TAGS } from '@/config/recipeTags'; // Importar tags predefinidos
 
 // Exportar tipo para filtros para que pueda ser usado por el servicio
 export interface RecipeFilters {
@@ -25,6 +26,8 @@ interface RecipeState {
   sortOption: string; // Opción de ordenamiento actual
   selectedIngredients: string[]; // Estado para ingredientes seleccionados
   selectedTags: string[]; // Estado para tags seleccionados
+  viewMode: 'card' | 'list'; // Estado para el modo de vista
+  availableTags: string[]; // Lista de tags disponibles para filtrar
 }
 
 interface RecipeActions {
@@ -39,7 +42,10 @@ interface RecipeActions {
   fetchNextPage: (userId: string) => Promise<void>; // Nueva acción para cargar más
   setSortOption: (option: string, userId: string) => void; // Acción para cambiar ordenamiento
   setSelectedIngredients: (ingredients: string[], userId: string) => void; // Acción para filtro de ingredientes
-  setSelectedTags: (tags: string[], userId: string) => void; // Acción para filtro de tags
+  setSelectedTags: (tags: string[], userId: string) => void; // Acción para filtro de tags (puede usarse para setear todos)
+  toggleTagFilter: (tag: string, userId: string) => void; // Acción para añadir/quitar un tag
+  clearTagFilters: (userId: string) => void; // Acción para limpiar filtros de tags
+  setViewMode: (mode: 'card' | 'list') => void; // Acción para cambiar el modo de vista
 }
 
 const initialState: RecipeState = {
@@ -55,6 +61,8 @@ const initialState: RecipeState = {
   sortOption: 'created_at_desc', // Valor inicial: Más recientes
   selectedIngredients: [],
   selectedTags: [],
+  viewMode: 'card', // Vista inicial por defecto
+  availableTags: PREDEFINED_RECIPE_TAGS, // Cargar tags predefinidos
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -269,5 +277,47 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
       reset: true,
     });
   }, // Fin de setSelectedTags
+
+  toggleTagFilter: (tag, userId) => {
+    const currentTags = get().selectedTags;
+    const newTags = currentTags.includes(tag)
+      ? currentTags.filter(t => t !== tag)
+      : [...currentTags, tag];
+    set({ selectedTags: newTags, currentPage: 1 }); // Resetear página
+    // Volver a cargar las recetas desde la página 1 con el filtro actualizado
+    get().fetchRecipes({
+      userId,
+      filters: {
+        searchTerm: get().searchTerm,
+        showOnlyFavorites: get().showOnlyFavorites,
+        sortOption: get().sortOption,
+        selectedIngredients: get().selectedIngredients,
+        selectedTags: newTags, // Usar los nuevos tags
+      },
+      page: 1,
+      reset: true,
+    });
+  }, // Fin de toggleTagFilter
+
+  clearTagFilters: (userId) => {
+    set({ selectedTags: [], currentPage: 1 }); // Resetear página
+    // Volver a cargar las recetas desde la página 1 sin filtro de tags
+    get().fetchRecipes({
+      userId,
+      filters: {
+        searchTerm: get().searchTerm,
+        showOnlyFavorites: get().showOnlyFavorites,
+        sortOption: get().sortOption,
+        selectedIngredients: get().selectedIngredients,
+        selectedTags: [], // Filtro vacío
+      },
+      page: 1,
+      reset: true,
+    });
+  }, // Fin de clearTagFilters
+
+  setViewMode: (mode) => {
+    set({ viewMode: mode });
+  }, // Fin de setViewMode
 
 })); // Fin de create

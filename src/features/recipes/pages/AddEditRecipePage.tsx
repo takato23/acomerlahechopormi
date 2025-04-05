@@ -348,10 +348,10 @@ const RecipePageContent: React.FC = () => {
       {/* Card para Ingredientes (Nueva UI) */}
       <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
         <CardHeader>
-          <CardTitle className="text-slate-900">Ingredientes</CardTitle>
+          <CardTitle id="ingredients-heading" className="text-slate-900">Ingredientes</CardTitle> {/* Añadir ID */}
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-3" aria-labelledby="ingredients-heading"> {/* Asociar con heading */}
             {ingredients.map((ingredient, index) => (
               <div key={ingredient.localId} className="flex items-center space-x-2">
                 {/* Combobox para Nombre/ID */}
@@ -363,37 +363,55 @@ const RecipePageContent: React.FC = () => {
                      disabled={isSaving}
                    />
                    {/* Input oculto o lógica para manejar nombre si no se selecciona ID */}
+                   {/* Input para nombre manual si no se selecciona del combobox */}
                    {!ingredient.ingredient_id && (
-                     <Input
-                       type="text"
-                       value={ingredient.name}
-                       onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                       placeholder="Nombre (si no se selecciona)"
-                       className="mt-1 text-xs border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                       disabled={isSaving}
-                     />
+                     <>
+                       <Label htmlFor={`ingredient-name-${ingredient.localId}`} className="sr-only">Nombre del ingrediente (manual)</Label>
+                       <Input
+                         id={`ingredient-name-${ingredient.localId}`}
+                         type="text"
+                         value={ingredient.name}
+                         onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                         placeholder="Nombre (si no se selecciona)"
+                         className="mt-1 text-xs border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                         disabled={isSaving}
+                         aria-label="Nombre del ingrediente (manual)" // Aria-label como alternativa si el label oculto falla
+                       />
+                     </>
                    )}
                 </div>
 
                 {/* Input para Cantidad */}
-                <Input
-                  type="text" // Usar text para permitir fracciones o rangos como "1/2" o "1-2"
-                  value={ingredient.quantity ?? ''}
-                  onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                  placeholder="Cant."
-                  className="w-20 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                  disabled={isSaving}
-                />
+                {/* Input para Cantidad */}
+                <div> {/* Contenedor para Label + Input */}
+                  <Label htmlFor={`ingredient-quantity-${ingredient.localId}`} className="sr-only">Cantidad</Label>
+                  <Input
+                    id={`ingredient-quantity-${ingredient.localId}`}
+                    type="text" // Usar text para permitir fracciones o rangos como "1/2" o "1-2"
+                    value={ingredient.quantity ?? ''}
+                    onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                    placeholder="Cant."
+                    className="w-20 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                    disabled={isSaving}
+                    aria-label={`Cantidad para ${ingredient.name || 'ingrediente'}`} // Aria-label más específico
+                  />
+                </div>
 
                 {/* Input para Unidad */}
-                <Input
-                  type="text"
-                  value={ingredient.unit ?? ''}
-                  onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                  placeholder="Unidad"
-                  className="w-24 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                  disabled={isSaving}
-                />
+                {/* Input para Unidad */}
+                 <div> {/* Contenedor para Label + Input */}
+                   <Label htmlFor={`ingredient-unit-${ingredient.localId}`} className="sr-only">Unidad</Label>
+                   <Input
+                    id={`ingredient-unit-${ingredient.localId}`}
+                    type="text"
+                    value={ingredient.unit ?? ''}
+                    onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                    placeholder="Unidad"
+                    className="w-24 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                    disabled={isSaving}
+                    aria-label={`Unidad para ${ingredient.name || 'ingrediente'}`} // Aria-label más específico
+                  />
+                 </div>
 
                 {/* Botón Eliminar */}
                 <Button
@@ -423,13 +441,14 @@ const RecipePageContent: React.FC = () => {
        {/* Card para Instrucciones */}
       <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
          <CardHeader>
-           <CardTitle className="text-slate-900">Instrucciones</CardTitle>
+           <CardTitle id="instructions-heading" className="text-slate-900">Instrucciones</CardTitle> {/* Añadir ID */}
          </CardHeader>
          <CardContent>
             <InstructionsEditor
               value={instructions}
               onChange={setInstructions} // Pasar directamente el setter del estado
               disabled={isSaving}
+              aria-labelledby="instructions-heading" // Asociar con heading
             />
          </CardContent>
       </Card>

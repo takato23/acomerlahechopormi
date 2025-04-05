@@ -18,7 +18,7 @@ export interface RecipeIngredient {
  */
 export interface Recipe {
   id: UUID; // ID único de la receta
-  user_id: UUID; // ID del usuario que creó la receta
+  user_id: UUID | null; // ID del usuario (null si es generada base)
   title: string; // Título de la receta
   description: string | null; // Descripción opcional de la receta
   instructions: string[]; // Instrucciones como array de pasos
@@ -30,6 +30,7 @@ export interface Recipe {
   servings: number | null; // Número de porciones (opcional)
   tags?: string[] | null; // Etiquetas o categorías de la receta (opcional)
   is_favorite: boolean; // Indica si la receta está marcada como favorita
+  is_generated_base?: boolean; // Indica si es una receta base generada por IA
   ingredients: RecipeIngredient[]; // Lista de ingredientes de la receta
 }
 

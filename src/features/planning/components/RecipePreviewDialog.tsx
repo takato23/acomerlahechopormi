@@ -49,7 +49,7 @@ export function RecipePreviewDialog({
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
-                    <Utensils className="w-10 h-10" />
+                    <Utensils className="w-10 h-10" aria-hidden="true" /> {/* Ocultar icono decorativo */}
                     <span className="text-xs">Sin imagen disponible</span>
                   </div>
                 </div>

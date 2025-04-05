@@ -234,3 +234,37 @@ graph TD
       - Si hay comidas planificadas, mostrarlas usando `Card` pequeñas (clase `p-1.5 text-xs`) con el nombre y un botón de eliminar (`Trash2`) que aparece al hacer hover (`group-hover:opacity-100`). La `Card` completa debe ser clickeable para editar (`onClick` llama a `handleOpenEditModal`).
       - Mostrar *siempre* un botón "+ Añadir" (estilo `outline` o `ghost`, tamaño pequeño `h-auto p-1 text-xs`) al final de la sección para abrir el modal (`onClick` llama a `handleOpenAddModal`).
    - **Estilo:** Ajustar padding y bordes internos de las celdas para claridad.
+
+## Fase 8: Optimización y Mejora Funcional del Planificador
+
+**Objetivo General:** Mejorar la experiencia de usuario, el rendimiento y la inteligencia del módulo de planificación semanal.
+
+### 8.1: Refactorización a Zustand (Prioridad #1 - Técnica)
+   - **Objetivo:** Centralizar el estado y la lógica del planificador para facilitar futuras mejoras y optimizar el rendimiento base.
+   - **Tareas:**
+        - Crear `planningStore.ts` (Zustand).
+        - Migrar estado (`plannedMeals`, `isLoading`, `error`) y lógica de carga/modificación desde `PlanningPage` al store.
+        - Refactorizar `PlanningPage` y componentes hijos (`PlanningDayView`, `MealCard`, `MealFormModal`) para usar el store.
+        - Revisar/optimizar consultas en `planningService.getPlannedMeals`.
+   - **Metodología:** Sprint corto (1-2 semanas).
+
+### 8.2: Mejoras UX Fundamentales (Prioridad #2 - Funcional)
+   - **Objetivo:** Agilizar la planificación manual reduciendo la repetición.
+   - **Tareas:**
+        - Implementar funcionalidad de **Copiar Comida/Día**.
+   - **Metodología:** Kanban (entrega incremental).
+
+### 8.3: Integración y Funciones Clave (Prioridad #3 - Funcional)
+   - **Objetivo:** Aumentar la inteligencia y utilidad práctica del planificador.
+   - **Tareas:**
+        - Implementar **Indicador de Ingredientes Faltantes** en `MealCard` (integración con despensa).
+        - Implementar **Autocompletado Mejorado** (más configurable, usa preferencias del perfil).
+   - **Metodología:** Scrum (iteraciones sobre funciones).
+
+### 8.4: Funciones Avanzadas y Exploración (Prioridad #4 - Funcional/Investigación)
+   - **Objetivo:** Añadir funcionalidades potentes y explorar interacciones complejas.
+   - **Tareas:**
+        - Implementar **Plantillas Semanales**.
+        - Investigar/Prototipar **Arrastrar y Soltar (D&D)**.
+        - Diseñar/Implementar **Sugerencias Contextuales** (requiere diseño UX cuidadoso).
+   - **Metodología:** Scrum/Kanban según complejidad y feedback.
