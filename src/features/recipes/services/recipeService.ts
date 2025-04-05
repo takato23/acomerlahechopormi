@@ -3,9 +3,12 @@ import { supabase } from '../../../lib/supabaseClient'; // Corregir ruta relativ
 import type { Recipe, RecipeIngredient } from '../../../types/recipeTypes'; // Corregir ruta relativa
 import { findOrCreateIngredient } from '../../ingredients/ingredientService'; // Importar servicio de ingredientes
 
-type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients'> & {
-  user_id: string;
+// Añadir isBaseRecipe al tipo de entrada
+export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients' | 'is_generated_base'> & {
+  user_id?: string | null; // Hacer user_id opcional aquí también
   ingredients: Array<{ name: string; quantity: string | number | null; unit?: string | null }>;
+  isBaseRecipe?: boolean; // Flag para indicar si es receta base generada
+  tags?: string[] | null; // Tags/categorías predefinidas para la receta
 };
 
 // Importar tipo de filtros
@@ -22,6 +25,12 @@ interface GetRecipesResult {
   data: Recipe[];
   hasMore: boolean;
 }
+
+// Tipo intermedio para la respuesta de Supabase con la relación
+type RecipeWithIngredientsRaw = Omit<Recipe, 'ingredients' | 'instructions'> & {
+  instructions: string | null; // Viene como string de la DB
+  recipe_ingredients: RecipeIngredient[] | null;
+};
 
 /**
  * Obtiene las recetas para un usuario específico, aplicando filtros y paginación.
@@ -40,10 +49,20 @@ export const getRecipes = async ({
   let query = supabase
     .from('recipes')
     .select(`
-      *,
+      id,
+      user_id,
+      title,
+      description,
+      image_url,
+      prep_time_minutes,
+      cook_time_minutes,
+      servings,
       is_favorite,
+      instructions,
+      created_at,
       recipe_ingredients (
         id,
+        recipe_id,
         ingredient_name,
         quantity,
         unit,
@@ -76,11 +95,11 @@ export const getRecipes = async ({
     console.log(`Applying ingredient filter (at least one): ${ingredientNames.join(', ')}`);
   }
 
-  // Filtro por Tags (contiene todos)
+  // Filtro por Tags (contiene todos los seleccionados)
   if (filters.selectedTags && filters.selectedTags.length > 0) {
-    // Asume que 'tags' es una columna text[] en la tabla 'recipes'
-    query = query.contains('tags', filters.selectedTags);
-    console.log(`Applying tags filter (contains all): ${filters.selectedTags.join(', ')}`);
+    // Usar '@>' (contains array) para aprovechar el índice GIN
+    query = query.filter('tags', '@>', filters.selectedTags);
+    console.log(`Applying tags filter (contains all selected): ${filters.selectedTags.join(', ')}`);
   }
 
   // Aplicar ordenamiento dinámico basado en filters.sortOption
@@ -129,10 +148,12 @@ export const getRecipes = async ({
   const safeData = data || [];
   // Mapear los ingredientes al formato esperado por el tipo Recipe
   // Añadir tipo explícito al parámetro del map
-  const recipesWithMappedIngredients = safeData.map((recipe: any) => ({
+  const recipesWithMappedIngredients = safeData.map((recipe: RecipeWithIngredientsRaw): Recipe => ({
     ...recipe,
-    // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
-    ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[], // Renombrar y asegurar tipo
+    // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
+    ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[],
+    // Convertir instructions (string) a string[]
+    instructions: typeof recipe.instructions === 'string' ? recipe.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
   }));
 
   // Determinar si hay más páginas comparando la cantidad obtenida con el límite
@@ -151,16 +172,26 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
   const { data, error } = await supabase
     .from('recipes')
     .select(`
-      *,
+      id,
+      user_id,
+      title,
+      description,
+      image_url,
+      prep_time_minutes,
+      cook_time_minutes,
+      servings,
       is_favorite,
+      instructions,
+      created_at,
       recipe_ingredients (
         id,
+        recipe_id,
         ingredient_name,
         quantity,
         unit,
         ingredient_id
       )
-    `) // Sintaxis correcta: is_favorite al mismo nivel que *
+    `)
     .eq('id', recipeId)
     .single();
 
@@ -177,11 +208,13 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
 
    // Mapear ingredientes
    // Añadir aserción de tipo a 'data'
-   const recipeWithMappedIngredients = {
-     ...(data as any), // Usar 'any' temporalmente o un tipo más específico si es posible
-     ...data,
-     // Asegurarse de que recipe_ingredients sea un array, incluso si viene null/undefined de la DB
-     ingredients: (data.recipe_ingredients || []) as RecipeIngredient[],
+   const rawData = data as RecipeWithIngredientsRaw; // Usar el tipo definido arriba
+   const recipeWithMappedIngredients: Recipe = {
+     ...rawData,
+     // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
+     ingredients: (rawData.recipe_ingredients || []) as RecipeIngredient[],
+     // Convertir instructions (string) a string[]
+     instructions: typeof rawData.instructions === 'string' ? rawData.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
    };
 
   return recipeWithMappedIngredients;
@@ -194,12 +227,14 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
 export const addRecipe = async (recipeData: RecipeInputData): Promise<Recipe> => { // Cambiar tipo de retorno a Recipe completo
   console.log("Guardando receta:", recipeData);
 
-  if (!recipeData.title || !recipeData.user_id) {
-    throw new Error("El título y el ID de usuario son obligatorios.");
+  // Validar: Se necesita título. Se necesita user_id a menos que sea isBaseRecipe
+  if (!recipeData.title || (!recipeData.user_id && !recipeData.isBaseRecipe)) {
+    throw new Error("El título es obligatorio. Se requiere user_id si no es una receta base.");
   }
 
+  // Construir el objeto a insertar basado en si es base o no
   const recipeToInsert = {
-    user_id: recipeData.user_id,
+    user_id: recipeData.isBaseRecipe ? null : recipeData.user_id, // Null si es base
     title: recipeData.title,
     description: recipeData.description,
     instructions: Array.isArray(recipeData.instructions)
@@ -208,8 +243,10 @@ export const addRecipe = async (recipeData: RecipeInputData): Promise<Recipe> =>
     prep_time_minutes: recipeData.prep_time_minutes,
     cook_time_minutes: recipeData.cook_time_minutes,
     servings: recipeData.servings,
-    // image_url se añadirá después de llamar a la Edge Function
-    // tags: recipeData.tags, // Asumiendo que no viene de RecipeInputData por ahora
+    is_generated_base: recipeData.isBaseRecipe || false, // Establecer el flag
+    is_favorite: false, // Las recetas base no son favoritas por defecto
+    tags: recipeData.tags || null, // Añadir tags
+    // image_url se añadirá después
   };
 
   const { data: newRecipe, error: recipeError } = await supabase
@@ -394,6 +431,8 @@ export const updateRecipe = async (recipeId: string, recipeData: Partial<RecipeI
   const updatePayload: { [key: string]: any } = { // Usar un tipo más flexible para el payload
       ...recipeFieldsToUpdate,
       updated_at: new Date().toISOString(),
+      // Incluir tags solo si se proporcionan explícitamente en la actualización parcial
+      ...(recipeData.tags !== undefined && { tags: recipeData.tags }),
   };
 
   // Convertir instructions a string si viene como array

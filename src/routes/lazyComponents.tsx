@@ -21,7 +21,10 @@ export const LazyFeatures = {
   DashboardPage: lazy(() => import('../features/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage }))) as any,
   UserProfilePage: lazy(() => import('../features/user/UserProfilePage').then(m => ({ default: m.UserProfilePage }))) as any,
   PantryPage: lazy(() => import('../features/pantry/PantryPage').then(m => ({ default: m.PantryPage }))) as any,
-  PlanningPage: lazy(() => import('../features/planning/PlanningPage')), // Corregido para importar default export
+  PlanningPage: lazy(() => import('../features/planning/PlanningPage').then(module => ({ default: module.default })).catch(error => {
+    console.error('Error loading PlanningPage:', error);
+    throw error;
+  })),
   ShoppingListPage: lazy(() => import('../features/shopping-list/ShoppingListPage').then(m => ({ default: m.ShoppingListPage }))) as any,
   RecipeListPage: lazy(() => import('../features/recipes/pages/RecipeListPage').then(m => ({ default: m.RecipeListPage }))) as any,
   AddEditRecipePage: lazy(() => import('../features/recipes/pages/AddEditRecipePage')),

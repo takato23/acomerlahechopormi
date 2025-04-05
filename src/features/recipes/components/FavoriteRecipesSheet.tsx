@@ -61,7 +61,7 @@ export const FavoriteRecipesSheet: React.FC<FavoriteRecipesSheetProps> = ({ open
                     aria-label="Quitar de favoritos"
                     className="text-destructive hover:text-destructive/80"
                   >
-                    <StarOff className="h-4 w-4" /> {/* O icono de estrella llena que cambia */}
+                    <StarOff className="h-4 w-4" aria-hidden="true" /> {/* Ocultar icono decorativo */}
                   </Button>
                 </li>
               ))}

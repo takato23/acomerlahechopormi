@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card as UICard, CardContent as UICardContent, CardHeader as UICardHeader, CardTitle as UICardTitle } from "@/components/ui/card"; // Renombrar
 import { Edit, Trash2, Clock, Users, AlertCircle, Image as ImageIcon, ChefHat, Tag } from 'lucide-react'; // Añadir iconos
+import { ShoppingCart } from 'lucide-react'; // Icono para lista de compras
 import { Wand2 } from 'lucide-react'; // Icono para variación
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner'; // Asumiendo que sonner está instalado para toasts
 import { generateRecipeVariation } from '@/features/recipes/generationService'; // Ajustar path si es necesario
 import { getRecipeById, deleteRecipe } from '@/features/recipes/services/recipeService';
+import { addItemsToShoppingList, calculateMissingRecipeIngredients } from '@/features/shopping-list/services/shoppingListService';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
 import { cn } from '@/lib/utils';
@@ -29,6 +31,7 @@ const RecipeDetailPage: React.FC = () => {
   const [isVariationModalOpen, setIsVariationModalOpen] = useState<boolean>(false);
   const [variationRequestText, setVariationRequestText] = useState<string>('');
   const [isGeneratingVariation, setIsGeneratingVariation] = useState<boolean>(false);
+  const [isAddingToShoppingList, setIsAddingToShoppingList] = useState<boolean>(false);
   useEffect(() => {
     const fetchRecipe = async () => {
       if (!recipeId) {
@@ -108,6 +111,31 @@ const RecipeDetailPage: React.FC = () => {
     }
   };
 
+
+  const handleAddRecipeToShoppingList = async () => {
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+      toast.info('No hay ingredientes en esta receta para añadir.');
+      return;
+    }
+
+    setIsAddingToShoppingList(true);
+    try {
+      const missingIngredients = await calculateMissingRecipeIngredients(recipe.ingredients);
+
+      if (missingIngredients.length > 0) {
+        await addItemsToShoppingList(missingIngredients);
+        toast.success(`${missingIngredients.length} ingrediente(s) faltante(s) añadido(s) a la lista de compras.`);
+      } else {
+        toast.info('Todos los ingredientes necesarios ya están en tu despensa o son básicos. ¡No se añadió nada!');
+      }
+    } catch (err) {
+      console.error('Error adding recipe ingredients to shopping list:', err);
+      toast.error('Error al añadir ingredientes a la lista. Inténtalo de nuevo.');
+    } finally {
+      setIsAddingToShoppingList(false);
+    }
+  };
+
   // --- Renderizado ---
 
   if (isLoading && !recipe) {
@@ -170,7 +198,7 @@ const RecipeDetailPage: React.FC = () => {
             />
           ) : (
             <div className="w-full h-64 bg-slate-200 rounded-lg flex items-center justify-center shadow-md">
-              <ImageIcon className="h-16 w-16 text-slate-400" />
+              <ImageIcon className="h-16 w-16 text-slate-400" aria-hidden="true" /> {/* Ocultar icono decorativo */}
             </div>
           )}
         </div>
@@ -258,6 +286,20 @@ const RecipeDetailPage: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleAddRecipeToShoppingList} 
+              disabled={isAddingToShoppingList || !recipe?.ingredients || recipe.ingredients.length === 0}
+              className="flex items-center"
+            >
+              {isAddingToShoppingList ? (
+                <Spinner size="sm" className="mr-2" />
+              ) : (
+                <ShoppingCart className="mr-2 h-4 w-4" />
+              )}
+              <span>Añadir a Lista</span>
+            </Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isLoading}>
               {isLoading ? (
                 <Spinner size="sm" className="mr-2" />

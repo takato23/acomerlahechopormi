@@ -12,12 +12,14 @@ export interface PlannedMeal {
   recipe_id: string | null; // UUID de la receta (si aplica)
   custom_meal_name: string | null; // Texto libre (si no es receta)
   created_at: string; // Timestamp
+  notes?: string | null; // Añadido para consistencia con Upsert y plantillas
 
   // Opcional: Incluir datos de la receta si se hace JOIN
   recipes?: {
     id: string;
     title: string;
-    // ... otras propiedades de receta si son necesarias
+    description: string | null;
+    image_url: string | null;
   } | null;
 }
 
@@ -44,3 +46,30 @@ export interface MealAlternativeRequestContext {
 export type MealAlternative = 
   | { type: 'recipe'; id: string; title: string } 
   | { type: 'custom'; text: string };
+
+// --- Tipos para Plantillas de Planificación ---
+
+export interface PlanningTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  template_data: TemplateData;
+  created_at: string;
+}
+
+export interface TemplateData {
+  meals: TemplateMeal[];
+}
+
+export interface TemplateMeal {
+  day_index: number; // 0 = Lunes, 1 = Martes, etc.
+  meal_type: MealType;
+  recipe_id?: string | null;
+  custom_meal_name?: string | null;
+  notes?: string | null; // Añadido para guardar/restaurar notas en plantillas
+}
+
+export interface SaveTemplateData {
+  name: string;
+  meals: PlannedMeal[];
+}

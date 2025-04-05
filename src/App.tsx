@@ -1,4 +1,4 @@
-import { useEffect, Suspense, useCallback } from 'react';
+import { useEffect, Suspense, useCallback, useState } from 'react';
 import { initializeCategories } from './features/shopping-list/lib/categoryInference';
 import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
@@ -70,20 +70,23 @@ const LandingPage = () => {
 
 function App() {
   const { loading, user } = useAuth()
+  const [categorySystemInitialized, setCategorySystemInitialized] = useState(false);
+
   const { settings } = useSettings();
 
   // Inicializar sistema de categorías cuando el usuario inicia sesión
   const initializeSystem = useCallback(async () => {
-    if (user) {
+    if (user && !categorySystemInitialized) {
       console.log('[App] User logged in, initializing category system...');
       try {
         await initializeCategories();
         console.log('[App] Category system initialized successfully');
+        setCategorySystemInitialized(true);
       } catch (error) {
         console.error('[App] Failed to initialize category system:', error);
       }
     }
-  }, [user]);
+  }, [user, categorySystemInitialized]);
 
   useEffect(() => {
     initializeSystem();
