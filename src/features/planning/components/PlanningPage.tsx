@@ -101,8 +101,8 @@ export function PlanningPage() {
       <AutocompleteConfigDialog
         isOpen={isAutocompleteOpen}
         onClose={() => setAutocompleteOpen(false)}
-        onConfirm={handleAutocompleteWeek}
-        isLoading={isAutocompleting}
+        onConfirm={(config) => handleAutocompleteWeek(format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), config)}
+        isProcessing={isAutocompleting} // Renombrar prop a isProcessing
       />
     </div>
   );

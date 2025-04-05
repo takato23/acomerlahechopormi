@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { addDays, format, startOfWeek, endOfWeek } from 'date-fns';
+import { addDays, format, startOfWeek, endOfWeek, getDay, eachDayOfInterval } from 'date-fns'; // Added getDay, eachDayOfInterval
 import {
   PlannedMeal,
   UpsertPlannedMealData,
@@ -10,13 +10,15 @@ import { Suggestion } from '@/features/suggestions/types';
 import { getSuggestions } from '@/features/suggestions/suggestionService';
 import * as planningService from '@/features/planning/planningService';
 import * as planningTemplateService from '@/features/planning/planningTemplateService';
+import { usePantryStore } from './pantryStore'; // Importar pantryStore
+import { useRecipeStore } from './recipeStore'; // Importar recipeStore (asumiendo que existe y tiene favoritos)
 import * as recipeService from '@/features/recipes/services/recipeService';
 import type { RecipeInputData } from '@/features/recipes/services/recipeService';
 import { supabase } from '@/lib/supabaseClient';
-import { generateRecipesFromPantry, generateRecipeForSlot } from '@/features/recipes/generationService';
+import { generateRecipeForSlot } from '@/features/recipes/generationService'; // Removed generateRecipesFromPantry for now
 import { getUserProfile } from '@/features/user/userService';
 import { toast } from 'sonner';
-import { getDay } from 'date-fns';
+// Removed unused import: getDay from 'date-fns';
 
 // Helper function para obtener el intervalo de la semana
 const getWeekInterval = (date: Date) => {
@@ -25,16 +27,18 @@ const getWeekInterval = (date: Date) => {
   return { start, end };
 };
 
-interface AutocompleteConfig {
-  selectedDays: string[];
-  selectedMealTypes: MealType[];
-  usePreferences: boolean;
-}
+// Unify AutocompleteMode type based on Dialog component
+export type AutocompleteMode = 'optimize-pantry' | 'flexible-suggestions';
+
+// Importar AutocompleteConfig desde el diálogo para usarla en la firma
+import type { AutocompleteConfig } from '@/features/planning/components/AutocompleteConfigDialog';
 
 interface PlanningState {
   // Estado para sugerencias
-  currentSuggestions: Suggestion[] | null;
+  pantrySuggestion: Suggestion | null;
+  discoverySuggestion: Suggestion | null;
   isLoadingSuggestions: boolean;
+  // Estado general
   plannedMeals: PlannedMeal[];
   isLoading: boolean;
   error: string | null;
@@ -62,21 +66,22 @@ interface PlanningState {
   setCopiedDayMeals: (meals: PlannedMeal[] | null) => void;
   pasteCopiedMeal: (date: string, mealType: MealType) => Promise<PlannedMeal | null>;
   pasteCopiedDayMeals: (targetDate: string) => Promise<PlannedMeal[]>;
-  // Autocompletado
-  handleAutocompleteWeek: (config: AutocompleteConfig) => Promise<void>;
+  // Autocompletado - Updated signature to accept full config
+  handleAutocompleteWeek: (startDate: string, endDate: string, config: AutocompleteConfig) => Promise<void>;
   // Acciones de plantillas
   fetchTemplates: () => Promise<void>;
   saveCurrentWeekAsTemplate: (name: string) => Promise<void>;
   applyTemplateToCurrentWeek: (templateId: string, startDate: string) => Promise<void>;
   deleteTemplate: (templateId: string) => Promise<void>;
-  clearWeek: (startDate: string, endDate: string) => Promise<void>; // Nueva acción
+  clearWeek: (startDate: string, endDate: string) => Promise<void>;
 }
 
 export const usePlanningStore = create<PlanningState>((set, get) => ({
   // Estado inicial
   plannedMeals: [],
   isLoading: false,
-  currentSuggestions: null,
+  pantrySuggestion: null,
+  discoverySuggestion: null,
   isLoadingSuggestions: false,
   error: null,
   copiedMeal: null,
@@ -91,7 +96,6 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   templateError: null,
 
   loadPlannedMeals: async (startDate: string, endDate: string) => {
-    // Solo cargar si las fechas son diferentes a las actuales
     const { currentStartDate, currentEndDate } = get();
     if (startDate === currentStartDate && endDate === currentEndDate) {
       console.log('[PlanningStore] Skipping reload - same date range');
@@ -104,10 +108,10 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       const meals = await planningService.getPlannedMeals(startDate, endDate);
       console.log(`[PlanningStore] Loaded meals:`, meals);
 
-      set((state) => ({
+      set({
         plannedMeals: meals,
         isLoading: false
-      }));
+      });
 
       console.log(`[PlanningStore] Store updated with ${meals.length} meals`);
     } catch (error) {
@@ -117,38 +121,33 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     }
   },
 
-  addPlannedMeal: async (mealData) => {
-    set({ isLoading: true, error: null });
+  addPlannedMeal: async (mealData: UpsertPlannedMealData) => {
+    // No establecer isLoading aquí para evitar parpadeos al añadir/pegar
+    // set({ isLoading: true, error: null });
     try {
       const newMeal = await planningService.upsertPlannedMeal(mealData);
       if (newMeal) {
-        // Recargar las comidas para el rango actual en lugar de concatenar
-        const { start: weekStart, end: weekEnd } = getWeekInterval(new Date());
-        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-        const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
-        
-        // Cargar las comidas actualizadas del rango
-        const meals = await planningService.getPlannedMeals(weekStartStr, weekEndStr);
-        console.log(`[PlanningStore] Recargando comidas después de añadir nueva para la semana: ${weekStartStr} - ${weekEndStr}`);
-        
-        set({
-          plannedMeals: meals,
-          isLoading: false
-        });
+        // Actualizar el estado localmente para respuesta más rápida
+        set((state) => ({
+          plannedMeals: [...state.plannedMeals, newMeal].sort((a, b) =>
+             a.plan_date.localeCompare(b.plan_date) || a.meal_type.localeCompare(b.meal_type)
+           ),
+          // isLoading: false // No necesario si no se estableció antes
+        }));
       } else {
-        set({ isLoading: false });
+        // set({ isLoading: false }); // No necesario
       }
       return newMeal;
     } catch (error) {
       console.error('Error adding planned meal:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to add planned meal';
-      set({ error: errorMessage, isLoading: false });
+      set({ error: errorMessage /*, isLoading: false */ });
       return null;
     }
   },
 
-  updatePlannedMeal: async (mealId, mealData) => {
-    set({ isLoading: true, error: null });
+  updatePlannedMeal: async (mealId: string, mealData: UpsertPlannedMealData) => {
+    // set({ isLoading: true, error: null }); // Evitar parpadeo
     try {
       const updatedMeal = await planningService.upsertPlannedMeal(mealData, mealId);
       if (updatedMeal) {
@@ -158,25 +157,26 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
           ).sort((a, b) =>
             a.plan_date.localeCompare(b.plan_date) || a.meal_type.localeCompare(b.meal_type)
           ),
-          isLoading: false,
+          // isLoading: false,
         }));
       } else {
-        set({ isLoading: false });
+        // set({ isLoading: false });
       }
       return updatedMeal;
     } catch (error) {
       console.error('Error updating planned meal:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update planned meal';
-      set({ error: errorMessage, isLoading: false });
+      set({ error: errorMessage /*, isLoading: false */ });
       return null;
     }
   },
 
-  deletePlannedMeal: async (mealId) => {
+  deletePlannedMeal: async (mealId: string) => {
     const originalMeals = get().plannedMeals;
+    // Optimistic update
     set((state) => ({
       plannedMeals: state.plannedMeals.filter((meal) => meal.id !== mealId),
-      isLoading: true,
+      // isLoading: true, // No necesario para borrado optimista
       error: null
     }));
 
@@ -185,23 +185,24 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       if (!success) {
         throw new Error("Deletion failed according to service");
       }
-      set({ isLoading: false });
+      // set({ isLoading: false }); // No necesario
     } catch (error) {
       console.error('Error deleting planned meal:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete planned meal';
-      set({ plannedMeals: originalMeals, error: errorMessage, isLoading: false });
+      // Revert optimistic update on error
+      set({ plannedMeals: originalMeals, error: errorMessage /*, isLoading: false */ });
     }
   },
 
-  setCopiedMeal: (meal) => {
+  setCopiedMeal: (meal: PlannedMeal | null) => {
     set({ copiedMeal: meal });
   },
 
-  setCopiedDayMeals: (meals) => {
+  setCopiedDayMeals: (meals: PlannedMeal[] | null) => {
     set({ copiedDayMeals: meals });
   },
 
-  pasteCopiedMeal: async (date, mealType) => {
+  pasteCopiedMeal: async (date: string, mealType: MealType) => {
     const { copiedMeal } = get();
     if (!copiedMeal) return null;
 
@@ -209,46 +210,45 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       plan_date: date,
       meal_type: mealType,
       recipe_id: copiedMeal.recipe_id,
-      custom_meal_name: copiedMeal.custom_meal_name
+      custom_meal_name: copiedMeal.custom_meal_name,
+      notes: copiedMeal.notes // Copiar también las notas
     };
 
     return await get().addPlannedMeal(mealData);
   },
 
-  pasteCopiedDayMeals: async (targetDate) => {
+  pasteCopiedDayMeals: async (targetDate: string) => {
     const { copiedDayMeals } = get();
     if (!copiedDayMeals || copiedDayMeals.length === 0) return [];
 
     const addedMeals: PlannedMeal[] = [];
+    const addPromises: Promise<PlannedMeal | null>[] = [];
 
     for (const meal of copiedDayMeals) {
       const mealData: UpsertPlannedMealData = {
         plan_date: targetDate,
         meal_type: meal.meal_type,
         recipe_id: meal.recipe_id,
-        custom_meal_name: meal.custom_meal_name
+        custom_meal_name: meal.custom_meal_name,
+        notes: meal.notes // Copiar también las notas
       };
-
-      const newMeal = await get().addPlannedMeal(mealData);
-      if (newMeal) addedMeals.push(newMeal);
+      // Lanzar todas las adiciones en paralelo
+      addPromises.push(get().addPlannedMeal(mealData));
     }
 
+    const results = await Promise.all(addPromises);
+    results.forEach(newMeal => {
+      if (newMeal) addedMeals.push(newMeal);
+    });
+
+    // No es necesario recargar aquí, addPlannedMeal actualiza el estado localmente
     return addedMeals;
   },
 
-  handleAutocompleteWeek: async (config) => {
-    const { selectedDays, selectedMealTypes, usePreferences } = config;
-
-    if (selectedDays.length === 0 || selectedMealTypes.length === 0) {
-      toast.error('Selecciona al menos un día y un tipo de comida');
-      return;
-    }
-
-    if (selectedDays.length > 1) {
-      toast.warning('Por ahora solo se autocompletará el primer día seleccionado');
-    }
-
+  // --- Autocomplete Logic ---
+  handleAutocompleteWeek: async (startDate: string, endDate: string, config: AutocompleteConfig) => {
     set({ isAutocompleting: true, error: null });
+    console.log(`[PlanningStore] Starting autocomplete for ${startDate} - ${endDate} with config:`, config);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -256,137 +256,169 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
         throw new Error('No se encontró usuario autenticado');
       }
 
-      // Configuración de fechas
-      const today = new Date();
-      const weekStart = startOfWeek(today);
-      const dayMap = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+      // 1. Determinar los slots a llenar según la configuración
+      const dayMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; // Nombres completos para comparar con config.days
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
+      const weekDays = eachDayOfInterval({ start, end });
+      const existingMeals = get().plannedMeals; // Obtener comidas existentes para no sobrescribir
 
-      // Para cada día seleccionado, generar recetas para todos sus tipos de comida
       let slotsToFill: { date: string; mealType: MealType; dayName: string }[] = [];
-      
-      // Generar slots solo para el primer día seleccionado
-      const dayName = selectedDays[0]; // Tomamos solo el primer día seleccionado
-      const dayIndex = dayMap.indexOf(dayName);
-      
-      if (dayIndex !== -1) {
-        const date = format(addDays(weekStart, dayIndex), 'yyyy-MM-dd');
-        // Generar slots para todos los tipos de comida de este día
-        selectedMealTypes.forEach(mealType => {
-          slotsToFill.push({ date, mealType, dayName });
+      weekDays.forEach(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const dayIndex = getDay(day); // 0 = Domingo, 1 = Lunes...
+        const dayName = dayMap[dayIndex];
+
+        // Filtrar por día seleccionado en la configuración
+        if (!config.days.includes(dayName)) {
+          return; // Saltar este día si no está seleccionado
+        }
+
+        config.meals.forEach(mealType => {
+          // Verificar si ya existe una comida para este slot
+           const mealExists = existingMeals.some(
+             meal => meal.plan_date === dateStr && meal.meal_type === mealType
+           );
+
+           if (!mealExists) {
+              slotsToFill.push({ date: dateStr, mealType, dayName });
+           } else {
+              console.log(`[PlanningStore] Skipping existing meal slot: ${dateStr} ${mealType}`);
+           }
         });
-      }
+      });
 
       if (slotsToFill.length === 0) {
-        toast.warning("No se encontraron slots válidos para autocompletar.");
+        toast.info("No hay slots para autocompletar en el rango seleccionado.");
         set({ isAutocompleting: false });
         return;
       }
+      console.log(`[PlanningStore] Found ${slotsToFill.length} slots to fill.`);
 
-      console.log(`[PlanningStore] Slots a llenar calculados (${slotsToFill.length}):`, JSON.stringify(slotsToFill, null, 2));
-
+      // 2. Obtener preferencias (opcional, basado en el modo quizás?)
       let userPreferences;
-      if (usePreferences) {
-        try {
-          userPreferences = await getUserProfile(user.id);
-        } catch (error) {
-          console.warn('No se pudieron obtener las preferencias del usuario:', error);
-          toast.warning('No se pudieron cargar las preferencias del usuario');
-        }
+      // Podríamos decidir obtener preferencias solo para ciertos modos si fuera necesario
+      try {
+        userPreferences = await getUserProfile(user.id);
+        console.log("[PlanningStore] User preferences loaded for autocomplete.");
+      } catch (error) {
+        console.warn('[PlanningStore] Could not load user preferences:', error);
+        toast.warning('No se pudieron cargar las preferencias del usuario para el autocompletado.');
+        // Continuar sin preferencias si falla
       }
 
-      // Generar una receta para cada slot individualmente, considerando el tipo de comida
+      // 3. Generar recetas para cada slot
       const generationPromises = slotsToFill.map(async (slot) => {
         const context = `Receta para ${slot.dayName} - ${slot.mealType}`;
-        console.log(`[PlanningStore] Generando receta para slot: ${context}`);
-        
-        // Usar la nueva función específica para el slot
-        const recipeOrError = await generateRecipeForSlot(user.id, slot.mealType, context);
+        console.log(`[PlanningStore] Generating recipe for slot: ${context} (Mode: ${config.mode})`);
+
+        // Pasar el modo al servicio de generación
+        // Mapear el modo del store/dialog al modo esperado por el servicio
+        const serviceMode = config.mode === 'optimize-pantry' ? 'optimize' : 'flexible';
+        const recipeOrError = await generateRecipeForSlot(user.id, slot.mealType, context, serviceMode);
 
         if ('error' in recipeOrError) {
-          console.error(`Error generando receta para ${slot.date} ${slot.mealType}: ${recipeOrError.error}`);
-          toast.error(`Error generando receta para ${slot.dayName} ${slot.mealType}: ${recipeOrError.error}`);
+          console.error(`Error generating recipe for ${slot.date} ${slot.mealType} (Mode ${config.mode}): ${recipeOrError.error}`);
+          toast.error(`Error generando para ${slot.dayName} ${slot.mealType}: ${recipeOrError.error.substring(0, 50)}...`);
           return { slot, recipeData: null }; // Marcar como fallido
         } else {
+          console.log(`[PlanningStore] Recipe generated successfully for ${slot.date} ${slot.mealType}`);
           return { slot, recipeData: recipeOrError }; // Devolver la receta generada
         }
       });
 
       const generationResults = await Promise.all(generationPromises);
 
+      // 4. Guardar recetas y comidas planificadas
       const addedMeals: PlannedMeal[] = [];
       let successfulGenerations = 0;
+      const savePromises: Promise<void>[] = [];
 
       for (const result of generationResults) {
         if (result.recipeData) {
           const { slot, recipeData } = result;
-          try {
-            // 1. Preparar datos de la receta
-            const recipeInputData: RecipeInputData = {
-              user_id: user.id,
-              title: recipeData.title,
-              description: recipeData.description || null,
-              prep_time_minutes: recipeData.prepTimeMinutes,
-              cook_time_minutes: recipeData.cookTimeMinutes,
-              servings: recipeData.servings,
-              image_url: null,
-              is_favorite: false,
-              ingredients: recipeData.ingredients.map(ing => ({
-                name: ing.name,
-                quantity: ing.quantity,
-                unit: ing.unit
-              })),
-              instructions: recipeData.instructions
-            };
 
-            console.log(`[PlanningStore] Guardando receta generada para ${slot.date} ${slot.mealType}:`, recipeInputData.title);
-            const savedRecipe = await recipeService.addRecipe(recipeInputData);
-            console.log(`[PlanningStore] Receta guardada con ID ${savedRecipe.id} para ${slot.date} ${slot.mealType}`);
+          // Lanzar el guardado en paralelo
+          savePromises.push((async () => {
+            try {
+              // 4a. Preparar datos de la receta
+              // Marcar como receta base generada por IA
+              const recipeInputData: RecipeInputData = {
+                user_id: null, // Sin usuario asociado
+                title: recipeData.title,
+                description: recipeData.description || null,
+                prep_time_minutes: recipeData.prepTimeMinutes,
+                cook_time_minutes: recipeData.cookTimeMinutes,
+                servings: recipeData.servings,
+                image_url: null,
+                is_favorite: false,
+                isBaseRecipe: true, // Marcar como base
+                ingredients: recipeData.ingredients.map(ing => ({
+                  name: ing.name,
+                  quantity: ing.quantity,
+                  unit: ing.unit
+                })),
+                instructions: recipeData.instructions
+              };
 
-            // 2. Crear la comida planificada
-            console.log(`[PlanningStore] Guardando comida para slot:`, {
-              slot_date: slot.date,
-              slot_mealType: slot.mealType,
-              recipe_id: savedRecipe.id
-            });
+              console.log(`[PlanningStore] Saving generated recipe: ${recipeInputData.title}`);
+              const savedRecipe = await recipeService.addRecipe(recipeInputData);
+              console.log(`[PlanningStore] Recipe saved with ID ${savedRecipe.id}`);
 
-            const mealData: UpsertPlannedMealData = {
-              plan_date: slot.date,
-              meal_type: slot.mealType,
-              recipe_id: savedRecipe.id,
-              notes: recipeData.description || undefined
-            };
+              // 4b. Crear la comida planificada
+              const mealData: UpsertPlannedMealData = {
+                plan_date: slot.date,
+                meal_type: slot.mealType,
+                recipe_id: savedRecipe.id,
+                notes: recipeData.description || undefined // Usar descripción como nota inicial
+              };
 
-            console.log(`[PlanningStore] Datos de comida a guardar:`, mealData);
-            const newMeal = await get().addPlannedMeal(mealData);
-            if (newMeal) {
-              addedMeals.push(newMeal);
-              successfulGenerations++;
+              console.log(`[PlanningStore] Saving planned meal for recipe ${savedRecipe.id}`);
+              const newMeal = await get().addPlannedMeal(mealData); // addPlannedMeal actualiza el estado
+              if (newMeal) {
+                // No necesitamos añadir a addedMeals aquí si addPlannedMeal actualiza el estado global
+                successfulGenerations++;
+              } else {
+                 console.warn(`[PlanningStore] Failed to save planned meal for recipe ${savedRecipe.id}`);
+              }
+            } catch (error) {
+              console.error(`[PlanningStore] Error saving recipe/meal for ${slot.date} ${slot.mealType} (Mode ${config.mode}):`, error);
+              toast.error(`Error al guardar receta para ${slot.dayName} ${slot.mealType}: ${(error as Error).message.substring(0, 50)}...`);
             }
-          } catch (error) {
-            console.error(`[PlanningStore] Error al guardar receta/comida para ${slot.date} ${slot.mealType}:`, error);
-            toast.error(`Error al guardar receta para ${slot.dayName} ${slot.mealType}: ${(error as Error).message}`);
-          }
+          })());
         }
       }
 
+      // Esperar a que todas las operaciones de guardado terminen
+      await Promise.all(savePromises);
+
+      // 5. Mostrar resultados
       if (successfulGenerations > 0) {
-        toast.success(`Se añadieron ${successfulGenerations} comidas al plan`);
+        toast.success(`Se añadieron ${successfulGenerations} comidas al plan (Modo: ${config.mode})`);
         if (successfulGenerations < slotsToFill.length) {
           toast.warning(`No se pudieron generar/guardar todas las recetas solicitadas (${successfulGenerations}/${slotsToFill.length})`);
         }
+      } else if (slotsToFill.length > 0) { // Solo mostrar error si se intentó llenar slots
+        toast.error(`No se pudo añadir ninguna comida nueva al plan (Modo: ${config.mode})`);
       } else {
-        toast.error('No se pudo añadir ninguna comida al plan');
+         toast.info("No había slots vacíos que coincidieran con tu selección para autocompletar.");
       }
 
+      // Recargar las comidas al final para asegurar consistencia,
+      // aunque addPlannedMeal ya actualiza el estado. Podría ser redundante.
+      // await get().loadPlannedMeals(startDate, endDate);
+
     } catch (error) {
-      console.error('Error general en autocompletado:', error);
+      console.error('[PlanningStore] General autocomplete error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       set({ error: errorMessage });
-      toast.error(`Error al autocompletar: ${errorMessage}`);
+      toast.error(`Error al autocompletar (Modo: ${config.mode}): ${errorMessage}`);
     } finally {
       set({ isAutocompleting: false });
+      console.log("[PlanningStore] Autocomplete finished.");
     }
   },
+  // --- Fin Autocomplete Logic ---
 
   // Acciones para plantillas
   fetchTemplates: async () => {
@@ -402,17 +434,26 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     }
   },
 
-  saveCurrentWeekAsTemplate: async (name) => {
+  saveCurrentWeekAsTemplate: async (name: string) => {
     set({ isLoadingTemplates: true, templateError: null });
     try {
-      const currentMeals = get().plannedMeals;
-      if (currentMeals.length === 0) {
-        throw new Error('No hay comidas planificadas para guardar como plantilla');
+      const { currentStartDate, currentEndDate, plannedMeals } = get();
+      if (!currentStartDate || !currentEndDate) {
+         throw new Error('Rango de fechas actual no definido');
+      }
+      // Filtrar comidas de la semana actual para la plantilla
+      const mealsForTemplate = plannedMeals.filter(meal =>
+        meal.plan_date >= currentStartDate && meal.plan_date <= currentEndDate
+      );
+
+      if (mealsForTemplate.length === 0) {
+        throw new Error('No hay comidas planificadas en la semana actual para guardar como plantilla');
       }
 
       const template = await planningTemplateService.savePlanningTemplate({
         name,
-        meals: currentMeals
+        meals: mealsForTemplate
+        // startDate no es parte de SaveTemplateData
       });
 
       set(state => ({
@@ -429,41 +470,42 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     }
   },
 
-  applyTemplateToCurrentWeek: async (templateId, startDate) => {
-    set({ isLoading: true, error: null });
+  applyTemplateToCurrentWeek: async (templateId: string, startDate: string) => {
+    set({ isLoading: true, error: null }); // Usar isLoading general
     try {
       const template = await planningTemplateService.loadPlanningTemplate(templateId);
-      const adjustedMeals = template.template_data.meals.map(templateMeal => {
-        const dayOffset = templateMeal.day_index;
-        const mealDate = new Date(startDate);
+      const addPromises: Promise<PlannedMeal | null>[] = [];
+
+      template.template_data.meals.forEach(templateMeal => {
+        const dayOffset = templateMeal.day_index; // Asumiendo que day_index existe
+        const mealDate = new Date(startDate + 'T00:00:00'); // Usar fecha de inicio proporcionada
         mealDate.setDate(mealDate.getDate() + dayOffset);
 
         const mealData: UpsertPlannedMealData = {
-          plan_date: mealDate.toISOString().split('T')[0],
+          plan_date: format(mealDate, 'yyyy-MM-dd'), // Formatear fecha
           meal_type: templateMeal.meal_type,
           recipe_id: templateMeal.recipe_id || null,
-          custom_meal_name: templateMeal.custom_meal_name || null
+          custom_meal_name: templateMeal.custom_meal_name || null,
+          notes: templateMeal.notes || null
         };
-
-        return mealData;
+        addPromises.push(get().addPlannedMeal(mealData));
       });
 
-      for (const mealData of adjustedMeals) {
-        await get().addPlannedMeal(mealData);
-      }
+      await Promise.all(addPromises);
+      // No es necesario recargar, addPlannedMeal actualiza el estado
 
       toast.success('Plantilla aplicada con éxito');
     } catch (error) {
       console.error('Error al aplicar plantilla:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al aplicar plantilla';
-      set({ error: errorMessage, isLoading: false });
+      set({ error: errorMessage });
       toast.error(errorMessage);
     } finally {
-      set({ isLoading: false });
+      set({ isLoading: false }); // Quitar isLoading general
     }
   },
 
-  deleteTemplate: async (templateId) => {
+  deleteTemplate: async (templateId: string) => {
     set({ isLoadingTemplates: true, templateError: null });
     try {
       await planningTemplateService.deletePlanningTemplate(templateId);
@@ -482,77 +524,87 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   // Acciones para sugerencias
   fetchSuggestions: async (date: string, mealType: MealType) => {
-    set({ isLoadingSuggestions: true, currentSuggestions: null });
+    set({ isLoadingSuggestions: true, pantrySuggestion: null, discoverySuggestion: null });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuario no autenticado');
 
-      // 1. Obtener items de despensa
-      const { data: pantryItems } = await supabase
-        .from('pantry_items')
-        .select(`
-          ingredient_id,
-          ingredients:ingredients (
-            name
-          )
-        `)
-        .eq('user_id', user.id) as {
-          data: Array<{
-            ingredient_id: string;
-            ingredients: { name: string } | null;
-          }> | null;
-        };
-
-      // 2. Obtener recetas favoritas
-      const { data: favoriteRecipes } = await supabase
-        .from('recipes')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('is_favorite', true);
-
-      // 3. Obtener historial simplificado (TODO: implementar tabla de historial)
-      const historyMock: Array<{ recipe_id: string; count: number }> = []; // Por ahora vacío hasta implementar historial
-
-      const suggestions = await getSuggestions({
+      // Obtener datos necesarios para el contexto
+      const pantryItems = usePantryStore.getState().items;
+      const favoriteRecipeIds = useRecipeStore.getState().recipes
+                                  .filter(r => r.is_favorite)
+                                  .map(r => r.id);
+      // TODO: Obtener historial de planificación real. Usar datos dummy por ahora.
+      const planningHistory: Array<{ recipe_id: string; count: number }> = []; // Placeholder
+  
+      console.log('[fetchSuggestions] Context data:', {
+         pantryItemsCount: pantryItems.length,
+         favoritesCount: favoriteRecipeIds.length,
+         historyCount: planningHistory.length
+      });
+  
+      // Construir el contexto completo
+      const context = {
         date,
         mealType,
         userId: user.id,
-        currentPantryItems: pantryItems?.map(item => ({
-          ingredient_id: item.ingredient_id,
-          name: item.ingredients?.name ?? 'Ingrediente sin nombre'
-        })) || [],
-        favoriteRecipeIds: favoriteRecipes?.map(r => r.id) || [],
-        planningHistory: historyMock
-      });
+        currentPantryItems: pantryItems.map(item => ({ // Mapear al formato esperado
+            ingredient_id: item.ingredient_id,
+            name: item.ingredient?.name || 'Desconocido' // CORREGIDO: usar item.ingredient?.name
+        })),
+        favoriteRecipeIds,
+        planningHistory, // Usar placeholder por ahora
+      };
+  
+      // Llamar al servicio con el contexto completo
+      const response = await getSuggestions(context);
 
-      set({ currentSuggestions: suggestions, isLoadingSuggestions: false });
+      set({
+        pantrySuggestion: response.pantrySuggestion || null,
+        discoverySuggestion: response.discoverySuggestion || null,
+        isLoadingSuggestions: false
+      });
     } catch (error) {
       console.error('Error fetching suggestions:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error al obtener sugerencias';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch suggestions';
+      set({ isLoadingSuggestions: false, pantrySuggestion: null, discoverySuggestion: null, error: errorMessage }); // Guardar error
       toast.error(errorMessage);
-      set({ isLoadingSuggestions: false, currentSuggestions: null });
     }
   },
 
   clearSuggestions: () => {
-    set({ currentSuggestions: null });
+    set({
+      pantrySuggestion: null,
+      discoverySuggestion: null
+    });
   },
 
   clearWeek: async (startDate: string, endDate: string) => {
-   set({ isLoading: true, error: null });
-   try {
-     await planningService.deletePlannedMealsInRange(startDate, endDate);
-     // Recargar las comidas de la semana actual para reflejar los cambios
-     await get().loadPlannedMeals(startDate, endDate);
-     toast.success("Semana limpiada con éxito");
+    const originalMeals = get().plannedMeals;
+    set({ isLoading: true, error: null });
+
+    // Optimistic update: Remove meals from local state immediately
+    set((state) => ({
+      plannedMeals: state.plannedMeals.filter(meal =>
+        meal.plan_date < startDate || meal.plan_date > endDate
+      ),
+    }));
+
+    try {
+      console.log(`[PlanningStore] Clearing week from ${startDate} to ${endDate}`);
+      // Call the service to delete meals in the backend
+      await planningService.deletePlannedMealsInRange(startDate, endDate);
+      toast.success('Planificación semanal limpiada con éxito.');
+      // No need to reload, state is already updated optimistically
    } catch (error) {
      console.error('Error clearing week:', error);
      const errorMessage = error instanceof Error ? error.message : 'Error al limpiar la semana';
-     set({ error: errorMessage, isLoading: false });
+     // Revert optimistic update on error
+     set({ plannedMeals: originalMeals, error: errorMessage });
      toast.error(errorMessage);
    } finally {
      set({ isLoading: false }); // Asegurar que isLoading se ponga en false
    }
- }
+  },
 
 }));

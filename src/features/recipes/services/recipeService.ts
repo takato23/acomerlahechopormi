@@ -3,9 +3,11 @@ import { supabase } from '../../../lib/supabaseClient'; // Corregir ruta relativ
 import type { Recipe, RecipeIngredient } from '../../../types/recipeTypes'; // Corregir ruta relativa
 import { findOrCreateIngredient } from '../../ingredients/ingredientService'; // Importar servicio de ingredientes
 
-export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients'> & {
-  user_id: string;
+// Añadir isBaseRecipe al tipo de entrada
+export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients' | 'is_generated_base'> & {
+  user_id?: string | null; // Hacer user_id opcional aquí también
   ingredients: Array<{ name: string; quantity: string | number | null; unit?: string | null }>;
+  isBaseRecipe?: boolean; // Flag para indicar si es receta base generada
 };
 
 // Importar tipo de filtros
@@ -224,12 +226,14 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
 export const addRecipe = async (recipeData: RecipeInputData): Promise<Recipe> => { // Cambiar tipo de retorno a Recipe completo
   console.log("Guardando receta:", recipeData);
 
-  if (!recipeData.title || !recipeData.user_id) {
-    throw new Error("El título y el ID de usuario son obligatorios.");
+  // Validar: Se necesita título. Se necesita user_id a menos que sea isBaseRecipe
+  if (!recipeData.title || (!recipeData.user_id && !recipeData.isBaseRecipe)) {
+    throw new Error("El título es obligatorio. Se requiere user_id si no es una receta base.");
   }
 
+  // Construir el objeto a insertar basado en si es base o no
   const recipeToInsert = {
-    user_id: recipeData.user_id,
+    user_id: recipeData.isBaseRecipe ? null : recipeData.user_id, // Null si es base
     title: recipeData.title,
     description: recipeData.description,
     instructions: Array.isArray(recipeData.instructions)
@@ -238,8 +242,9 @@ export const addRecipe = async (recipeData: RecipeInputData): Promise<Recipe> =>
     prep_time_minutes: recipeData.prep_time_minutes,
     cook_time_minutes: recipeData.cook_time_minutes,
     servings: recipeData.servings,
-    // image_url se añadirá después de llamar a la Edge Function
-    // tags: recipeData.tags, // Asumiendo que no viene de RecipeInputData por ahora
+    is_generated_base: recipeData.isBaseRecipe || false, // Establecer el flag
+    is_favorite: false, // Las recetas base no son favoritas por defecto
+    // image_url se añadirá después
   };
 
   const { data: newRecipe, error: recipeError } = await supabase

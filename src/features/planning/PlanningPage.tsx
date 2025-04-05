@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
 import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
-import { AutocompleteConfigDialog } from './components/AutocompleteConfigDialog';
+import { AutocompleteConfigDialog, AutocompleteConfig } from './components/AutocompleteConfigDialog'; // Importar AutocompleteConfig
 import { PlannedMealWithRecipe } from './components/MealCard';
 import type { Recipe } from '@/types/recipeTypes';
 // Importar stores
-import { usePlanningStore } from '@/stores/planningStore';
+import { usePlanningStore, AutocompleteMode } from '@/stores/planningStore';
 import { Calendar, Copy, Eraser } from 'lucide-react';
 import { useRecipeStore } from '@/stores/recipeStore';
 import {
@@ -324,6 +324,15 @@ const PlanningPage: React.FC = (): JSX.Element => {
     }
   };
 
+  const handleAutocompleteConfirm = (config: AutocompleteConfig) => { // Aceptar config
+    const startDateStr = format(weekStart, 'yyyy-MM-dd');
+    const endDateStr = format(weekEnd, 'yyyy-MM-dd');
+    console.log(`[PlanningPage] Autocompleting week ${startDateStr} to ${endDateStr} with config:`, config);
+    // Llamar a la función del store con la configuración completa
+    usePlanningStore.getState().handleAutocompleteWeek(startDateStr, endDateStr, config); // Pasar config completo
+    handleCloseAutocomplete(); // Cerrar el diálogo después de confirmar
+  };
+
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const selectedDayMeals = mealsByDay[selectedDateStr] || {};
 
@@ -544,8 +553,8 @@ const PlanningPage: React.FC = (): JSX.Element => {
       <AutocompleteConfigDialog
         isOpen={showAutocompleteConfig}
         onClose={handleCloseAutocomplete}
-        onConfirm={usePlanningStore.getState().handleAutocompleteWeek}
-        isLoading={usePlanningStore.getState().isAutocompleting}
+        onConfirm={handleAutocompleteConfirm}
+        isProcessing={usePlanningStore.getState().isAutocompleting} // Usar isProcessing
       />
     </div>
   );

@@ -14,9 +14,17 @@ const buildRecipePrompt = (
   pantryIngredients: string[],
   preferences?: Partial<UserProfile>,
   requestContext?: string, // Ej. "para la cena del lunes", "una opción diferente"
-  mealType?: string // Añadir mealType como parámetro opcional
+  mealType?: string, // Añadir mealType como parámetro opcional
+  mode: 'optimize' | 'flexible' = 'flexible' // Añadir modo con valor por defecto
 ): string => {
-  let prompt = `Genera una receta de cocina creativa. **Inspírate** en los siguientes ingredientes que tengo disponibles: ${pantryIngredients.join(', ')}, pero **no te limites estrictamente** a ellos. `;
+  let prompt = '';
+  const ingredientsList = pantryIngredients.length > 0 ? pantryIngredients.join(', ') : 'ninguno especificado';
+
+  if (mode === 'optimize') {
+    prompt = `Genera una receta de cocina utilizando **estrictamente y únicamente** los siguientes ingredientes disponibles: ${ingredientsList}. **No uses ningún otro ingrediente que no esté en esta lista.** Si no es posible crear una receta coherente solo con estos ingredientes, indica que no es posible en lugar de inventar una receta con otros. `;
+  } else { // mode === 'flexible'
+    prompt = `Genera una receta de cocina creativa. **Inspírate** en los siguientes ingredientes que tengo disponibles: ${ingredientsList}, pero **no te limites estrictamente** a ellos si necesitas otros ingredientes comunes para completar la receta. `;
+  }
 
   if (requestContext) {
     prompt += `Contexto adicional: ${requestContext}. `;
@@ -435,7 +443,8 @@ export const generateRecipesFromPantry = async (count: number, userId: string): 
 export const generateRecipeForSlot = async (
   userId: string,
   mealType: string, // Usar string genérico por si acaso
-  context: string
+  context: string,
+  mode: 'optimize' | 'flexible' // Añadir parámetro mode
 ): Promise<GeneratedRecipeData | { error: string }> => {
   console.log(`[generateRecipeForSlot] Iniciando generación para usuario ${userId}, Slot: ${context}, MealType: ${mealType}`);
 
@@ -488,7 +497,8 @@ export const generateRecipeForSlot = async (
     pantryIngredientNames,
     userPreferences ?? undefined,
     context, // Usar el contexto proporcionado (ej. "Receta para lunes - Desayuno")
-    mealType // Pasar el tipo de comida explícitamente
+    mealType, // Pasar el tipo de comida explícitamente
+    mode // Pasar el modo
   );
 
   // 4. Llamar a la API

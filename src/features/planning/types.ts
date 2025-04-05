@@ -12,6 +12,7 @@ export interface PlannedMeal {
   recipe_id: string | null; // UUID de la receta (si aplica)
   custom_meal_name: string | null; // Texto libre (si no es receta)
   created_at: string; // Timestamp
+  notes?: string | null; // Añadido para consistencia con Upsert y plantillas
 
   // Opcional: Incluir datos de la receta si se hace JOIN
   recipes?: {
@@ -65,6 +66,7 @@ export interface TemplateMeal {
   meal_type: MealType;
   recipe_id?: string | null;
   custom_meal_name?: string | null;
+  notes?: string | null; // Añadido para guardar/restaurar notas en plantillas
 }
 
 export interface SaveTemplateData {

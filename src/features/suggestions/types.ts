@@ -21,3 +21,26 @@ export interface Suggestion {
   title: string;
   reason?: string;
 }
+
+export interface SuggestionResponse {
+  pantrySuggestion?: Suggestion;
+  discoverySuggestion?: Suggestion;
+  pendingShoppingListCheck?: {
+    recipeId: string;
+    ingredientsCount: number;
+  };
+}
+
+export interface IngredientMatch {
+  matched: boolean;
+  reason?: string;
+  missingQuantity?: number;
+  unit?: string;
+}
+
+export interface MissingIngredient {
+  name: string;
+  quantity: number;
+  unit: string;
+  recipeId?: string;
+}

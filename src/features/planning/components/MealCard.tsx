@@ -3,7 +3,7 @@ import type { PlannedMeal, MealType, UpsertPlannedMealData } from '../types';
 import type { Recipe, RecipeIngredient } from '@/types/recipeTypes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, Pencil, Eye, BookOpen, Copy, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, BookOpen, Copy, AlertTriangle, MoreHorizontal } from 'lucide-react';
 import { usePlanningStore } from '@/stores/planningStore';
 import { usePantryStore } from '@/stores/pantryStore';
 import { calculateMissingRecipeIngredients } from '@/features/shopping-list/services/shoppingListService';
@@ -15,6 +15,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { RecipePreviewDialog } from './RecipePreviewDialog';
@@ -164,100 +170,104 @@ export function MealCard({
                   <div key={meal.id} className="relative group bg-background/60 rounded border border-transparent hover:bg-background/80 hover:border-border/20 transition-colors">
                     {/* Contenido principal de la comida */}
                     <div className="px-1.5 py-1 text-left">
-                      <div className="flex items-center gap-1.5 pr-10">
+                      <div className="flex items-center gap-1.5"> {/* Contenedor principal: Icono, Título, Ver, Más */}
                          {meal.recipe_id && <BookOpen className="h-3 w-3 text-muted-foreground flex-shrink-0" aria-hidden="true" />}
-                         <p className="text-xs text-foreground line-clamp-1 flex-grow">
-                           {meal.recipes?.title || meal.custom_meal_name || 'Comida'}
-                         </p>
-                         {meal.recipe_id && (
-                           <>
-                             {ingredientStatus[meal.id]?.loading ? (
-                               <div className="h-3 w-3 animate-pulse bg-muted-foreground/30 rounded-full" />
-                             ) : ingredientStatus[meal.id]?.hasMissingIngredients ? (
-                               <TooltipProvider>
-                                 <Tooltip delayDuration={300}>
-                                   <TooltipTrigger asChild>
-                                     <div className="inline-flex">
-                                       <AlertTriangle
-                                         className="h-3 w-3 text-warning flex-shrink-0 cursor-help"
-                                         aria-label="Faltan ingredientes"
-                                       />
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent side="top" align="center">
-                                     <p className="text-xs">
-                                       Faltan ingredientes en la despensa para esta receta
-                                     </p>
-                                   </TooltipContent>
-                                 </Tooltip>
-                               </TooltipProvider>
-                             ) : null}
-                           </>
+                         <TooltipProvider delayDuration={300}>
+                           <Tooltip>
+                             <TooltipTrigger asChild>
+                               <p className="text-xs text-foreground line-clamp-1 leading-snug py-0.5 flex-grow min-w-0 cursor-help"> {/* Título limpio */}
+                                 {meal.recipes?.title || meal.custom_meal_name || 'Comida'}
+                               </p>
+                             </TooltipTrigger>
+                             <TooltipContent side="top" align="start">
+                               <p>{meal.recipes?.title || meal.custom_meal_name || 'Comida'}</p> {/* Título completo */}
+                             </TooltipContent>
+                           </Tooltip>
+                         </TooltipProvider>
+                         {/* Indicador de ingredientes faltantes (si aplica) */}
+                         {meal.recipe_id && ingredientStatus[meal.id]?.hasMissingIngredients && (
+                           <TooltipProvider>
+                             <Tooltip delayDuration={300}>
+                               <TooltipTrigger asChild>
+                                 <div className="inline-flex flex-shrink-0"> {/* Evita que se encoja */}
+                                   <AlertTriangle
+                                     className="h-3 w-3 text-warning cursor-help"
+                                     aria-label="Faltan ingredientes"
+                                   />
+                                 </div>
+                               </TooltipTrigger>
+                               <TooltipContent side="top" align="center">
+                                 <p className="text-xs">Faltan ingredientes</p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </TooltipProvider>
                          )}
+
+                         {/* Botón Ver (siempre visible) */}
                          {meal.recipe_id && (
-                           <Button
-                             variant="ghost"
-                             size="icon"
-                             className="h-5 w-5 text-muted-foreground hover:text-primary z-10"
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               setSelectedRecipe({
-                                 id: meal.recipe_id!,
-                                 recipe: meal.recipes as {
-                                   id: string;
-                                   title: string;
-                                   description: string | null;
-                                   image_url: string | null;
+                           <TooltipProvider delayDuration={300}>
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <Button
+                                   variant="ghost"
+                                   size="icon"
+                                   className="h-5 w-5 flex-shrink-0 text-muted-foreground hover:text-primary"
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setSelectedRecipe({
+                                       id: meal.recipe_id!,
+                                       recipe: meal.recipes as any // Simplificado para el ejemplo
+                                     });
+                                   }}
+                                   aria-label="Ver receta"
+                                 >
+                                   <Eye className="w-3.5 h-3.5" />
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent side="top" align="center">
+                                 <p>Ver Receta</p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </TooltipProvider>
+                         )}
+
+                         {/* Botón Más Opciones (...) */}
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button
+                               variant="ghost"
+                               size="icon"
+                               className="h-5 w-5 flex-shrink-0 text-muted-foreground hover:text-primary"
+                               aria-label="Más opciones"
+                               onClick={(e) => e.stopPropagation()} // Evitar que el clic en el trigger active otros eventos
+                             >
+                               <MoreHorizontal className="w-3.5 h-3.5" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}> {/* Evitar cierre al hacer clic dentro y añadir tipo */}
+                             {onCopyClick && (
+                               <DropdownMenuItem onSelect={() => onCopyClick(meal)}>
+                                 <Copy className="mr-2 h-3.5 w-3.5" /> Copiar
+                               </DropdownMenuItem>
+                             )}
+                             <DropdownMenuItem onSelect={() => onEditClick(meal)}>
+                               <Pencil className="mr-2 h-3.5 w-3.5" /> Editar
+                             </DropdownMenuItem>
+                             <DropdownMenuItem
+                               className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                               onSelect={() => {
+                                 if (window.confirm('¿Eliminar esta comida planificada?')) {
+                                   onDeleteClick(meal.id);
                                  }
-                               });
-                             }}
-                             aria-label="Ver receta"
-                           >
-                             <Eye className="h-3 w-3" />
-                           </Button>
-                         )}
+                               }}
+                             >
+                               <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
+                             </DropdownMenuItem>
+                           </DropdownMenuContent>
+                         </DropdownMenu>
                       </div>
                     </div>
-                    {/* Botones de acción */}
-                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
-                       <Button
-                         variant="ghost"
-                         size="icon"
-                         className="h-5 w-5 hover:bg-background/80 text-muted-foreground hover:text-primary"
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           if (onCopyClick) {
-                             onCopyClick(meal);
-                           }
-                         }}
-                         aria-label="Copiar comida"
-                       >
-                         <Copy className="w-3 h-3"/>
-                       </Button>
-                       <Button
-                         variant="ghost"
-                         size="icon"
-                         className="h-5 w-5 hover:bg-background/80 text-muted-foreground hover:text-primary"
-                         onClick={(e) => { e.stopPropagation(); onEditClick(meal); }}
-                         aria-label="Editar comida"
-                       >
-                         <Pencil className="w-3 h-3"/>
-                       </Button>
-                       <Button
-                         variant="ghost"
-                         size="icon"
-                         className="h-5 w-5 hover:bg-background/80 text-muted-foreground hover:text-destructive"
-                         onClick={(e: React.MouseEvent) => {
-                           e.stopPropagation();
-                           if (window.confirm('¿Eliminar esta comida planificada?')) {
-                             onDeleteClick(meal.id);
-                           }
-                         }}
-                         aria-label="Eliminar comida"
-                       >
-                         <Trash2 className="h-3 w-3" />
-                       </Button>
-                     </div>
+                    {/* Contenedor de botones antiguo eliminado */}
                   </div>
                 );
               })
