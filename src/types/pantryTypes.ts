@@ -1,16 +1,18 @@
-import { Database } from '@/lib/database.types'; // Corregir ruta de importación
+// import { Database } from '@/lib/database.types'; // Comentado temporalmente
 
 // Usar el tipo generado por Supabase para PantryItem si está disponible y es adecuado
 // o definir uno manualmente si es necesario mayor control o personalización.
 
-// Opción 1: Usar tipo inferido de Supabase (preferido si coincide)
+// Opción 1: Usar tipo inferido de Supabase (Comentado temporalmente hasta regenerar tipos)
+/*
 export type PantryItem = Database['public']['Tables']['pantry_items']['Row'] & {
   // Añadir relaciones explícitas si no están en el tipo base o son necesarias
   ingredients?: Database['public']['Tables']['ingredients']['Row'] | null;
+  // expiry_date?: string | null; // Añadir manualmente si no se regenera
 };
+*/
 
-// Opción 2: Definición manual (si el tipo de Supabase no es suficiente o claro)
-/*
+// Opción 2: Definición manual (Usaremos esta temporalmente)
 export interface PantryItem {
   id: string;
   user_id: string;
@@ -32,17 +34,16 @@ export interface PantryItem {
       name: string;
       // otros campos de ingredients...
   } | null;
+  // expiry_date ya está definido arriba (línea 25)
 }
-*/
 
 // Tipo para crear un nuevo ítem (puede ser más simple)
-export type NewPantryItem = Omit<PantryItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'ingredients'> & {
-    // Campos requeridos/opcionales para la creación
-    ingredient_id?: string | null; // Hacer opcional si se permite crear sin enlazar
+// Ajustar NewPantryItem para incluir expiry_date y basarse en la interfaz manual
+export type NewPantryItem = Omit<PantryItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'ingredients' | 'category'> & {
     name: string; // Requerido al crear
-    quantity: number | null;
-    unit?: string | null;
+    // expiry_date es opcional y ya está en PantryItem
 };
 
 // Tipo para actualizar un ítem
-export type UpdatePantryItem = Partial<Omit<PantryItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'ingredients'>>;
+// Ajustar UpdatePantryItem para basarse en la interfaz manual
+export type UpdatePantryItem = Partial<Omit<PantryItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'ingredients' | 'category'>>;

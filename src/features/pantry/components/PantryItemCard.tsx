@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
+import { differenceInDays, format, parseISO, isToday, isTomorrow } from 'date-fns'; // Importar funciones de date-fns
+import { es } from 'date-fns/locale'; // Importar locale español
 import { PantryItem } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Importar CardFooter
 import { Button } from '@/components/ui/button';
@@ -175,7 +177,7 @@ export function PantryItemCard({
               <span className="text-muted-foreground">{item.unit || ''}</span>
             </div>
             {item.expiry_date && (
-              <p className="text-xs text-muted-foreground">Vence: {item.expiry_date}</p>
+              <ExpiryDateDisplay expiryDate={item.expiry_date} />
             )}
           </div>
         </CardContent>
@@ -205,3 +207,44 @@ export function PantryItemCard({
     </TooltipProvider>
   );
 }
+
+// Componente auxiliar para mostrar la fecha de vencimiento con formato y color
+const ExpiryDateDisplay: React.FC<{ expiryDate: string }> = ({ expiryDate }) => {
+  try {
+    const date = parseISO(expiryDate); // Parsea la fecha ISO (YYYY-MM-DD)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Ignorar la hora para la comparación de días
+    const daysUntilExpiry = differenceInDays(date, today);
+
+    let text = '';
+    let colorClass = 'text-muted-foreground'; // Color por defecto
+
+    if (daysUntilExpiry < 0) {
+      text = `Venció hace ${Math.abs(daysUntilExpiry)} día(s)`;
+      colorClass = 'text-red-600 dark:text-red-500 font-medium'; // Rojo fuerte
+    } else if (daysUntilExpiry === 0 || isToday(date)) {
+      text = 'Vence Hoy';
+      colorClass = 'text-red-600 dark:text-red-500 font-medium'; // Rojo fuerte
+    } else if (daysUntilExpiry === 1 || isTomorrow(date)) {
+      text = 'Vence Mañana';
+      colorClass = 'text-orange-500 dark:text-orange-400 font-medium'; // Naranja
+    } else if (daysUntilExpiry <= 7) {
+      text = `Vence en ${daysUntilExpiry} días`;
+      colorClass = 'text-yellow-600 dark:text-yellow-500'; // Amarillo
+    } else {
+      // Formato normal para fechas más lejanas
+      text = `Vence: ${format(date, 'dd/MM/yy', { locale: es })}`;
+      // colorClass se mantiene como muted-foreground
+    }
+
+    return (
+      <p className={cn("text-xs", colorClass)}>
+        {text}
+      </p>
+    );
+  } catch (error) {
+    console.error("Error parsing expiry date:", expiryDate, error);
+    // Mostrar la fecha original si hay error al parsear
+    return <p className="text-xs text-muted-foreground">Vence: {expiryDate}</p>;
+  }
+};

@@ -20,12 +20,14 @@ interface PantryState {
   isLoadingLowStock: boolean;
   error: string | null;
   errorLowStock: string | null;
+  filterExpiryDays: number | null; // Nuevo estado para filtro de vencimiento
   fetchItems: () => Promise<void>;
   fetchLowStockItems: (threshold?: number) => Promise<void>;
   addItem: (itemData: CreatePantryItemData) => Promise<PantryItem | null>;
   updateItem: (itemId: string, updates: UpdatePantryItemData) => Promise<PantryItem | null>;
   deleteItem: (itemId: string) => Promise<boolean>;
-  toggleFavorite: (itemId: string) => Promise<void>; // Nueva acción
+  toggleFavorite: (itemId: string) => Promise<void>;
+  setExpiryFilter: (days: number | null) => void; // Nueva acción para filtro
 }
 
 /**
@@ -38,6 +40,7 @@ export const usePantryStore = create<PantryState>((set, get) => ({
   isLoadingLowStock: false,
   error: null,
   errorLowStock: null,
+  filterExpiryDays: null, // Valor inicial del filtro
 
   fetchItems: async () => {
     if (get().isLoading) return;
@@ -59,12 +62,15 @@ export const usePantryStore = create<PantryState>((set, get) => ({
       return Promise.resolve();
   },
 
+  // addItem ya debería pasar expiry_date si está en CreatePantryItemData
+  // y addItemService lo maneja (verificamos que sí lo hace)
   addItem: async (itemData) => {
     try {
+      // Asegurarse de que expiry_date se pasa (ya está en CreatePantryItemData)
       const newItem = await addItemService(itemData);
-      if (!newItem) throw new Error("Failed to add item"); // Manejar caso null
+      if (!newItem) throw new Error("Failed to add item");
       set((state) => ({
-        items: [newItem, ...state.items].sort((a, b) => // Mantener ordenado si es necesario
+        items: [newItem, ...state.items].sort((a, b) =>
            new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
         )
       }));
@@ -75,21 +81,24 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }
   },
 
+  // updateItem ya debería pasar expiry_date si está en UpdatePantryItemData
+  // y updateItemService lo maneja (verificamos que sí lo hace)
   updateItem: async (itemId, updates) => {
      const originalItems = get().items;
      const itemIndex = originalItems.findIndex(i => i.id === itemId);
-     if (itemIndex === -1) return null; // Item no encontrado
+     if (itemIndex === -1) return null;
 
-     // Optimistic update
+     // Optimistic update (asegurarse que expiry_date se incluya si viene en updates)
      const updatedOptimisticItem = { ...originalItems[itemIndex], ...updates };
      set((state) => ({
        items: state.items.map(i => i.id === itemId ? updatedOptimisticItem : i)
      }));
 
      try {
+      // updates ya contiene expiry_date si se pasó desde la UI
       const updatedItem = await updateItemService(itemId, updates);
-      if (!updatedItem) throw new Error("Update failed on server"); // Manejar caso null
-      // Re-sincronizar con la respuesta del servidor
+      if (!updatedItem) throw new Error("Update failed on server");
+      // Re-sincronizar
       set((state) => ({
         items: state.items.map(i => i.id === itemId ? updatedItem : i)
       }));
@@ -153,5 +162,13 @@ export const usePantryStore = create<PantryState>((set, get) => ({
       // Opcional: Lanzar el error o mostrar un toast
       // throw error;
     }
+  },
+
+  // Acción para actualizar el filtro de vencimiento
+  setExpiryFilter: (days: number | null) => {
+    set({ filterExpiryDays: days });
+    // Opcional: Podríamos re-filtrar los items aquí o dejar que el componente
+    // que usa los items reaccione a este cambio y filtre.
+    // Por simplicidad, dejaremos que el componente filtre.
   },
 }));
