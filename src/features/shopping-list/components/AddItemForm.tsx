@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -12,6 +12,9 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import type { Category } from '@/types/categoryTypes';
+import VoiceInput from '@/features/pantry/components/voice/VoiceInput';
+import { toast } from 'sonner';
+import { getCategoryForItem } from '../utils/categorization';
 
 interface AddItemFormProps {
   onAddItem: (parsedItem: ParsedShoppingInput & { categoryId?: string | null }) => Promise<boolean>;
@@ -35,8 +38,9 @@ export function AddItemForm({
   const itemName = isControlled ? currentSearchTerm : internalItemName;
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [localIsAdding, setLocalIsAdding] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   
-  const adding = isAdding || localIsAdding;
+  const adding = isAdding || localIsAdding || isProcessingVoice;
 
   useEffect(() => {
     if (isControlled && !itemName) {
@@ -52,6 +56,7 @@ export function AddItemForm({
     if (onSearchChange) {
       onSearchChange(newValue);
     }
+    setSelectedCategoryId(null);
   };
 
   const handleCategoryChange = (value: string) => {
@@ -67,20 +72,26 @@ export function AddItemForm({
     
     try {
       const parsedInput = parseShoppingInput(trimmedName); 
+      
+      let finalCategoryId = selectedCategoryId;
+      if (!finalCategoryId && parsedInput.name) {
+           const autoCategory = getCategoryForItem(parsedInput.name);
+           const matchedCategory = availableCategories.find(cat => cat.name.toLowerCase() === autoCategory?.toLowerCase());
+           if (matchedCategory) {
+              finalCategoryId = matchedCategory.id;
+              console.log(`[AddItemForm] Auto-categoría asignada: ${matchedCategory.name} (ID: ${finalCategoryId})`);
+           } else if (autoCategory) {
+             console.log(`[AddItemForm] Auto-categoría detectada (${autoCategory}) pero no encontrada en disponibles.`);
+           }
+      }
+
       const success = await onAddItem({ 
         ...parsedInput, 
-        categoryId: selectedCategoryId 
+        categoryId: finalCategoryId
       }); 
       
       if (success) {
-        // Si la adición fue exitosa, el padre (ShoppingListPage)
-        // limpiará el searchTerm, lo que debería resetear 
-        // selectedCategoryId a través del useEffect.
-        // Si no fuera controlado, limpiaríamos aquí:
-        // if (!isControlled) { 
-        //    setInternalItemName(''); 
-        //    setSelectedCategoryId(null); 
-        // }
+        toast.success(`\"${parsedInput.name || trimmedName}\" añadido.`);
       } else {
         console.error("[AddItemForm] onAddItem reported failure.");
       }
@@ -92,6 +103,50 @@ export function AddItemForm({
     }
   };
 
+  const handleVoiceTranscript = async (text: string) => {
+    if (!text || adding) return;
+
+    setIsProcessingVoice(true);
+    setInternalItemName(text);
+    if (onSearchChange) onSearchChange(text);
+    setSelectedCategoryId(null);
+
+    console.log(`[AddItemForm] Processing voice input: \"${text}\"`);
+
+    try {
+        const parsedInput = parseShoppingInput(text);
+        
+        let finalCategoryId: string | null = null;
+        if (parsedInput.name) {
+           const autoCategory = getCategoryForItem(parsedInput.name);
+           const matchedCategory = availableCategories.find(cat => cat.name.toLowerCase() === autoCategory?.toLowerCase());
+           if (matchedCategory) {
+              finalCategoryId = matchedCategory.id;
+              console.log(`[AddItemForm][Voice] Auto-categoría asignada: ${matchedCategory.name} (ID: ${finalCategoryId})`);
+           } else if(autoCategory) {
+              console.log(`[AddItemForm][Voice] Auto-categoría detectada (${autoCategory}) pero no encontrada en disponibles.`);
+           }
+        }
+
+        const success = await onAddItem({
+           ...parsedInput,
+           categoryId: finalCategoryId
+        });
+
+        if (success) {
+           toast.success(`\"${parsedInput.name || text}\" añadido por voz.`);
+        } else {
+           toast.error(`Error al añadir \"${parsedInput.name || text}\" por voz.`);
+           console.error("[AddItemForm][Voice] onAddItem reported failure.");
+        }
+    } catch (error) {
+       console.error("[AddItemForm] Error processing voice input:", error);
+       toast.error("Error al procesar la entrada de voz.");
+    } finally {
+       setIsProcessingVoice(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
@@ -99,22 +154,30 @@ export function AddItemForm({
           type="text"
           value={itemName}
           onChange={handleInputChange}
-          placeholder="Añadir o buscar en la lista..."
-          className="flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+          placeholder="Añadir o buscar en la lista... (ej: 2kg Papas)"
+          className="h-10 flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
           disabled={adding}
+          readOnly={isProcessingVoice}
           aria-label="Añadir ítem o buscar en la lista"
         />
+        <Suspense fallback={<Button variant="outline" size="icon" disabled className="h-10 w-10"><Spinner size="sm" /></Button>}>
+           <VoiceInput
+             isLoading={isAdding}
+             isProcessingVoice={isProcessingVoice}
+             onTranscriptReceived={handleVoiceTranscript}
+           />
+        </Suspense>
         <Button
           type="submit"
           disabled={adding || !itemName.trim()}
           size="icon"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          className="h-10 w-10 flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
           aria-label="Añadir ítem a la lista"
         >
-          {adding ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
+          {adding && !isProcessingVoice ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
         </Button>
       </form>
-      {itemName.trim() && ( 
+      {itemName.trim() && !isProcessingVoice && ( 
          <div className="flex items-center gap-2 pl-1">
            <span className="text-xs text-slate-500">Categoría:</span>
            <Select 

@@ -10,12 +10,18 @@ import {
 import type { Database } from '@/lib/database.types'; // Importar tipos generados
 import { addShoppingItemViaEdgeFunction, ShoppingItemPayload } from '@/features/shopping-list/services/shoppingListEdgeFunctions';
 import { ShoppingListItem } from '@/types/shoppingListTypes';
-import { getCategoryForItem } from '@/features/shopping-list/utils/categorization'; // <-- Importar la nueva utilidad
+import { getCategoryForItem, getDisplayCategory } from '../features/shopping-list/utils/categorization';
 
 // Tipos correctos basados en los generados
-type DBShoppingListItemRow = Database['public']['Tables']['shopping_list_items']['Row'];
-type DBShoppingListItemInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
-type DBShoppingListItemUpdate = Database['public']['Tables']['shopping_list_items']['Update'];
+type DBShoppingListItemRow = Database['public']['Tables']['shopping_list_items']['Row'] & {
+  brand?: string | null; // <-- AÑADIR MARCA OPCIONAL
+};
+type DBShoppingListItemInsert = Database['public']['Tables']['shopping_list_items']['Insert'] & {
+  brand?: string | null; // <-- AÑADIR MARCA OPCIONAL
+};
+type DBShoppingListItemUpdate = Database['public']['Tables']['shopping_list_items']['Update'] & {
+  brand?: string | null; // <-- AÑADIR MARCA OPCIONAL
+};
 
 // Interfaz para el estado del store
 interface ShoppingListState {

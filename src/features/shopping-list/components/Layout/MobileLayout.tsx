@@ -14,7 +14,7 @@ export function MobileLayout({ shoppingList, map }: MobileLayoutProps) {
   return (
     <div className="flex flex-col h-full p-2 gap-2"> {/* Padding más pequeño, flex-col */}
       {/* Contenido Principal: Lista */}
-      <div className="flex-grow overflow-hidden"> {/* Permitir que crezca */}
+      <div className="flex-grow"> {/* Permitir que crezca, sin overflow explícito aquí */}
         {shoppingList} {/* Renderizar shoppingList directamente */}
       </div>
       

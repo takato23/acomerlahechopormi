@@ -323,7 +323,6 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     ? <ShoppingMap
         onToggleFavorite={handleToggleFavoriteStore}
         favoriteStoreIds={favoriteStoreIds}
-        selectedStoreName={selectedStoreName} // <-- PASAR ESTADO AL MAPA
       />
     : <FavoriteStoresInfo
         count={favoriteStoreIds.size}
@@ -474,7 +473,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
       {/* Mostrar resultados de búsqueda de precios (Pasar handler) */}
       {(priceResults !== null) && (
-        <div className="px-4"> 
+        <div className="px-4 flex-shrink-0 max-h-[45vh] overflow-y-auto">
             <PriceResultsDisplay
               results={priceResults}
               itemName={itemForPriceSearch}
@@ -487,9 +486,11 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
        )}
 
       {/* Lista de Compras AGRUPADA */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden m-4 mt-0"> 
-        <CardHeader className="p-4 border-b"> 
-           {/* ... (CardTitle sin cambios) ... */}
+      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col m-4 mt-0"> 
+        <CardHeader className="p-4 border-b flex-shrink-0"> {/* Añadir flex-shrink-0 al header */}
+           <CardTitle className="text-lg font-semibold">
+             Mi Lista de Compras {generatedRange ? formatRange(generatedRange) : ''}
+           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 flex-grow overflow-y-auto"> 
           {isLoading ? (

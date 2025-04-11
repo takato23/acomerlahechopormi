@@ -12,7 +12,7 @@ export function DesktopLayout({ shoppingList, map }: DesktopLayoutProps) {
   return (
     <div className="grid grid-cols-[minmax(450px,_55%)_minmax(350px,_45%)] gap-4 h-full p-4"> {/* 2 columnas */}
       {/* Columna Principal: Lista de Compras (Integrará Add/Search) */}
-      <div className="h-full overflow-hidden">
+      <div className="h-full">
         {shoppingList}
       </div>
 
