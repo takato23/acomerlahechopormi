@@ -116,41 +116,83 @@ export async function updateShoppingListItem(
 }
 
 export async function deleteShoppingListItem(id: string): Promise<void> {
+  console.log(`[shoppingListService] Intentando eliminar item con ID: ${id}`);
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  if (!user) {
+    console.error('[shoppingListService] Usuario no autenticado al eliminar');
+    throw new Error('Usuario no autenticado');
+  }
+  console.log(`[shoppingListService] Eliminando item ${id} para usuario ${user.id}`);
 
-  const { error } = await supabase
-    .from('shopping_list_items')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+  try {
+    const { error } = await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
 
-  if (error) throw error;
+    if (error) {
+      console.error(`[shoppingListService] Error de Supabase al eliminar item ${id}:`, error);
+      throw error;
+    }
+    console.log(`[shoppingListService] Item ${id} eliminado exitosamente.`);
+  } catch (error) {
+    console.error(`[shoppingListService] Error inesperado en deleteShoppingListItem para ${id}:`, error);
+    throw error; // Re-lanzar para que el store lo maneje
+  }
 }
 
 export async function clearPurchasedItems(): Promise<void> {
+  console.log('[shoppingListService] Intentando limpiar items comprados');
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  if (!user) {
+    console.error('[shoppingListService] Usuario no autenticado al limpiar comprados');
+    throw new Error('Usuario no autenticado');
+  }
+  console.log(`[shoppingListService] Limpiando items comprados para usuario ${user.id}`);
 
-  const { error } = await supabase
-    .from('shopping_list_items')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('is_checked', true);
+  try {
+    const { error } = await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('is_checked', true);
 
-  if (error) throw error;
+    if (error) {
+      console.error('[shoppingListService] Error de Supabase al limpiar comprados:', error);
+      throw error;
+    }
+    console.log('[shoppingListService] Items comprados limpiados exitosamente.');
+  } catch (error) {
+    console.error('[shoppingListService] Error inesperado en clearPurchasedItems:', error);
+    throw error;
+  }
 }
 
 export async function clearAllItems(): Promise<void> {
+  console.log('[shoppingListService] Intentando limpiar TODOS los items');
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuario no autenticado');
+  if (!user) {
+    console.error('[shoppingListService] Usuario no autenticado al limpiar todo');
+    throw new Error('Usuario no autenticado');
+  }
+  console.log(`[shoppingListService] Limpiando TODOS los items para usuario ${user.id}`);
 
-  const { error } = await supabase
-    .from('shopping_list_items')
-    .delete()
-    .eq('user_id', user.id);
+  try {
+    const { error } = await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('user_id', user.id);
 
-  if (error) throw error;
+    if (error) {
+      console.error('[shoppingListService] Error de Supabase al limpiar todo:', error);
+      throw error;
+    }
+    console.log('[shoppingListService] TODOS los items limpiados exitosamente.');
+  } catch (error) {
+    console.error('[shoppingListService] Error inesperado en clearAllItems:', error);
+    throw error;
+  }
 }
 
 export function calculateMissingRecipeIngredients(recipe: Recipe, currentItems: ShoppingListItem[]): Partial<ShoppingListItem>[] {

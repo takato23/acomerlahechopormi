@@ -25,6 +25,39 @@ const DEFAULT_SUGGESTIONS: SearchTermRecord[] = [
     { term: "Fideos", frequency: 0, lastUsed: 0 },
 ];
 
+// --- NUEVA FUNCIÓN AUXILIAR ---
+const getStoreNameFromUrl = (urlString: string): string => {
+  if (!urlString || urlString === '#') {
+    return 'Tienda Desconocida';
+  }
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname.toLowerCase();
+
+    if (hostname.includes('jumbo.com')) return 'Jumbo';
+    if (hostname.includes('disco.com')) return 'Disco';
+    if (hostname.includes('carrefour.com') || hostname.includes('carrefourar.')) return 'Carrefour';
+    if (hostname.includes('masonline.com')) return 'MasOnline';
+    if (hostname.includes('farmacity.com')) return 'Farmacity';
+    if (hostname.includes('supermercadosdia.com') || hostname.includes('ardiaprod.')) return 'Dia';
+    // Añadir más mapeos si es necesario
+    
+    // Fallback si no coincide ninguna conocida
+    // Extraer una parte legible del dominio si es posible
+    const domainParts = hostname.replace(/^www\./, '').split('.');
+    if (domainParts.length > 1) {
+        // Capitalizar la primera parte (ej. Coto -> Coto)
+        return domainParts[0].charAt(0).toUpperCase() + domainParts[0].slice(1);
+    }
+
+    return 'Tienda Desconocida'; // Último recurso
+  } catch (error) {
+    console.warn(`[getStoreNameFromUrl] Error parsing URL: ${urlString}`, error);
+    return 'Tienda Desconocida';
+  }
+};
+// --- FIN FUNCIÓN AUXILIAR ---
+
 // Function to search for products with retries and fallback
 export const searchProducts = async (query: string, isRetryAttempt = false): Promise<SearchProductsResult> => {
   console.log(`🔍 Iniciando búsqueda con consulta: "${query}" ${isRetryAttempt ? '(Reintento)' : ''}`);
@@ -162,14 +195,18 @@ const formatProducts = (data: any): BuscaPreciosProduct[] => {
       });
       return true;
     })
-    .map((item: any) => { // Added type annotation
+    .map((item: any) => { 
+      // Extraer URL primero para usarla en la tienda
+      const productUrl = item.link || item.url || '#';
+      
       const formattedProduct = {
         id: item.id || `product-${Math.random().toString(36).substring(2, 9)}`,
         nombre: item.name || item.title || 'Producto sin nombre',
-        precio: typeof item.price === 'string' ? parseFloat(item.price.replace(/[^0-9.-]+/g,"")) : (item.price || 0), // Clean price string
-        imagen: item.image || item.img || item.imagen || '/placeholder.svg', // Use placeholder
-        tienda: item.store || item.tienda || item.comercio || 'Tienda no especificada',
-        url: item.link || item.url || '#'
+        precio: typeof item.price === 'string' ? parseFloat(item.price.replace(/[^0-9.-]+/g,"")) : (item.price || 0), 
+        imagen: item.image || item.img || item.imagen || '/placeholder.svg',
+        // MODIFICADO: Usar la nueva función para obtener la tienda desde la URL
+        tienda: getStoreNameFromUrl(productUrl),
+        url: productUrl // Usar la variable que ya definimos
       };
       console.log('✨ Producto formateado:', formattedProduct);
       return formattedProduct;

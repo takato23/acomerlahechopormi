@@ -1,4 +1,7 @@
+// Añadir comentarios sobre Deno para el linter local
+// @deno-types="https://deno.land/std@0.177.0/http/server.ts"
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+// @deno-types="https://esm.sh/@supabase/supabase-js@2.21.0/dist/module/index.d.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.21.0";
 
 interface ShoppingListItem {
@@ -7,6 +10,8 @@ interface ShoppingListItem {
   unit: string | null;
   notes: string | null;
   recipe_source: string | null;
+  category_id?: string | null;
+  is_checked?: boolean;
 }
 
 // Headers CORS que usaremos en todas las respuestas
@@ -76,8 +81,11 @@ serve(async (req) => {
       console.error("Missing ingredient_name in item:", item);
       return createResponse({ error: "Ingredient name is required" }, 400);
     }
+    
+    console.log("Item data received (including category_id?):", item);
 
-    // Crear cliente Supabase (con role service_role para bypasear RLS)
+    // Crear cliente Supabase
+    // Linter local puede marcar error en Deno.env, es normal.
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
@@ -92,8 +100,8 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
     console.log("Supabase client created");
 
-    // Variable para el ID del usuario
-    let userId: string;
+    // Variable para el ID del usuario - INICIALIZAR A NULL
+    let userId: string | null = null;
     
     // Obtener el usuario desde el token
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -106,18 +114,20 @@ serve(async (req) => {
         const { data, error } = await supabaseAdmin.auth.getUser(token);
         if (error) {
           console.error("Error getting user from token:", error);
-          throw error;
+          // No lanzar error necesariamente, podría ser un token inválido
+        } else if (data.user?.id) {
+           userId = data.user.id; // Asignar solo si existe
+           console.log("Found user ID from token:", userId);
+        } else {
+          console.warn("Token provided but user not found or ID missing.");
         }
-        
-        userId = data.user?.id as string;
-        console.log("Found user ID from token:", userId);
-      } else if (isDevelopment) {
-        // En desarrollo, usar un ID de prueba o recuperar el último usuario
-        console.log("Development mode: Using a test user ID");
+      } 
+      // Si no hay token O falló la obtención con token, y estamos en desarrollo
+      if (!userId && isDevelopment) { 
+        console.log("Development mode: Attempting to get a test user ID");
         try {
-          // Intentar obtener un usuario real como fallback
           const { data: users } = await supabaseAdmin
-            .from("profiles")
+            .from("profiles") // Asegúrate que "profiles" existe o usa otra tabla
             .select("id")
             .limit(1)
             .maybeSingle();
@@ -126,69 +136,69 @@ serve(async (req) => {
             userId = users.id;
             console.log("Using test user ID from profiles:", userId);
           } else {
-            // ID de prueba para desarrollo
+            console.warn("Could not get test user from profiles, using hardcoded ID.");
             userId = "00000000-0000-0000-0000-000000000000";
-            console.log("Using hardcoded test user ID:", userId);
           }
         } catch (e) {
-          console.error("Error getting test user:", e);
-          // ID de prueba para desarrollo
+          console.error("Error getting test user from profiles:", e);
           userId = "00000000-0000-0000-0000-000000000000";
           console.log("Using hardcoded test user ID after error:", userId);
         }
       }
     } catch (error) {
-      console.error("Error authenticating user:", error);
-      if (isDevelopment) {
-        console.log("Development mode: Using a default test user ID");
-        userId = "00000000-0000-0000-0000-000000000000";
-      } else {
-        return createResponse({ error: "Authentication failed" }, 401);
-      }
+      // Captura errores durante la obtención del usuario
+      console.error("Error during user identification process:", error);
+      // No asignamos userId aquí, se quedará null si falla
     }
     
+    // Comprobar SIEMPRE si tenemos userId antes de continuar
     if (!userId) {
-      console.error("No user ID found");
-      return createResponse({ error: "User not found" }, 401);
+      console.error("Could not determine User ID (authentication or dev fallback failed).");
+      // En producción, esto debería ser un 401. En dev, podría ser un error o el hardcoded.
+      // Por seguridad, devolvemos 401 si no hay ID.
+      return createResponse({ error: "Authentication failed or User ID could not be determined" }, 401);
     }
 
-    // Preparar el objeto a insertar
-    const shoppingItem: ShoppingListItem & { user_id: string } = {
+    // Preparar el objeto a insertar (userId ahora está garantizado o ya salió)
+    const shoppingItemToInsert = {
       ingredient_name: item.ingredient_name,
       quantity: item.quantity ?? null,
       unit: item.unit ?? null,
       notes: item.notes ?? null,
       recipe_source: item.recipe_id ?? null, // Convertir recipe_id a recipe_source
-      user_id: userId,
+      category_id: item.category_id ?? null,
+      user_id: userId, // userId ahora tiene un valor string
+      is_checked: false
     };
 
-    console.log("Inserting shopping item:", shoppingItem);
+    console.log("Inserting shopping item:", shoppingItemToInsert);
 
     try {
       // Usar approach directo (para pruebas)
-      const result = await supabaseAdmin
-        .from("shopping_list_items")
-        .insert(shoppingItem);
-      
-      if (result.error) {
-        throw result.error;
-      }
-      
-      // Obtener el registro insertado
       const { data, error } = await supabaseAdmin
         .from("shopping_list_items")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
+        // Usar el objeto preparado con category_id
+        .insert(shoppingItemToInsert)
+        .select() // <-- Seleccionar para obtener el resultado
+        .single(); // <-- Esperamos un solo resultado
+      
       if (error) {
-        console.error("Error selecting inserted item:", error);
+        // Log más específico del error de inserción
+        console.error(`Error inserting item for user ${userId}:`, error);
         throw error;
       }
       
+      // Ya no es necesario el segundo select si el insert devuelve el item
+      // const { data, error } = await supabaseAdmin
+      //   .from("shopping_list_items")
+      //   .select("*")
+      //   .eq("user_id", userId)
+      //   .order("created_at", { ascending: false })
+      //   .limit(1)
+      //   .single();
+      
       console.log("Inserted item:", data);
+      // Devolver el item insertado directamente desde la respuesta del insert
       return createResponse({ success: true, item: data });
       
     } catch (error) {

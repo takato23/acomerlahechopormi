@@ -1,42 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
-import { parseShoppingInput, ParsedShoppingInput } from '../lib/inputParser'; // Importar parser y tipo
+import { parseShoppingInput, ParsedShoppingInput } from '../lib/inputParser';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import type { Category } from '@/types/categoryTypes';
 
 interface AddItemFormProps {
-  onAddItem: (parsedItem: ParsedShoppingInput) => Promise<void>; // Actualizar tipo de prop
-  isAdding?: boolean; // Nuevo prop opcional para controlar el estado de carga
-  onSearchChange?: (value: string) => void; // <-- Nuevo prop para notificar búsqueda
-  currentSearchTerm?: string; // <-- Nuevo prop para controlar valor si es necesario
+  onAddItem: (parsedItem: ParsedShoppingInput & { categoryId?: string | null }) => Promise<boolean>;
+  isAdding?: boolean;
+  onSearchChange?: (value: string) => void;
+  currentSearchTerm?: string;
+  availableCategories: Category[];
+  isLoadingCategories?: boolean;
 }
 
 export function AddItemForm({ 
   onAddItem, 
   isAdding = false, 
   onSearchChange, 
-  currentSearchTerm // <-- Recibir nuevos props
+  currentSearchTerm,
+  availableCategories,
+  isLoadingCategories = false,
 }: AddItemFormProps) {
-  // Usar el término de búsqueda del padre si se proporciona, sino estado local
-  // Esto permite que el componente funcione como buscador y como simple añadidor
   const isControlled = currentSearchTerm !== undefined;
   const [internalItemName, setInternalItemName] = useState('');
   const itemName = isControlled ? currentSearchTerm : internalItemName;
-
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [localIsAdding, setLocalIsAdding] = useState(false);
   
   const adding = isAdding || localIsAdding;
+
+  useEffect(() => {
+    if (isControlled && !itemName) {
+      setSelectedCategoryId(null);
+    }
+  }, [itemName, isControlled]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value;
     if (!isControlled) {
       setInternalItemName(newValue);
     }
-    // Siempre notificar al padre si la función existe
     if (onSearchChange) {
       onSearchChange(newValue);
     }
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategoryId(value === 'none' ? null : value);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -48,40 +67,73 @@ export function AddItemForm({
     
     try {
       const parsedInput = parseShoppingInput(trimmedName); 
-      await onAddItem(parsedInput); 
-      // Limpiar solo si NO es controlado (si es controlado, el padre limpia)
-      if (!isControlled) {
-        setInternalItemName(''); 
+      const success = await onAddItem({ 
+        ...parsedInput, 
+        categoryId: selectedCategoryId 
+      }); 
+      
+      if (success) {
+        // Si la adición fue exitosa, el padre (ShoppingListPage)
+        // limpiará el searchTerm, lo que debería resetear 
+        // selectedCategoryId a través del useEffect.
+        // Si no fuera controlado, limpiaríamos aquí:
+        // if (!isControlled) { 
+        //    setInternalItemName(''); 
+        //    setSelectedCategoryId(null); 
+        // }
+      } else {
+        console.error("[AddItemForm] onAddItem reported failure.");
       }
+      
     } catch (error) {
-      console.error("Error passed to AddItemForm handler:", error);
+      console.error("[AddItemForm] Error calling onAddItem:", error);
     } finally {
       if (!isAdding) { setLocalIsAdding(false); }
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
-      <Input
-        type="text"
-        value={itemName} // Usar el valor controlado o interno
-        onChange={handleInputChange} // Usar el nuevo handler
-        placeholder="Añadir o buscar en la lista..." // Placeholder actualizado
-        className="flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-        disabled={adding}
-        // El required podría quitarse si ahora también es buscador
-        // required 
-        aria-label="Añadir ítem o buscar en la lista" // Aria-label actualizado
-      />
-      <Button
-        type="submit"
-        disabled={adding || !itemName.trim()} // Deshabilitar si está añadiendo o vacío
-        size="icon"
-        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-        aria-label="Añadir ítem a la lista" // Aria-label específico para añadir
-      >
-        {adding ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
-      </Button>
-    </form>
+    <div className="flex flex-col gap-2">
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
+        <Input
+          type="text"
+          value={itemName}
+          onChange={handleInputChange}
+          placeholder="Añadir o buscar en la lista..."
+          className="flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+          disabled={adding}
+          aria-label="Añadir ítem o buscar en la lista"
+        />
+        <Button
+          type="submit"
+          disabled={adding || !itemName.trim()}
+          size="icon"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          aria-label="Añadir ítem a la lista"
+        >
+          {adding ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
+        </Button>
+      </form>
+      {itemName.trim() && ( 
+         <div className="flex items-center gap-2 pl-1">
+           <span className="text-xs text-slate-500">Categoría:</span>
+           <Select 
+             value={selectedCategoryId ?? 'none'} 
+             onValueChange={handleCategoryChange}
+             disabled={adding || isLoadingCategories}
+           >
+             <SelectTrigger className="w-[180px] h-7 text-xs border-slate-300">
+               <SelectValue placeholder={isLoadingCategories ? "Cargando..." : "Seleccionar"} />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="none">Sin Categoría</SelectItem>
+               {availableCategories.map(cat => (
+                 <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+               ))}
+             </SelectContent>
+           </Select>
+         </div>
+      )}
+    </div>
   );
 }

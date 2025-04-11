@@ -59,8 +59,10 @@ export const getCategories = async (): Promise<Category[]> => {
  * Añade un nuevo item a la despensa.
  */
 export const addPantryItem = async (itemData: CreatePantryItemData): Promise<PantryItem> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Usuario no autenticado");
+  if (!itemData.user_id) {
+     console.error("[addPantryItem Service] user_id falta en itemData:", itemData);
+     throw new Error("Falta user_id para añadir el item a la despensa.");
+  }
 
   const ingredient = await findOrCreateIngredient(
     itemData.ingredient_name,
@@ -79,11 +81,15 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
     }
   }
 
+  // --- NUEVO LOG ---
+  console.log(`[addPantryItem Service] Attempting insert with user_id: ${itemData.user_id}`);
+
   const { data, error } = await supabase
     .from('pantry_items')
     .insert({
-      user_id: user.id,
+      user_id: itemData.user_id,
       ingredient_id: ingredient.id,
+      name: itemData.ingredient_name,
       quantity: itemData.quantity ?? 1,
       unit: itemData.unit,
       category_id: finalCategoryId,
@@ -93,7 +99,11 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
     .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
     .single();
 
-  if (error) throw error;
+  if (error) {
+      // Añadir log más detallado del error de Supabase
+      console.error("[addPantryItem Service] Supabase insert error:", error);
+      throw error;
+  }
   if (!data) throw new Error("No se pudo crear el item");
 
   return {

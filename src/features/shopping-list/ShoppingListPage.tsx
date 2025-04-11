@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/features/auth/AuthContext'; // Importar useAuth
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -30,10 +30,34 @@ import { ListChecks, Terminal, Trash2, XCircle, Search } from 'lucide-react'; //
 import { parseShoppingInput, ParsedShoppingInput } from './lib/inputParser'; // Importar parser
 import { supabase } from '@/lib/supabaseClient'; // Importar supabase directamente
 import ResponsiveLayout from './components/Layout/ResponsiveLayout'; // IMPORTAR RESPONSIVE LAYOUT
+import { getDisplayCategory } from './utils/categorization'; // Importar la función de display
+
+// --- ANALYTICS HELPER ---
+// Función para categorizar el número de resultados (Paso 2.2)
+const calculateBucket = (count: number): string => {
+  if (count === 0) return '0';
+  if (count <= 5) return '1-5';
+  return '6+';
+};
+
+// Placeholder para la función de tracking - ¡Reemplazar con tu implementación real!
+const trackEvent = (eventName: string, properties?: object) => {
+  console.log(`[Analytics] Event: ${eventName}`, properties || '');
+  // Ejemplo: window.analytics.track(eventName, properties);
+  // Ejemplo: posthog.capture(eventName, properties);
+};
+// --- FIN ANALYTICS HELPER ---
 
 // Tipos DB
 type DBShoppingListItemInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
 type DBShoppingListItemUpdate = Database['public']['Tables']['shopping_list_items']['Update'];
+
+// AÑADIR tipo Category Row
+type CategoryRow = Database['public']['Tables']['categories']['Row'];
+
+// Tipo para la estructura agrupada
+type GroupedShoppingListItems = { [category: string]: Database['public']['Tables']['shopping_list_items']['Row'][] };
+
 export function ShoppingListPage() {
   // Usar estado del store
   const {
@@ -66,6 +90,11 @@ export function ShoppingListPage() {
   const [forceShowMap, setForceShowMap] = useState(false);
   const breakpoint = useBreakpoint(); // Recuperado
   const [searchTerm, setSearchTerm] = useState(''); // <-- Paso 1.2: Añadir estado para la búsqueda
+  const [selectedStoreName, setSelectedStoreName] = useState<string | null>(null); // <-- NUEVO ESTADO
+  const prevSearchTermRef = useRef(''); // <-- Ref para tracking (Paso 2.2)
+  const [storeFilter, setStoreFilter] = useState<string>('all'); // <-- ESTADO PARA FILTRO DE TIENDAS
+  const [availableCategories, setAvailableCategories] = useState<CategoryRow[]>([]); // <-- NUEVO ESTADO para categorías
+  const [isLoadingAvailCategories, setIsLoadingAvailCategories] = useState(true); // <-- NUEVO ESTADO de carga
 
    // Obtener user para pasar ID a generateShoppingList
    const { user } = useAuth(); // Asumiendo que useAuth está disponible
@@ -97,6 +126,67 @@ export function ShoppingListPage() {
     });
   }, [listItems, searchTerm]);
   // --- Fin Lógica de Filtrado ---
+
+  // --- NUEVO: Agrupar ítems filtrados por categoría ---
+  const groupedAndSortedItems = useMemo(() => {
+    const grouped: GroupedShoppingListItems = filteredListItems.reduce((acc, item) => {
+      // Usar 'Sin Categoría' si category es null, undefined o vacío
+      const category = item.category || 'Sin Categoría'; 
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {} as GroupedShoppingListItems);
+
+    // Ordenar ítems dentro de cada categoría (opcional, pero bueno)
+    Object.keys(grouped).forEach(category => {
+      grouped[category].sort((a, b) => {
+        if (a.is_checked !== b.is_checked) return a.is_checked ? 1 : -1; // No comprados primero
+        return (a.ingredient_name ?? '').localeCompare(b.ingredient_name ?? ''); // Luego alfabéticamente
+      });
+    });
+
+    // Ordenar las categorías (opcional, poner 'Sin Categoría' al final?)
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Sin Categoría') return 1; // Mover Sin Categoría al final
+      if (b === 'Sin Categoría') return -1;
+      return a.localeCompare(b); // Ordenar alfabéticamente las demás
+    });
+
+    // Crear un objeto ordenado para facilitar el mapeo
+    const orderedGrouped: GroupedShoppingListItems = {};
+    sortedCategories.forEach(cat => {
+        orderedGrouped[cat] = grouped[cat];
+    });
+
+    return orderedGrouped;
+  }, [filteredListItems]); // Depende de los ítems ya filtrados
+  // --- FIN Agrupación ---
+
+  // --- Tracking de Eventos (Paso 2.2) ---
+  useEffect(() => {
+    // Track 'search_initiated' cuando searchTerm pasa de vacío a no-vacío
+    if (!prevSearchTermRef.current && searchTerm) {
+      trackEvent('search_initiated');
+    }
+    // Actualizar el valor previo para la próxima comparación
+    prevSearchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  useEffect(() => {
+    // Track 'search_results_found' cuando la lista filtrada cambia Y hay un término de búsqueda activo
+    if (searchTerm) { // Solo trackear si la búsqueda está activa
+      const bucket = calculateBucket(filteredListItems.length);
+      trackEvent('search_results_found', { resultCountBucket: bucket });
+    }
+    // Nota: No incluimos searchTerm en las dependencias aquí para evitar
+    // trackear resultados cuando la lista base (listItems) cambia pero la búsqueda no.
+    // Solo queremos trackear cuando los *resultados filtrados* cambian debido a la búsqueda.
+    // Si listItems cambia Y hay un searchTerm, filteredListItems se recalculará
+    // y este efecto se disparará igualmente gracias a la dependencia de filteredListItems.
+  }, [filteredListItems/*, searchTerm*/]); // Dejamos searchTerm comentado aquí intencionalmente
+  // --- Fin Tracking de Eventos ---
 
   const handleGenerateList = useCallback(async () => {
     if (!user?.id) {
@@ -150,55 +240,54 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
   };
 
 
-  // Función para añadir ítem directamente a Supabase (SIMPLIFICADO)
-  const handleAddItemSubmit = useCallback(async (parsedItem: ParsedShoppingInput) => {
+  // Función para añadir ítem directamente a Supabase (MODIFICADA)
+  const handleAddItemSubmit = useCallback(async (
+    // Ajustar tipo para incluir categoryId opcional
+    parsedItem: ParsedShoppingInput & { categoryId?: string | null }
+  ): Promise<boolean> => { 
     const itemName = parsedItem.name;
     if (!itemName) {
       toast.error("No se pudo identificar el nombre del ítem.");
-      throw new Error("Parsed item name is missing"); // Lanzar error para el formulario
+      return false;
     }
 
-    // Asegurarse que el usuario está autenticado
     if (!user?.id) {
       toast.error("Debes iniciar sesión para añadir ítems.");
-      throw new Error("User not authenticated");
+      return false;
     }
 
-    setIsAddingItem(true); // Indicar que estamos añadiendo
+    setIsAddingItem(true); 
 
     try {
-      const { data, error } = await supabase
-        .from('shopping_list_items')
-        .insert({
-          ingredient_name: itemName.trim(),
-          quantity: parsedItem.quantity,
-          unit: parsedItem.unit,
-          user_id: user.id 
-        })
-        .select()
-        .single();
+      // Usar addItem del store que maneja API/Edge fallback
+      const newItem = await addItemToStore({
+        ingredient_name: itemName.trim(),
+        quantity: parsedItem.quantity,
+        unit: parsedItem.unit,
+        category: parsedItem.categoryId // <-- CAMBIAR A 'category'
+      });
 
-      if (error) {
-        console.error("Error de Supabase al añadir item:", error);
-        toast.error(`Error al añadir "${itemName}". ${error.message}`);
-        throw error; // Lanzar error para el formulario
-      }
-
-      if (data) {
-        fetchItems(); // Refrescar toda la lista
+      if (newItem) {
         toast.success(`"${itemName}" añadido a la lista.`);
+        setIsAddingItem(false); 
+        return true; 
+      } else {
+        toast.error(`Error al añadir "${itemName}".`);
+        setIsAddingItem(false); 
+        return false; 
       }
+
     } catch (error) {
       console.error("Error inesperado al añadir:", error);
       toast.error(`Error inesperado al añadir "${itemName}".`);
-      throw error; // Propagar error para que el formulario lo sepa
-    } finally {
-      setIsAddingItem(false); // Terminar el estado de añadir
+      setIsAddingItem(false);
+      return false; 
     }
-  }, [user, fetchItems]); // Dependencias
+  }, [user, addItemToStore]);
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
+    // El tracking de 'search_initiated' se hace en el useEffect basado en el cambio de estado
   };
 
   // Handler para seleccionar/deseleccionar tienda favorita (Recuperado)
@@ -218,16 +307,26 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     });
   };
 
+  // NUEVO Handler para seleccionar tienda desde el acordeón de precios
+  const handleStoreSelect = (storeName: string | null) => {
+    console.log("Store selected/deselected:", storeName);
+    setSelectedStoreName(storeName);
+    // Opcionalmente, forzar mostrar el mapa si estaba oculto
+    if (storeName && !shouldShowFullMap) {
+        // setForceShowMap(true); // Decidiremos esto luego
+    }
+  };
+
   // Determinar si mostrar el mapa completo o la info de favoritos (Recuperado)
   const shouldShowFullMap = favoriteStoreIds.size === 0 || forceShowMap;
   const mapContent = shouldShowFullMap
     ? <ShoppingMap
         onToggleFavorite={handleToggleFavoriteStore}
         favoriteStoreIds={favoriteStoreIds}
+        selectedStoreName={selectedStoreName} // <-- PASAR ESTADO AL MAPA
       />
     : <FavoriteStoresInfo
         count={favoriteStoreIds.size}
-
         onShowMapClick={() => setForceShowMap(true)}
       />;
 
@@ -318,131 +417,157 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   }, [listItems]);
 
-  // Cargar items desde el store al montar
+  // Cargar items y CATEGORÍAS desde el store/DB al montar
   useEffect(() => {
     console.log("--- Fetching shopping list items on mount ---");
     fetchItems();
-    // TODO: Cargar categorías si es necesario para SearchPanel
-    // setIsLoadingCategories(true);
-    // getCategories().then(setCategories).finally(() => setIsLoadingCategories(false));
-  }, [fetchItems]);
 
-  // Función para renderizar el contenido principal (lista unificada)
+    // Cargar categorías disponibles
+    const fetchCategories = async () => {
+      console.log("--- Fetching available categories on mount ---");
+      setIsLoadingAvailCategories(true);
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name', { ascending: true }); // Ordenar alfabéticamente
+        
+        if (error) {
+          console.error("Error fetching categories:", error);
+          toast.error("Error al cargar categorías.");
+          setAvailableCategories([]);
+        } else {
+          setAvailableCategories(data || []);
+        }
+      } catch (err) {
+        console.error("Unexpected error fetching categories:", err);
+        toast.error("Error inesperado al cargar categorías.");
+        setAvailableCategories([]);
+      } finally {
+        setIsLoadingAvailCategories(false);
+      }
+    };
+
+    fetchCategories();
+
+  }, [fetchItems]); // fetchItems como dependencia
+
+  // Función para renderizar el contenido principal (MODIFICADA para pasar categorías)
   const renderShoppingListContent = () => (
-    // Contenedor principal para la lista
     <div className="flex flex-col h-full gap-4"> 
-      {/* Formulario unificado para añadir y buscar */}
-      <div className="p-4 pb-0"> {/* Padding solo arriba y lados */}
+      <div className="p-4 pb-0"> 
         <AddItemForm 
-          onAddItem={handleAddItemSubmit} 
+          onAddItem={async (parsedItem) => { 
+             const success = await handleAddItemSubmit(parsedItem); // Llamar y esperar resultado
+             if (success) {
+               setSearchTerm(''); // <-- Limpiar el input/búsqueda SOLO si tuvo éxito
+             }
+             return success; // Devolver éxito/fallo a AddItemForm
+          }}
           isAdding={isAddingItem}
-          // Pasar la función para manejar el cambio de búsqueda/input
           onSearchChange={handleSearchChange} 
-          // Pasar el valor actual para controlar el input si es necesario
           currentSearchTerm={searchTerm}
+          availableCategories={availableCategories} // <-- PASAR CATEGORÍAS AL FORM
+          isLoadingCategories={isLoadingAvailCategories} // <-- PASAR ESTADO DE CARGA
         /> 
       </div>
 
-      {/* Mostrar resultados de búsqueda de precios (AHORA SE USA) */}
+      {/* Mostrar resultados de búsqueda de precios (Pasar handler) */}
       {(priceResults !== null) && (
-        <div className="px-4"> {/* Añadir padding */}
+        <div className="px-4"> 
             <PriceResultsDisplay
-            results={priceResults}
-            itemName={itemForPriceSearch}
-            isLoading={isSearchingPrices}
+              results={priceResults}
+              itemName={itemForPriceSearch}
+              isLoading={isSearchingPrices}
+              onStoreSelect={handleStoreSelect} // <-- PASAR NUEVO HANDLER
+              storeFilter={storeFilter} // <-- PASAR ESTADO DEL FILTRO
+              onStoreFilterChange={setStoreFilter} // <-- PASAR FUNCION PARA CAMBIAR FILTRO
             />
         </div>
        )}
 
-      {/* Lista de Compras */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden m-4 mt-0"> {/* Margen ajustado */}
-        <CardHeader className="p-4 border-b"> {/* Añadir borde inferior */}
-          <CardTitle className="text-lg font-medium flex items-center justify-between"> 
-            <div className="flex items-center gap-2"> 
-                <ListChecks className="h-4 w-4 text-muted-foreground" />
-                <span>Mi Lista</span>
-                {generatedRange && (
-                <span className="text-sm text-slate-500 font-normal ml-2">
-                    ({formatRange(generatedRange)})
-                </span>
-                )}
-            </div>
-            {/* Botón buscar precios podría moverse a un menú o acción contextual */}
-            {/* 
-            <Button variant="outline" size="sm" onClick={handleSearchAllPrices} disabled={isSearchingPrices || listItems.length === 0} className="text-xs"> 
-              {isSearchingPrices ? <Spinner size="sm" /> : <Search className="mr-1 h-3 w-3" />} Buscar Precios
-            </Button>
-            */}
-          </CardTitle>
-          {/* EL INPUT DE BÚSQUEDA INTERNO SE ELIMINA DE AQUÍ */}
+      {/* Lista de Compras AGRUPADA */}
+      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden m-4 mt-0"> 
+        <CardHeader className="p-4 border-b"> 
+           {/* ... (CardTitle sin cambios) ... */}
         </CardHeader>
         <CardContent className="p-0 flex-grow overflow-y-auto"> 
           {isLoading ? (
              <div className="flex items-center justify-center h-full p-6"> <Spinner /> </div>
           ) : error ? (
-             <Alert variant="destructive" className="m-4"> ... </Alert>
+             <Alert variant="destructive" className="m-4"> {error} </Alert> // Mostrar mensaje de error
           ) : listItems.length === 0 ? (
              <p className="text-slate-500 text-center p-6 italic">Tu lista está vacía.</p>
-          ) : filteredListItems.length === 0 && searchTerm ? ( // Mostrar solo si hay término de búsqueda
+          ) : Object.keys(groupedAndSortedItems).length === 0 && searchTerm ? ( // Cambiado para verificar grupos
              <p className="text-slate-500 text-center p-6 italic">
                No se encontraron ítems para "{searchTerm}".
              </p>
           ) : (
-            // Renderizar filteredListItems (el mapeo se mantiene igual)
-            <ul className="divide-y divide-slate-200"> 
-              {filteredListItems.map((item: Database['public']['Tables']['shopping_list_items']['Row']) => (
-                <li key={item.id} className={`flex items-center justify-between px-4 py-3 ${item.is_checked ? 'opacity-50 bg-slate-50' : ''}`}> {/* Padding y estilo para marcados */}
-                  <div className="flex items-center gap-3"> {/* Gap entre checkbox y texto */}
-                    <Checkbox
-                      id={`item-${item.id}`}
-                      checked={item.is_checked}
-                      onCheckedChange={() => handleToggleItem(item.id, item.is_checked)}
-                      aria-label={`Marcar ${item.ingredient_name} como ${item.is_checked ? 'no comprado' : 'comprado'}`}
-                    />
-                    <label
-                      htmlFor={`item-${item.id}`}
-                      className={`flex flex-col cursor-pointer ${item.is_checked ? 'line-through' : ''}`} 
-                    >
-                      <span className="font-medium text-slate-800">{item.ingredient_name}</span>
-                      {(item.quantity || item.unit) && (
-                        <span className="text-xs text-slate-500">
-                          {item.quantity} {item.unit}
-                          {item.notes && ` - ${item.notes}`} {/* Mostrar notas */}
-                        </span>
-                      )}
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-1"> {/* Contenedor para botones */}
-                     {/* Botón para buscar precios individuales (AHORA FUNCIONAL) */}
-                     <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-7 w-7 text-slate-500 hover:text-blue-600" 
-                        onClick={() => handleSearchItemPrice(item)} // <-- LLAMAR AL NUEVO HANDLER
-                        disabled={isSearchingPrices} // <-- Deshabilitar mientras busca
-                        aria-label={`Buscar precios para ${item.ingredient_name}`}
-                     > 
-                         {/* Opcional: mostrar spinner si se busca ESTE item? (más complejo) */}
-                         <Search className="h-4 w-4" />
-                     </Button>
-                     {/* Botón para eliminar */}
-                     <Button
-                       variant="ghost"
-                       size="icon"
-                       className="h-7 w-7 text-slate-500 hover:text-red-600"
-                       onClick={async () => {
-                         const success = await deleteItem(item.id);
-                         if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
-                         else toast.error("Error al eliminar el ítem.");
-                       }}
-                       aria-label={`Eliminar ${item.ingredient_name}`}
-                     >
-                       <Trash2 className="h-4 w-4" />
-                     </Button>
-                  </div>
-                </li>
+            // Iterar sobre las CATEGORÍAS AGRUPADAS Y ORDENADAS
+            <div> {/* Contenedor para las secciones */} 
+              {Object.entries(groupedAndSortedItems).map(([category, itemsInCategory]) => (
+                <div key={category} className="mb-1"> {/* Espacio entre categorías */}
+                  {/* Encabezado de Categoría - MODIFICADO */}
+                  <h3 className="bg-slate-100 text-slate-700 px-4 py-1.5 text-sm font-semibold sticky top-0 z-10 border-b border-slate-200 flex items-center gap-2"> {/* Sticky header, flex y gap */} 
+                    {getDisplayCategory(category)} {/* <-- USAR LA NUEVA FUNCIÓN */}
+                    <span className="text-xs text-slate-500 font-normal">({itemsInCategory.length})</span> {/* Contador aparte */}
+                  </h3>
+                  {/* Lista de ítems para esta categoría */}
+                  <ul className="divide-y divide-slate-100"> {/* Divisor más suave */} 
+                    {itemsInCategory.map((item) => (
+                      // El renderizado del <li> individual no cambia
+                      <li key={item.id} className={`flex items-center justify-between px-4 py-3 ${item.is_checked ? 'opacity-50 bg-slate-50' : ''}`}> 
+                        <div className="flex items-center gap-3"> 
+                          <Checkbox
+                            id={`item-${item.id}`}
+                            checked={item.is_checked}
+                            onCheckedChange={() => handleToggleItem(item.id, item.is_checked)}
+                            aria-label={`Marcar ${item.ingredient_name} como ${item.is_checked ? 'no comprado' : 'comprado'}`}
+                          />
+                          <label
+                            htmlFor={`item-${item.id}`}
+                            className={`flex flex-col cursor-pointer ${item.is_checked ? 'line-through' : ''}`} 
+                          >
+                            <span className="font-medium text-slate-800">{item.ingredient_name}</span>
+                            {(item.quantity || item.unit) && (
+                              <span className="text-xs text-slate-500">
+                                {item.quantity} {item.unit}
+                                {item.notes && ` - ${item.notes}`} 
+                              </span>
+                            )}
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-1"> 
+                           <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-slate-500 hover:text-blue-600" 
+                              onClick={() => handleSearchItemPrice(item)} 
+                              disabled={isSearchingPrices} 
+                              aria-label={`Buscar precios para ${item.ingredient_name}`}
+                           > 
+                               <Search className="h-4 w-4" />
+                           </Button>
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             className="h-7 w-7 text-slate-500 hover:text-red-600"
+                             onClick={async () => {
+                               const success = await deleteItem(item.id);
+                               if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
+                               else toast.error("Error al eliminar el ítem.");
+                             }}
+                             aria-label={`Eliminar ${item.ingredient_name}`}
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
         {listItems.length > 0 && (

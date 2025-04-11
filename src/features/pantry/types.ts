@@ -27,6 +27,7 @@ export interface CreatePantryItemData {
   expiry_date?: string | null;
   notes?: string | null;
   category_id?: string | null;
+  user_id: string;
 }
 
 export interface UpdatePantryItemData {

@@ -6,6 +6,7 @@ export interface ShoppingItemPayload {
   unit?: string | null;
   notes?: string | null;
   recipe_id?: string | null; // Se convertirá en recipe_source en el Edge Function
+  category_id?: string | null;
 }
 
 export async function addShoppingItemViaEdgeFunction(item: ShoppingItemPayload) {
@@ -19,6 +20,7 @@ export async function addShoppingItemViaEdgeFunction(item: ShoppingItemPayload) 
       unit: item.unit === undefined ? null : item.unit,
       notes: item.notes === undefined ? null : item.notes,
       recipe_id: item.recipe_id === undefined ? null : item.recipe_id,
+      category_id: item.category_id === undefined ? null : item.category_id
     };
     
     // Asegurarnos que el body tiene el formato exacto que espera la función

@@ -11,6 +11,7 @@ import { CreatePantryItemData } from '../types';
 import { addPantryItem } from '../pantryService';
 import { suggestCategory } from '../lib/categorySuggestor';
 import { AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/features/auth/AuthContext';
 
 // Lazy load componentes pesados
 const BarcodeScanner = lazy(() => import('./barcode/BarcodeScanner'));
@@ -33,6 +34,16 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [parseResultForPreview, setParseResultForPreview] = useState<ParseResult | null>(null);
   const debouncedTranscript = useDebounce('', 2000);
+  const { user } = useAuth();
+
+  // --- NUEVO LOG ---
+  useEffect(() => {
+    if (user) {
+      console.log(`[UnifiedPantryInput] User ID from useAuth: ${user.id}`);
+    } else {
+      console.log(`[UnifiedPantryInput] User from useAuth is null/undefined.`);
+    }
+  }, [user]); // Ejecutar cuando user cambie
 
   const handleParseAttempt = () => {
     const trimmedInput = inputValue.trim();
@@ -76,17 +87,32 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     }
   };
 
-  const handleConfirmAdd = async (itemData: CreatePantryItemData, addAnother: boolean) => {
+  const handleConfirmAdd = async (itemDataFromPreview: CreatePantryItemData, addAnother: boolean) => {
+    if (!user) {
+      toast.error("Error: Usuario no autenticado.");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await addPantryItem(itemData);
-      toast.success(`"${itemData.ingredient_name}" añadido!`);
+      const itemDataWithUser: CreatePantryItemData = {
+        ...itemDataFromPreview,
+        user_id: user.id
+      };
+
+      await addPantryItem(itemDataWithUser);
+      toast.success(`"${itemDataWithUser.ingredient_name}" añadido!`);
       setParseResultForPreview(null);
       setInputValue('');
       onItemAdded();
     } catch (error) {
       console.error("Error adding item from unified input:", error);
-      toast.error(error instanceof Error ? error.message : "Error al añadir el ítem.");
+      const errorMessage = (error instanceof Error && error.message) 
+         ? error.message 
+         : (typeof error === 'object' && error !== null && 'message' in error) 
+         ? String(error.message)
+         : "Error al añadir el ítem.";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +136,10 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     if (!text || isLoading || parseResultForPreview || isProcessingVoice) {
       return;
     }
+     if (!user) {
+       toast.error("Error: Usuario no autenticado para procesar voz.");
+       return;
+     }
 
     try {
       setIsProcessingVoice(true);
@@ -139,20 +169,34 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
           // Continuar sin categoría si hay error
         }
 
-        // 2. Preparar los datos finales para CreatePantryItemData
+        // 2. Preparar los datos finales INCLUYENDO user_id y corrigiendo quantity
         const itemToAdd: CreatePantryItemData = {
-          // Mapear propiedades de parsedData (camelCase) a CreatePantryItemData (snake_case)
           ingredient_name: parsedData.ingredientName,
-          quantity: parsedData.quantity,
+          quantity: parsedData.quantity ?? 1,
           unit: parsedData.unit,
-          category_id: finalCategoryId, // Usar la categoría inferida (o null)
-          // Asegúrate de incluir cualquier otra propiedad requerida por CreatePantryItemData
-          // Por ejemplo, si necesita user_id, deberías obtenerlo del contexto de autenticación
-          // user_id: user?.id, // Ejemplo - descomentar y ajustar si es necesario
+          category_id: finalCategoryId,
+          user_id: user.id
         };
 
-        // 3. Añadir directamente el ítem
-        await handleConfirmAdd(itemToAdd, false);
+        // 3. Llamar a addPantryItem directamente
+        setIsLoading(true);
+        try {
+           await addPantryItem(itemToAdd);
+           toast.success(`"${itemToAdd.ingredient_name}" añadido por voz!`);
+           setParseResultForPreview(null);
+           setInputValue('');
+           onItemAdded();
+        } catch (addError) {
+           console.error("Error adding voice item directly:", addError);
+           const errorMessage = (addError instanceof Error && addError.message) 
+             ? addError.message 
+             : (typeof addError === 'object' && addError !== null && 'message' in addError) 
+             ? String(addError.message)
+             : "Error al añadir el ítem por voz.";
+           toast.error(errorMessage);
+        } finally {
+           setIsLoading(false);
+        }
 
       } else {
         console.error("Voice Parse Error:", result.error);

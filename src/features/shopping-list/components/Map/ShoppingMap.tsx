@@ -20,10 +20,11 @@ L.Icon.Default.mergeOptions({
 interface ShoppingMapProps {
  onToggleFavorite: (storeId: string) => void; // Callback para favoritos
  favoriteStoreIds: Set<string>; // IDs de tiendas favoritas
+ selectedStoreName: string | null; // <-- AÑADIR PROP
  // TODO: Añadir otras props si son necesarias (highlightedStoreId, onStoreSelect)
 }
 
-export function ShoppingMap({ onToggleFavorite, favoriteStoreIds }: ShoppingMapProps) {
+export function ShoppingMap({ onToggleFavorite, favoriteStoreIds, selectedStoreName }: ShoppingMapProps) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStores, setNearbyStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,33 +128,39 @@ export function ShoppingMap({ onToggleFavorite, favoriteStoreIds }: ShoppingMapP
         zoom={initialZoom}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
-        whenCreated={(instance: L.Map) => { mapRef.current = instance }} // Añadir tipo explícito a instance
+        ref={mapRef}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {nearbyStores.map(store => (
-          // Usar Marker directamente aquí o el componente StoreMarker si se personaliza
-          <Marker key={store.id} position={[store.lat, store.lng]}>
-            <Popup>
-              <div>
-                <b>{store.sucursalNombre}</b> ({store.banderaDescripcion})<br />
-                {store.direccion}, {store.localidad} <br/>
-                <span className="text-xs text-muted-foreground">{store.distanciaDescripcion}</span>
-                <Button
-                  size="sm"
-                  variant={favoriteStoreIds.has(store.id) ? "secondary" : "outline"}
-                  className="mt-2 w-full h-auto py-1 px-2 text-xs"
-                  onClick={() => onToggleFavorite(store.id)}
-                >
-                  {favoriteStoreIds.has(store.id) ? '★ Favorito' : '☆ Añadir Favorito'}
-                </Button>
-              </div>
-            </Popup>
-          </Marker>
-          // <StoreMarker key={store.id} store={store} /> // Si StoreMarker se implementa
-        ))}
+        {nearbyStores.map(store => {
+           // <-- USAR selectedStoreName AQUÍ PARA RESALTAR
+           const isSelected = store.sucursalNombre === selectedStoreName;
+           console.log(`Store: ${store.sucursalNombre}, Is Selected: ${isSelected}`); // Log de ejemplo
+           // Aplicar lógica de resaltado basada en isSelected (ej. cambiando icono, estilo)
+          return (
+            // Usar Marker directamente aquí o el componente StoreMarker si se personaliza
+            <Marker key={store.id} position={[store.lat, store.lng]}>
+              <Popup>
+                <div>
+                  <b>{store.sucursalNombre}</b> ({store.banderaDescripcion})<br />
+                  {store.direccion}, {store.localidad} <br/>
+                  <span className="text-xs text-muted-foreground">{store.distanciaDescripcion}</span>
+                  <Button
+                    size="sm"
+                    variant={favoriteStoreIds.has(store.id) ? "secondary" : "outline"}
+                    className="mt-2 w-full h-auto py-1 px-2 text-xs"
+                    onClick={() => onToggleFavorite(store.id)}
+                  >
+                    {favoriteStoreIds.has(store.id) ? '★ Favorito' : '☆ Añadir Favorito'}
+                  </Button>
+                </div>
+              </Popup>
+            </Marker>
+            // <StoreMarker key={store.id} store={store} /> // Si StoreMarker se implementa
+          );
+        })}
         {/* Opcional: Marcador para la ubicación del usuario */}
         {userLocation && (
            <Marker position={[userLocation.lat, userLocation.lng]} icon={L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png', iconSize: [25, 41], iconAnchor: [12, 41] })}>
