@@ -46,8 +46,8 @@ export function PriceResultsDisplay({ results, itemName, isLoading }: PriceResul
       </CardHeader>
       <CardContent>
         <ul className="space-y-3">
-          {results.map((product) => (
-            <li key={product.id} className="flex items-center justify-between p-3 border rounded-md bg-background hover:bg-muted/50 transition-colors">
+          {results.map((product, index) => (
+            <li key={`${product.tienda}-${product.id}-${product.nombre}-${product.precio}-${index}`} className="flex items-center justify-between p-3 border rounded-md bg-background hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-3">
                 <img 
                   src={product.imagen || '/placeholder.svg'} 

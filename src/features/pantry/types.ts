@@ -1,5 +1,6 @@
 import { Ingredient } from '@/types/ingredientTypes';
 import { Category } from '@/types/categoryTypes';
+export type { Category };
 
 export interface PantryItem {
   id: string;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/features/auth/AuthContext'; // Importar useAuth
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -29,9 +29,9 @@ import { es } from 'date-fns/locale';
 import { ListChecks, Terminal, Trash2, XCircle, Search } from 'lucide-react'; // Añadir icono Search
 import { parseShoppingInput, ParsedShoppingInput } from './lib/inputParser'; // Importar parser
 import { supabase } from '@/lib/supabaseClient'; // Importar supabase directamente
+import ResponsiveLayout from './components/Layout/ResponsiveLayout'; // IMPORTAR RESPONSIVE LAYOUT
 
 // Tipos DB
-type DBShoppingListItemRow = Database['public']['Tables']['shopping_list_items']['Row'];
 type DBShoppingListItemInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
 type DBShoppingListItemUpdate = Database['public']['Tables']['shopping_list_items']['Update'];
 export function ShoppingListPage() {
@@ -65,10 +65,38 @@ export function ShoppingListPage() {
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<Set<string>>(new Set());
   const [forceShowMap, setForceShowMap] = useState(false);
   const breakpoint = useBreakpoint(); // Recuperado
+  const [searchTerm, setSearchTerm] = useState(''); // <-- Paso 1.2: Añadir estado para la búsqueda
 
    // Obtener user para pasar ID a generateShoppingList
    const { user } = useAuth(); // Asumiendo que useAuth está disponible
 
+  // --- Lógica de Filtrado (Paso 1.2) ---
+  const filteredListItems = useMemo(() => {
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    if (!lowerCaseSearchTerm) {
+      return listItems; // Si no hay búsqueda, devolver todos los items
+    }
+
+    // Lógica simple para plurales (Paso 1.4)
+    let searchTermSingular = lowerCaseSearchTerm;
+    let searchTermPlural = lowerCaseSearchTerm;
+    if (lowerCaseSearchTerm.endsWith('s')) {
+      searchTermSingular = lowerCaseSearchTerm.slice(0, -1);
+    } else {
+      searchTermPlural = lowerCaseSearchTerm + 's';
+    }
+
+    return listItems.filter(item => {
+      const lowerCaseItemName = item.ingredient_name?.toLowerCase();
+      if (!lowerCaseItemName) return false;
+
+      // Comprobar término original, singular y plural
+      return lowerCaseItemName.includes(lowerCaseSearchTerm) ||
+             lowerCaseItemName.includes(searchTermSingular) ||
+             lowerCaseItemName.includes(searchTermPlural);
+    });
+  }, [listItems, searchTerm]);
+  // --- Fin Lógica de Filtrado ---
 
   const handleGenerateList = useCallback(async () => {
     if (!user?.id) {
@@ -99,7 +127,7 @@ export function ShoppingListPage() {
 // Actualizar para usar updateItem del store con is_purchased
 const handleToggleItem = useCallback(async (itemId: string, currentStatus: boolean) => {
   try {
-    await updateItem(itemId, { is_purchased: !currentStatus });
+    await updateItem(itemId, { is_checked: !currentStatus });
     // El store ya actualiza el estado optimisticamente, no necesitamos setListItems
     // Opcional: mostrar toast de éxito
   } catch (error) {
@@ -145,7 +173,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
           ingredient_name: itemName.trim(),
           quantity: parsedItem.quantity,
           unit: parsedItem.unit,
-          // user_id: user.id // <--- ELIMINADO (La DB lo pondrá por DEFAULT)
+          user_id: user.id 
         })
         .select()
         .single();
@@ -168,6 +196,10 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
       setIsAddingItem(false); // Terminar el estado de añadir
     }
   }, [user, fetchItems]); // Dependencias
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+  };
 
   // Handler para seleccionar/deseleccionar tienda favorita (Recuperado)
   const handleToggleFavoriteStore = (storeId: string) => {
@@ -201,6 +233,38 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // --- Funciones movidas aquí dentro del componente ---
 
+  // Handler para buscar precios de un ítem individual
+  const handleSearchItemPrice = useCallback(async (item: Database['public']['Tables']['shopping_list_items']['Row']) => {
+    if (!item.ingredient_name) return;
+    
+    console.log(`Buscando precios para: ${item.ingredient_name}`);
+    setIsSearchingPrices(true);
+    setPriceResults(null);
+    setItemForPriceSearch(item.ingredient_name);
+    
+    try {
+      const result = await searchProducts(item.ingredient_name);
+      if (!result.error) {
+        setPriceResults(result.products);
+        if (result.products.length > 0) {
+          toast.success(`Precios encontrados para "${item.ingredient_name}".`);
+        } else {
+          toast.info(`No se encontraron precios online para "${item.ingredient_name}".`);
+        }
+      } else {
+        console.error(`Error buscando precios para ${item.ingredient_name}:`, result.originalError);
+        toast.error(`Error al buscar precios para "${item.ingredient_name}".`);
+        setPriceResults([]);
+      }
+    } catch (err) {
+        console.error("Error inesperado en handleSearchItemPrice:", err);
+        toast.error("Error inesperado al buscar precios.");
+        setPriceResults([]);
+    } finally {
+      setIsSearchingPrices(false);
+    }
+  }, []);
+
   // Handler para buscar precios de todos los items
   const handleSearchAllPrices = useCallback(async () => {
     if (listItems.length === 0) {
@@ -209,8 +273,8 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     }
 
     setIsSearchingPrices(true);
-    setPriceResults(null); // Limpiar resultados anteriores
-    setItemForPriceSearch('Todos los ítems'); // Indicar búsqueda general
+    setPriceResults(null);
+    setItemForPriceSearch('Todos los ítems');
     const allResults: BuscaPreciosProduct[] = [];
     let errorCount = 0;
 
@@ -218,7 +282,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
     // Usar Promise.allSettled para manejar errores individuales
     const searchPromises = listItems.map(item =>
-      searchProducts(item.ingredient_name).then(result => ({ item, result })) // Usar ingredient_name
+      searchProducts(item.ingredient_name).then(result => ({ item, result }))
     );
 
     const settledResults = await Promise.allSettled(searchPromises);
@@ -252,7 +316,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
       toast.success(`Precios encontrados para ${listItems.length - errorCount} ítems.`);
     }
 
-  }, [listItems]); // Depende de la lista actual
+  }, [listItems]);
 
   // Cargar items desde el store al montar
   useEffect(() => {
@@ -263,29 +327,38 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     // getCategories().then(setCategories).finally(() => setIsLoadingCategories(false));
   }, [fetchItems]);
 
-  // Función para renderizar el contenido principal (lista) (Adaptado)
-  const renderMainContent = () => (
-    // Contenedor principal para la lista y resultados de precios
-    <div className="flex flex-col h-full p-4 gap-4"> {/* Añadido padding y gap */}
-      {/* Formulario para añadir manualmente (Movido aquí) */}
-      <div className="mb-4">
+  // Función para renderizar el contenido principal (lista unificada)
+  const renderShoppingListContent = () => (
+    // Contenedor principal para la lista
+    <div className="flex flex-col h-full gap-4"> 
+      {/* Formulario unificado para añadir y buscar */}
+      <div className="p-4 pb-0"> {/* Padding solo arriba y lados */}
         <AddItemForm 
           onAddItem={handleAddItemSubmit} 
-          isAdding={isAddingItem} // Pasar el estado de carga
+          isAdding={isAddingItem}
+          // Pasar la función para manejar el cambio de búsqueda/input
+          onSearchChange={handleSearchChange} 
+          // Pasar el valor actual para controlar el input si es necesario
+          currentSearchTerm={searchTerm}
         /> 
       </div>
-      {/* Resultados de Precios (si existen) */}
-      <PriceResultsDisplay
-        results={priceResults}
-        itemName={itemForPriceSearch}
-        isLoading={isSearchingPrices}
-      />
+
+      {/* Mostrar resultados de búsqueda de precios (AHORA SE USA) */}
+      {(priceResults !== null) && (
+        <div className="px-4"> {/* Añadir padding */}
+            <PriceResultsDisplay
+            results={priceResults}
+            itemName={itemForPriceSearch}
+            isLoading={isSearchingPrices}
+            />
+        </div>
+       )}
 
       {/* Lista de Compras */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden"> {/* Ajustado shadow */}
-        <CardHeader>
-          <CardTitle className="text-lg font-medium flex items-center justify-between"> {/* Flex para alinear */}
-            <div className="flex items-center gap-2"> {/* Grupo para título e icono */}
+      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden m-4 mt-0"> {/* Margen ajustado */}
+        <CardHeader className="p-4 border-b"> {/* Añadir borde inferior */}
+          <CardTitle className="text-lg font-medium flex items-center justify-between"> 
+            <div className="flex items-center gap-2"> 
                 <ListChecks className="h-4 w-4 text-muted-foreground" />
                 <span>Mi Lista</span>
                 {generatedRange && (
@@ -294,33 +367,37 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
                 </span>
                 )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleSearchAllPrices} disabled={isSearchingPrices || listItems.length === 0} className="text-xs"> {/* Botón de buscar precios */}
+            {/* Botón buscar precios podría moverse a un menú o acción contextual */}
+            {/* 
+            <Button variant="outline" size="sm" onClick={handleSearchAllPrices} disabled={isSearchingPrices || listItems.length === 0} className="text-xs"> 
               {isSearchingPrices ? <Spinner size="sm" /> : <Search className="mr-1 h-3 w-3" />} Buscar Precios
             </Button>
+            */}
           </CardTitle>
+          {/* EL INPUT DE BÚSQUEDA INTERNO SE ELIMINA DE AQUÍ */}
         </CardHeader>
-        <CardContent className="p-0 flex-grow overflow-y-auto"> {/* Quitado padding, añadido scroll */}
+        <CardContent className="p-0 flex-grow overflow-y-auto"> 
           {isLoading ? (
-            <div className="flex items-center justify-center h-full p-6"> {/* Padding para centrar spinner */}
-              <Spinner />
-            </div>
+             <div className="flex items-center justify-center h-full p-6"> <Spinner /> </div>
           ) : error ? (
-            <Alert variant="destructive" className="m-4">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>Error al cargar la lista</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+             <Alert variant="destructive" className="m-4"> ... </Alert>
           ) : listItems.length === 0 ? (
-            <p className="text-slate-500 text-center p-6 italic">Tu lista de compras está vacía.</p>
+             <p className="text-slate-500 text-center p-6 italic">Tu lista está vacía.</p>
+          ) : filteredListItems.length === 0 && searchTerm ? ( // Mostrar solo si hay término de búsqueda
+             <p className="text-slate-500 text-center p-6 italic">
+               No se encontraron ítems para "{searchTerm}".
+             </p>
           ) : (
-            <ul className="divide-y divide-slate-200"> {/* Añadido divisor */}
-              {listItems.map((item) => (
+            // Renderizar filteredListItems (el mapeo se mantiene igual)
+            <ul className="divide-y divide-slate-200"> 
+              {filteredListItems.map((item: Database['public']['Tables']['shopping_list_items']['Row']) => (
                 <li key={item.id} className={`flex items-center justify-between px-4 py-3 ${item.is_checked ? 'opacity-50 bg-slate-50' : ''}`}> {/* Padding y estilo para marcados */}
                   <div className="flex items-center gap-3"> {/* Gap entre checkbox y texto */}
                     <Checkbox
                       id={`item-${item.id}`}
                       checked={item.is_checked}
-                      onCheckedChange={() => handleToggleItem(item.id, item.is_checked)} 
+                      onCheckedChange={() => handleToggleItem(item.id, item.is_checked)}
+                      aria-label={`Marcar ${item.ingredient_name} como ${item.is_checked ? 'no comprado' : 'comprado'}`}
                     />
                     <label
                       htmlFor={`item-${item.id}`}
@@ -336,18 +413,32 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
                     </label>
                   </div>
                   <div className="flex items-center gap-1"> {/* Contenedor para botones */}
-                     {/* Botón para buscar precios individuales */}
-                     <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-blue-600" onClick={() => { /* TODO: Implementar búsqueda individual */ toast.info('Funcionalidad pendiente'); }}>
+                     {/* Botón para buscar precios individuales (AHORA FUNCIONAL) */}
+                     <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-7 w-7 text-slate-500 hover:text-blue-600" 
+                        onClick={() => handleSearchItemPrice(item)} // <-- LLAMAR AL NUEVO HANDLER
+                        disabled={isSearchingPrices} // <-- Deshabilitar mientras busca
+                        aria-label={`Buscar precios para ${item.ingredient_name}`}
+                     > 
+                         {/* Opcional: mostrar spinner si se busca ESTE item? (más complejo) */}
                          <Search className="h-4 w-4" />
                      </Button>
                      {/* Botón para eliminar */}
-                     <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hover:text-red-600" onClick={async () => {
-                        const success = await deleteItem(item.id);
-                        if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
-                        else toast.error("Error al eliminar el ítem.");
-                      }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                     <Button
+                       variant="ghost"
+                       size="icon"
+                       className="h-7 w-7 text-slate-500 hover:text-red-600"
+                       onClick={async () => {
+                         const success = await deleteItem(item.id);
+                         if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
+                         else toast.error("Error al eliminar el ítem.");
+                       }}
+                       aria-label={`Eliminar ${item.ingredient_name}`}
+                     >
+                       <Trash2 className="h-4 w-4" />
+                     </Button>
                   </div>
                 </li>
               ))}
@@ -382,30 +473,11 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
   // Renderizar el layout según el breakpoint (Recuperado y adaptado)
   return (
     <div className="h-screen flex flex-col"> {/* Ocupar toda la altura */}
-      {breakpoint === 'desktop' && (
-        <DesktopLayout
-          searchPanel={<SearchPanel categories={categories} />}
-          shoppingList={renderMainContent()}
-          map={mapContent}
-        />
-      )}
-      {breakpoint === 'tablet' && (
-        <TabletLayout
-          listAndSearch={
-            <div className="flex flex-col h-full">
-              <div className="p-4"><SearchPanel categories={categories} /></div>
-              <div className="flex-grow overflow-y-auto">{renderMainContent()}</div> {/* Lista abajo */}
-            </div>
-          }
-          map={mapContent}
-        />
-      )}
-      {breakpoint === 'mobile' && (
-        <MobileLayout
-          listAndSearch={renderMainContent()}
-          map={mapContent}
-        />
-      )}
+      <ResponsiveLayout
+        shoppingList={renderShoppingListContent()} // Pasar el contenido de la lista unificada
+        map={mapContent} // Pasar el contenido del mapa
+        // searchPanel ya no se pasa
+      />
     </div>
   );
 }
