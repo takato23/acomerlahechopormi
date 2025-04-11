@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ interface PlanningDayViewProps {
   className?: string;
 }
 
-export function PlanningDayView({
+export const PlanningDayView = React.memo(function PlanningDayView({
   date,
   mealsByType,
   mealTypes,
@@ -32,6 +32,21 @@ export function PlanningDayView({
   showHeader = true,
   className
 }: PlanningDayViewProps) {
+  // Log de renderizado controlado
+  const lastLogTimeRef = React.useRef(0);
+  const shouldLog = () => {
+    const now = Date.now();
+    if (now - lastLogTimeRef.current > 2000) {
+      lastLogTimeRef.current = now;
+      return true;
+    }
+    return false;
+  };
+  
+  if (shouldLog()) {
+      console.log(`[PlanningDayView] Rendering day ${format(date, 'yyyy-MM-dd')}`);
+  }
+
   return (
     // Contenedor principal: flex-col para móvil, space-y para desktop (ya que es hijo directo del grid)
     <div className={cn(
@@ -93,4 +108,4 @@ export function PlanningDayView({
       })}
     </div>
   );
-}
+});

@@ -1,82 +1,80 @@
-import React, { useState, useEffect } from 'react';
+// Core imports
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Filter, Sparkles, PlusCircle, ClipboardList, LayoutGrid, List } from 'lucide-react';
+import { toast } from 'sonner';
+
+// Icons
+import {
+  Filter,
+  Sparkles,
+  PlusCircle,
+  ClipboardList,
+  LayoutGrid,
+  List,
+  Home,
+  AlertCircle,
+  Loader2
+} from 'lucide-react';
+
+// Recipe Categories & Icons
+import {
+  RECIPE_CATEGORIES,
+  getCategoryIcon
+} from '@/config/recipeTags';
+import type { RecipeCategory } from '@/config/recipeTags';
+
+// UI Components
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import { Switch } from '@/components/ui/switch';
-import { useRecipeStore } from '@/stores/recipeStore';
-import { getPantryItems } from '@/features/pantry/pantryService';
-import { useAuth } from '@/features/auth/AuthContext';
-import { getUserProfile } from '@/features/user/userService';
-import type { GeneratedRecipeData } from '@/types/recipeTypes';
+import { AnimatedTabs } from '@/components/common/AnimatedTabs';
+import { EmptyState } from '@/components/common/EmptyState';
+import RecipeCard from '../components/RecipeCard';
+import RecipeList from '../components/RecipeList';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Types
+import type { TabItem } from '@/components/common/AnimatedTabs';
 import type { UserProfile } from '@/features/user/userTypes';
 import type { PantryItem } from '@/features/pantry/types';
-import RecipeCard from '../components/RecipeCard';
-import RecipeList from '../components/RecipeList'; // Importar RecipeList
-import { toast } from 'sonner';
-import { suggestSingleRecipeFromPantry } from '../generationService';
-import { EmptyState } from '@/components/common/EmptyState';
+import { DEFAULT_USER_PREFERENCES } from '@/types/userPreferences';
+import type { UserPreferences } from '@/types/userPreferences';
 
-// --- Helper Functions (buildRecipePrompt, extractAndParseRecipe - sin cambios) ---
-const buildRecipePrompt = (
-  userPrompt: string,
-  preferences?: Partial<UserProfile>,
-  pantryIngredients?: string[]
-): string => {
-  let prompt = "";
-  if (pantryIngredients && pantryIngredients.length > 0) {
-    prompt = `Genera una receta de cocina creativa utilizando principalmente los siguientes ingredientes que tengo disponibles: ${pantryIngredients.join(', ')}. `;
-    if (userPrompt.trim()) {
-      prompt += `Considera también esta descripción adicional: "${userPrompt}". `;
-    }
-    prompt += "Puedes usar otros ingredientes comunes si es necesario.\n\n";
-  } else {
-    prompt = `Genera una receta de cocina basada en la siguiente descripción: "${userPrompt}".\n\n`;
-  }
-  if (preferences) {
-    prompt += "Considera las siguientes preferencias del usuario:\n";
-    if (preferences.dietary_preference) prompt += `- Preferencia dietética: ${preferences.dietary_preference}\n`;
-    if (preferences.allergies_restrictions) prompt += `- Alergias/Restricciones: ${preferences.allergies_restrictions}\n`;
-    if (preferences.difficulty_preference) prompt += `- Dificultad preferida: ${preferences.difficulty_preference}\n`;
-    if (preferences.max_prep_time) prompt += `- Tiempo máximo de preparación: ${preferences.max_prep_time} minutos\n`;
-    prompt += "\n";
-  }
-  prompt += "Formatea la respuesta completa como un único objeto JSON válido contenido dentro de un bloque de código JSON (\`\`\`json ... \`\`\`). El objeto JSON debe tener las siguientes claves: 'title' (string), 'description' (string), 'prepTimeMinutes' (number), 'cookTimeMinutes' (number), 'servings' (number), 'ingredients' (array of objects with 'quantity' (número decimal, sin fracciones como 1/2), 'unit' (string, puede ser null o vacío), 'name' (string)), y 'instructions' (array of strings). Importante: las cantidades deben ser números decimales (ej: 0.5 en lugar de 1/2).";
-  return prompt;
-};
+// Stores & Services
+import { useRecipeStore } from '@/stores/recipeStore';
+import { useAuth } from '@/features/auth/AuthContext';
+import { getUserProfile } from '@/features/user/userService';
+import { getPantryItems } from '@/features/pantry/services/pantryService'; // Corregir ruta
+import { getRecipes, addRecipe, updateRecipe, deleteRecipe, toggleRecipeFavorite } from '../services/recipeService';
+import { preferencesService } from '@/features/user/services/PreferencesService'; // Importar servicio de preferencias
+import { debugLogger } from '@/lib/utils';
+import { buildCreativePrompt } from '../generationService';
 
-const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null => {
+// Inicialización del logger
+// No crear una instancia de logger aquí, llamar directamente a debugLogger
+
+// --- Definición local del tipo GeneratedRecipeData ---
+interface GeneratedRecipeData {
+  title: string;
+  description: string | null;
+  ingredients: Array<{ name: string; quantity: number | string | null; unit: string | null }>;
+  instructions: string[];
+  prepTimeMinutes: number | null;
+  cookTimeMinutes: number | null;
+  servings: number | null;
+  tags?: string[] | null;
+  // Añadir otros campos si son necesarios y devueltos por la API/parseo
+}
+
+// --- Helper Functions ---
+const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null => { // Usar tipo local
   try {
     const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
@@ -90,13 +88,16 @@ const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null
         Array.isArray(parsedData.instructions)
       ) {
         const validIngredients = parsedData.ingredients.every(
-          (ing: any) => typeof ing.name === 'string' // Simplificado, la cantidad puede ser número
+          (ing: any) => typeof ing.name === 'string'
         );
         const validInstructions = parsedData.instructions.every(
           (inst: any) => typeof inst === 'string'
         );
         if (validIngredients && validInstructions) {
-           return parsedData as GeneratedRecipeData;
+           // Validación básica de la estructura de GeneratedRecipeData
+           if (typeof parsedData.prepTimeMinutes === 'number' && typeof parsedData.cookTimeMinutes === 'number' && typeof parsedData.servings === 'number') {
+             return parsedData as GeneratedRecipeData; // Usar tipo local
+           }
         }
       }
     }
@@ -107,7 +108,6 @@ const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null
     return null;
   }
 };
-
 
 // --- Componente para el Switch de Vista ---
 const ViewModeSwitch: React.FC<{ currentMode: 'card' | 'list'; onChange: (mode: 'card' | 'list') => void }> = ({ currentMode, onChange }) => (
@@ -133,49 +133,59 @@ const ViewModeSwitch: React.FC<{ currentMode: 'card' | 'list'; onChange: (mode: 
   </div>
 );
 
+interface RecipeListPageProps {}
+
 // --- Component Principal ---
-export const RecipeListPage: React.FC = () => {
+export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
+  // Hooks y contexto
   const navigate = useNavigate();
   const { user, session } = useAuth();
+
+  // Estado global de recetas
   const {
     recipes,
     isLoading,
     error,
-    fetchRecipes,
+    loadRecipes,
     toggleFavorite,
     deleteRecipe,
-    showOnlyFavorites,
-    toggleFavoriteFilter,
-    searchTerm,
-    setSearchTerm,
-    fetchNextPage,
     hasMore,
-    isLoadingMore,
-    sortOption,
-    setSortOption,
-    selectedIngredients,
-    selectedTags,
-    setSelectedIngredients,
-    setSelectedTags,
-    // Nuevos estados y acciones del store
-    viewMode,
-    availableTags, // Usar este en lugar del hardcodeado
-    setViewMode,
-    clearTagFilters, // Usado en handleClearFilters
+    filters,
+    setFilters
   } = useRecipeStore();
 
-  const [usePantryIngredients, setUsePantryIngredients] = useState(false);
+  // Tags disponibles
+  const availableTags = useMemo(() =>
+    RECIPE_CATEGORIES
+      .filter(category => category.id !== 'all')
+      .map(category => category.name),
+    []
+  );
+
+  // Estados derivados del store
+  // Destructuring de filters con valores por defecto
+  const {
+    searchTerm = '',
+    selectedIngredients = [],
+    selectedTags = [],
+    showOnlyFavorites = false,
+    sortOption = 'created_at_desc',
+    categoryId = null,
+    viewMode = 'card'
+  } = filters;
+
+  // Estados locales para la UI
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [promptText, setPromptText] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [usePantryIngredients, setUsePantryIngredients] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
-
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [tempSelectedIngredients, setTempSelectedIngredients] = useState<string[]>([]);
   const [tempSelectedTags, setTempSelectedTags] = useState<string[]>([]);
+  const [isGenerationDialogOpen, setIsGenerationDialogOpen] = useState(false); // Estado para el diálogo de generación
 
   // TODO: Obtener availableIngredients dinámicamente si es necesario, o desde config
   const availableIngredients = ['Pollo', 'Arroz', 'Tomate', 'Cebolla', 'Ajo', 'Pimiento', 'Carne Picada', 'Pasta'];
@@ -188,71 +198,75 @@ export const RecipeListPage: React.FC = () => {
   ];
 
   // --- Funciones para manejar el Sheet de Filtros ---
-  const handleIngredientChange = (ingredient: string, checked: boolean) => {
+  const handleIngredientChange = useCallback((ingredient: string, checked: boolean) => {
     setTempSelectedIngredients(prev =>
-      checked ? [...prev, ingredient] : prev.filter(item => item !== ingredient)
+      checked
+        ? [...prev, ingredient]
+        : prev.filter(item => item !== ingredient)
     );
-  };
+  }, []);
 
-  const handleTagChange = (tag: string, checked: boolean) => {
+  const handleTagChange = useCallback((tag: string, checked: boolean) => {
     setTempSelectedTags(prev =>
-      checked ? [...prev, tag] : prev.filter(item => item !== tag)
+      checked
+        ? [...prev, tag]
+        : prev.filter(item => item !== tag)
     );
-  };
+  }, []);
 
-  const handleApplyFilters = () => {
+  const handleApplyFilters = useCallback(() => {
     if (user?.id) {
-      // Idealmente, el store debería tener una acción para setear múltiples filtros y hacer un solo fetch.
-      // Por ahora, llamamos a ambas acciones que dispararán fetches separados.
-      setSelectedIngredients(tempSelectedIngredients, user.id);
-      setSelectedTags(tempSelectedTags, user.id);
+      setFilters({
+        ...filters,
+        selectedIngredients: tempSelectedIngredients,
+        selectedTags: tempSelectedTags
+      });
       setIsFilterSheetOpen(false);
     }
-  };
+  }, [user?.id, tempSelectedIngredients, tempSelectedTags, filters, setFilters, setIsFilterSheetOpen]);
 
-  const handleClearFilters = () => {
+  const handleClearFilters = useCallback(() => {
     setTempSelectedIngredients([]);
     setTempSelectedTags([]);
-    // Aplicar limpieza a los filtros globales también
     if (user?.id) {
-      // Idealmente, una sola acción en el store para limpiar ambos y hacer un solo fetch.
-      setSelectedIngredients([], user.id);
-      clearTagFilters(user.id);
-      // No cerramos el sheet aquí, el usuario puede querer seguir ajustando.
+      setFilters({
+        ...filters,
+        selectedIngredients: [],
+        selectedTags: []
+      });
     }
-  };
+  }, [user?.id, filters, setFilters]);
 
-  // Sincronizar estado temporal con el global al abrir el sheet
+  // Sincronizar estado temporal con el global
   useEffect(() => {
     if (isFilterSheetOpen) {
       setTempSelectedIngredients(selectedIngredients);
       setTempSelectedTags(selectedTags);
     }
-  }, [isFilterSheetOpen, selectedIngredients, selectedTags]);
+  }, [isFilterSheetOpen, selectedIngredients, selectedTags, setTempSelectedIngredients, setTempSelectedTags]);
 
-  // Carga inicial de recetas
+  // Efecto para carga inicial y actualización de datos
   useEffect(() => {
-    if (user?.id) {
-      fetchRecipes({
-        userId: user.id,
-        filters: { searchTerm, showOnlyFavorites, sortOption, selectedIngredients, selectedTags },
-        page: 1,
-        reset: true
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, fetchRecipes]); // Dependencias mínimas para carga inicial
+    const loadData = async () => {
+      if (!user?.id) return;
 
-  // --- Handlers para Generación y Sugerencia (sin cambios) ---
+      debugLogger("[RecipeListPage] Loading recipes with current filters");
+      await loadRecipes(user.id, true);
+    };
+
+    loadData();
+  }, [user?.id, loadRecipes]);
+
+  // --- Handlers para Generación y Sugerencia ---
   const handleGenerateRecipe = async () => {
     const usePantry = usePantryIngredients;
     if (!promptText.trim() && !usePantry) {
-      setGenerationError("Por favor, introduce una descripción o selecciona 'Usar ingredientes de mi despensa'.");
+      setGenerationError("Introduce una descripción o marca 'Usar ingredientes de mi despensa'.");
       return;
     }
-     if (!session || !user?.id) {
-        setGenerationError("Necesitas iniciar sesión para generar recetas.");
-        return;
+    if (!session || !user?.id) {
+      setGenerationError("Debes iniciar sesión para generar recetas.");
+      return;
     }
     setIsGenerating(true);
     setGenerationError(null);
@@ -262,21 +276,26 @@ export const RecipeListPage: React.FC = () => {
       try {
           userProfile = await getUserProfile(user.id);
           apiKey = userProfile?.gemini_api_key ?? undefined;
-          console.log("API Key obtenida del perfil de usuario.");
       } catch (profileError) {
           console.warn("No se pudo obtener el perfil del usuario o la clave API del perfil:", profileError);
       }
       if (!apiKey) {
           apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-          if (apiKey) console.log("API Key obtenida de las variables de entorno.");
       }
       if (!apiKey) {
-        throw new Error('No API key available. Please set it in your profile or configure VITE_GEMINI_API_KEY.');
+        throw new Error('Clave API no disponible. Configúrala en tu perfil o en VITE_GEMINI_API_KEY.');
       }
-      const userPreferences = userProfile;
+      
+      let userPreferences: UserPreferences;
+      try {
+        userPreferences = await preferencesService.getUserPreferences(user.id);
+      } catch (prefError) {
+        console.warn("Error obteniendo preferencias, usando defaults:", prefError);
+        userPreferences = DEFAULT_USER_PREFERENCES;
+      }
+      
       let pantryIngredientNames: string[] | undefined = undefined;
       if (usePantry) {
-        console.log("Intentando obtener ingredientes de la despensa...");
         try {
           const pantryItems: PantryItem[] = await getPantryItems();
           if (pantryItems && pantryItems.length > 0) {
@@ -305,7 +324,18 @@ export const RecipeListPage: React.FC = () => {
         }
       }
       console.log(`Construyendo prompt ${usePantry && pantryIngredientNames ? 'con' : 'sin'} ingredientes de despensa.`);
-      const fullPrompt = buildRecipePrompt(promptText, userPreferences ?? undefined, pantryIngredientNames);
+      // const simplePrompt = `Genera una receta de cocina basada en: \"${promptText}\"${pantryIngredientNames ? ` usando principalmente: ${pantryIngredientNames.join(', ')}` : ''}. Formato JSON: { title, description, prepTimeMinutes, cookTimeMinutes, servings, ingredients: [{name, quantity, unit}], instructions }. Cantidades como números decimales.`;
+      // const fullPrompt = simplePrompt;
+      // Usar buildCreativePrompt para un prompt más robusto
+      const fullPrompt = buildCreativePrompt(
+        null, // No estamos adaptando una receta base aquí
+        pantryIngredientNames || [], // Ingredientes de la despensa si se usan
+        userPreferences, // Pasar las preferencias obtenidas
+        promptText, // Usar la descripción del usuario como contexto
+        undefined, // No especificamos MealType aquí
+        null, // Sin modificador de estilo específico
+        [] // Sin contexto de recetas previas
+      );
       console.log("Prompt final para Gemini:", fullPrompt);
       console.log("Llamando a la API de Gemini...");
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -341,7 +371,7 @@ export const RecipeListPage: React.FC = () => {
        }
       const responseText = geminiResult.candidates[0].content.parts[0].text;
       console.log("Texto JSON original:", responseText);
-      let recipeData: GeneratedRecipeData | null = null;
+      let recipeData: GeneratedRecipeData | null = null; // Usar tipo local
       try {
           const sanitizedText = responseText
               .replace(/"quantity":\s*1\/2\b/g, '"quantity": 0.5')
@@ -352,15 +382,37 @@ export const RecipeListPage: React.FC = () => {
           console.log("Texto JSON sanitizado:", sanitizedText);
           recipeData = JSON.parse(sanitizedText);
           console.log("Receta parseada exitosamente:", recipeData);
+          // Validar estructura y tipos usando los nombres camelCase del tipo local GeneratedRecipeData
           if (!recipeData || typeof recipeData.title !== 'string' || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions) || typeof recipeData.prepTimeMinutes !== 'number' || typeof recipeData.cookTimeMinutes !== 'number' || typeof recipeData.servings !== 'number') {
-              console.error("JSON parseado pero con formato inválido o tipos incorrectos:", recipeData);
+              console.error("JSON parseado pero con formato inválido o tipos incorrectos para GeneratedRecipeData:", recipeData);
               throw new Error("Formato JSON de receta inválido o incompleto.");
           }
-           recipeData.ingredients = recipeData.ingredients.map(ing => ({
-               quantity: ing.quantity ?? '',
-               unit: ing.unit ?? '',
-               name: ing.name ?? 'Ingrediente desconocido'
-           })).filter(ing => ing.name !== 'Ingrediente desconocido' && ing.name.trim() !== '');
+           // Mapear y limpiar ingredientes usando recipeData.ingredients (camelCase)
+          recipeData.ingredients = recipeData.ingredients
+              .map((ing: GeneratedRecipeData['ingredients'][number]) => {
+                  // Parsea la cantidad asegurándose de que sea number | null
+                  let quantityValue: number | null = null;
+                  if (typeof ing.quantity === 'number') {
+                      quantityValue = ing.quantity;
+                  } else if (typeof ing.quantity === 'string') {
+                      const parsed = parseFloat(ing.quantity.replace(',', '.'));
+                      if (!isNaN(parsed)) {
+                          quantityValue = parsed;
+                      }
+                  }
+                  // Asegurar que unit sea string | null
+                  const unitValue = typeof ing.unit === 'string' ? ing.unit.trim() : null;
+                  
+                  return {
+                      name: ing.name ?? 'Ingrediente desconocido',
+                      quantity: quantityValue,
+                      unit: unitValue,
+                  };
+              })
+              .filter((ing: { name: string; quantity: number | null; unit: string | null }) =>
+                  // Filtrar por nombre válido
+                  ing.name !== 'Ingrediente desconocido' && ing.name.trim() !== ''
+              );
       } catch (parseError) {
           console.error("Error al parsear la respuesta JSON de la API:", parseError, responseText);
           const snippet = responseText.substring(0, 100);
@@ -371,6 +423,7 @@ export const RecipeListPage: React.FC = () => {
       setIsDialogOpen(false);
       setPromptText('');
       setUsePantryIngredients(false);
+      setGenerationError(null); // Limpiar error al cerrar
     } catch (error: any) {
       console.error("Error generando receta:", error);
       setGenerationError(error.message || "Ocurrió un error inesperado al generar la receta.");
@@ -387,16 +440,25 @@ export const RecipeListPage: React.FC = () => {
     setIsSuggesting(true);
     setSuggestionError(null);
     try {
-      console.log("Solicitando sugerencia de receta desde la despensa...");
-      const suggestedRecipe = await suggestSingleRecipeFromPantry(user.id);
-      if (suggestedRecipe) {
-        console.log("Receta sugerida recibida, navegando a edición:", suggestedRecipe);
-        navigate('/app/recipes/new', { state: { generatedRecipe: suggestedRecipe } });
-      } else {
-        console.log("No se pudo obtener una sugerencia de receta.");
-        toast.info("No pudimos generar una sugerencia con tus ingredientes actuales.");
-        setSuggestionError("No se pudo generar una sugerencia con los ingredientes de tu despensa.");
+      console.log("Obteniendo ítems de la despensa para sugerencia...");
+      const pantryItems = await getPantryItems(); // Obtener ítems primero
+      if (!pantryItems || pantryItems.length === 0) {
+        console.log("La despensa está vacía, no se puede sugerir.");
+        toast.info("Tu despensa está vacía. Añade ingredientes para obtener sugerencias.");
+        setSuggestionError("Despensa vacía.");
+        setIsSuggesting(false);
+        return;
       }
+      console.log("Solicitando sugerencia de receta desde la despensa con", pantryItems.length, "items.");
+      // const suggestedRecipe = await suggestSingleRecipeFromPantry(pantryItems); // Función no disponible
+      // if (suggestedRecipe) { // Comentado porque suggestedRecipe ya no se obtiene
+      //   console.log("Receta sugerida recibida, navegando a edición:", suggestedRecipe);
+      //   navigate('/app/recipes/new', { state: { generatedRecipe: suggestedRecipe } });
+      // } else {
+      //   console.log("No se pudo obtener una sugerencia de receta.");
+      //   toast.info("No pudimos generar una sugerencia con tus ingredientes actuales.");
+      //   setSuggestionError("No se pudo generar una sugerencia con los ingredientes de tu despensa.");
+      // }
     } catch (error: any) {
       console.error("Error al sugerir receta desde la despensa:", error);
       const errorMessage = error.message || "Ocurrió un error inesperado al obtener la sugerencia.";
@@ -409,70 +471,89 @@ export const RecipeListPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      {/* --- Cabecera y Botones Principales --- */}
-      <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-        <h1 className="text-3xl md:text-4xl font-bold">Mis Recetas</h1>
-        <div className="flex gap-2">
-           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="default">
-                <Sparkles className="mr-2 h-4 w-4" /> Generar desde Descripción
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Generar Receta con IA</DialogTitle>
-                <DialogDescription>
-                  Describe qué tipo de receta quieres generar. Puedes incluir ingredientes, tipo de cocina, dificultad, etc.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="prompt" className="text-right col-span-1">
-                    Descripción
-                  </Label>
-                  <Textarea
-                    id="prompt"
-                    value={promptText}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    placeholder="Ej: Una cena rápida y saludable con pollo y verduras"
-                    className="col-span-3"
-                    rows={3}
-                  />
-                </div>
-                <div className="flex items-center space-x-2 mt-2 col-span-4 justify-end">
-                  <Switch
-                    id="use-pantry"
-                    checked={usePantryIngredients}
-                    onCheckedChange={setUsePantryIngredients}
-                  />
-                  <Label htmlFor="use-pantry">Usar ingredientes de mi despensa</Label>
-                </div>
-                {generationError && <p className="text-red-500 text-sm col-span-4">{generationError}</p>}
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  onClick={handleGenerateRecipe}
-                  disabled={isGenerating || (!promptText.trim() && !usePantryIngredients)}
-                >
-                  {isGenerating ? <Spinner size="sm" className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Generar Receta
+      {/* --- Cabecera --- */}
+      <header className="mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-200 pb-4">
+          <h1 className="text-3xl md:text-4xl font-bold">Mis Recetas</h1>
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            {/* --- Botón Generar desde Descripción (abre Dialog) --- */}
+            <Dialog open={isGenerationDialogOpen} onOpenChange={setIsGenerationDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default">
+                  <Sparkles className="mr-2 h-4 w-4" /> Generar desde Descripción
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-           </Dialog>
-          <Button variant="secondary" onClick={handleSuggestFromPantry} disabled={isSuggesting || isLoading || isGenerating}>
-            {isSuggesting ? <Spinner size="sm" className="mr-2" /> : <ClipboardList className="mr-2 h-4 w-4" />}
-            Sugerir desde Despensa
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to="/app/recipes/new">
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Generar Receta con IA</DialogTitle>
+                  <DialogDescription>
+                    Describe qué tipo de receta quieres o usa tus ingredientes de la despensa.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="recipe-prompt">Descripción de la Receta</Label>
+                    <Textarea
+                      id="recipe-prompt"
+                      placeholder="Ej: 'Un postre rápido con chocolate y frutas' o 'Algo vegetariano para la cena'"
+                      value={promptText}
+                      onChange={(e) => setPromptText(e.target.value)}
+                      rows={3}
+                      disabled={isGenerating}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="use-pantry"
+                      checked={usePantryIngredients}
+                      onCheckedChange={(checked) => setUsePantryIngredients(!!checked)} // Asegurar que sea boolean
+                      disabled={isGenerating}
+                    />
+                    <Label htmlFor="use-pantry" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      Usar ingredientes de mi despensa
+                    </Label>
+                  </div>
+                   {generationError && (
+                     <Alert variant="destructive">
+                       <AlertCircle className="h-4 w-4" />
+                       <AlertTitle>Error de Generación</AlertTitle>
+                       <AlertDescription>{generationError}</AlertDescription>
+                     </Alert>
+                   )}
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                     <Button variant="outline" disabled={isGenerating}>Cancelar</Button>
+                  </DialogClose>
+                  <Button
+                    onClick={handleGenerateRecipe}
+                    disabled={isGenerating || (!promptText.trim() && !usePantryIngredients)}
+                  >
+                    {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Generar Receta
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* --- Botón Sugerir desde Despensa --- */}
+            <Button
+              onClick={handleSuggestFromPantry}
+              disabled={isSuggesting}
+              variant="secondary"
+            >
+              {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardList className="mr-2 h-4 w-4" />}
+              Sugerir desde Despensa
+            </Button>
+            <a
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+              href="/app/recipes/new"
+            >
               <PlusCircle className="mr-2 h-4 w-4" /> Añadir Manualmente
-            </Link>
-          </Button>
+            </a>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* --- Controles Principales (Búsqueda, Favoritos, Orden, Filtros, Vista) --- */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
@@ -483,11 +564,8 @@ export const RecipeListPage: React.FC = () => {
             placeholder="Buscar recetas..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              // Disparar búsqueda con debounce o botón
-              // Ejemplo simple: buscar al cambiar (puede ser ineficiente)
               if (user?.id) {
-                 fetchRecipes({ userId: user.id, filters: { searchTerm: e.target.value }, page: 1, reset: true });
+                setFilters({ ...filters, searchTerm: e.target.value });
               }
             }}
           />
@@ -499,14 +577,21 @@ export const RecipeListPage: React.FC = () => {
             <Switch
               id="favorite-filter"
               checked={showOnlyFavorites}
-              onCheckedChange={() => user?.id && toggleFavoriteFilter(user.id)}
+              onCheckedChange={() => user?.id && setFilters({ ...filters, showOnlyFavorites: !showOnlyFavorites })}
             />
             <Label htmlFor="favorite-filter">Solo Favoritos</Label>
           </div>
 
           {/* Select Ordenamiento */}
           <div className="w-full sm:w-auto">
-            <Select value={sortOption} onValueChange={(value) => user?.id && setSortOption(value, user.id)}>
+            <Select
+              value={filters.sortOption || 'created_at_desc'}
+              onValueChange={(value) => {
+                if (user?.id) {
+                  setFilters({ ...filters, sortOption: value });
+                }
+              }}
+            >
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Ordenar por..." />
               </SelectTrigger>
@@ -578,16 +663,60 @@ export const RecipeListPage: React.FC = () => {
               </SheetFooter>
             </SheetContent>
           </Sheet>
-
-           {/* Switch de Vista */}
-           <ViewModeSwitch currentMode={viewMode} onChange={setViewMode} />
-
+          <ViewModeSwitch
+            currentMode={filters.viewMode || 'card'}
+            onChange={(mode) => setFilters({ ...filters, viewMode: mode })}
+          />
         </div>
       </div>
 
-      {/* --- Grid o Lista de Recetas --- */}
-      {isLoading && <div className="flex justify-center mt-10"><Spinner size="lg" /></div>}
-      {!isLoading && error && <p className="text-red-500 text-center mt-10">Error: {error}</p>}
+      {/* Tabs de Categorías */}
+      <div className="mb-6 flex justify-center relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-400/15 via-pink-400/10 to-blue-400/15 backdrop-blur-md rounded-xl shadow-lg ring-1 ring-white/10 -z-10" />
+        <div className="w-full max-w-4xl px-4">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-10">
+              <Spinner size="sm" className="text-purple-500" />
+            </div>
+          ) : (
+            <AnimatedTabs
+              tabs={[
+                { id: 'all', label: 'Todas', icon: React.createElement(Home, { className: "w-3.5 h-3.5" }) },
+                ...RECIPE_CATEGORIES
+                  .filter((category: RecipeCategory) => category.id !== 'all')
+                  .map((category: RecipeCategory) => ({
+                    id: category.id,
+                    label: category.name,
+                    icon: getCategoryIcon(category.id)
+                  }))
+              ]}
+              activeTabIds={filters.categoryId ? [filters.categoryId] : ['all']}
+              onChange={(ids) => {
+                const selectedId = ids[0] || 'all';
+                if (user?.id) {
+                  setFilters({
+                    ...filters,
+                    categoryId: selectedId === 'all' ? null : selectedId
+                  });
+                }
+              }}
+              className="max-w-xl px-6 py-3.5 rounded-xl bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all duration-300 shadow-md"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Contenido Principal */}
+      {isLoading && (
+         <div className="flex justify-center mt-10">
+           <Spinner size="lg" />
+         </div>
+       )}
+      {!isLoading && error && (
+        <p className="text-red-500 text-center mt-10">
+          Error: {error instanceof Error ? error.message : String(error)}
+        </p>
+      )}
       {!isLoading && !error && recipes.length === 0 && (
         <EmptyState
           title="No hay recetas"
@@ -607,31 +736,34 @@ export const RecipeListPage: React.FC = () => {
 
       {!isLoading && !error && recipes.length > 0 && (
         <>
-          {viewMode === 'card' ? (
+          {(filters.viewMode || 'card') === 'card' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {recipes.map((recipe) => (
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
-                  onToggleFavorite={() => toggleFavorite(recipe.id)}
+                  onToggleFavorite={() => toggleFavorite(recipe.id, !recipe.is_favorite)}
                   onDelete={() => deleteRecipe(recipe.id)}
                 />
               ))}
             </div>
           ) : (
-            // Usar el componente RecipeList real
-            <RecipeList recipes={recipes} />
+            <RecipeList
+              recipes={recipes}
+              onToggleFavorite={(id, isFavorite) => toggleFavorite(id, isFavorite)}
+              onDelete={(id) => deleteRecipe(id)}
+            />
           )}
 
           {/* Botón Cargar Más */}
           {hasMore && (
             <div className="flex justify-center mt-8">
               <Button
-                onClick={() => user?.id && fetchNextPage(user.id)}
-                disabled={isLoadingMore}
+                onClick={() => user?.id && loadRecipes(user.id, false)} // false para no resetear
+                disabled={isLoading}
                 variant="outline"
               >
-                {isLoadingMore ? <Spinner size="sm" className="mr-2" /> : null}
+                {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
                 Cargar más recetas
               </Button>
             </div>

@@ -19,8 +19,14 @@ const options = {
     detectSessionInUrl: true,
   },
   global: {
+    // Eliminar headers explícitos que causan conflictos (Supabase SDK ya los maneja internamente)
     fetch: typeof fetch !== 'undefined' ? fetch : undefined, // Pasar fetch explícitamente si existe
-  },
+  }
 };
+
+console.log('Inicializando Supabase client con:', { 
+  url: supabaseUrl, 
+  hasKey: !!supabaseAnonKey
+});
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, options);

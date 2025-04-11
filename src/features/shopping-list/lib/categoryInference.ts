@@ -141,7 +141,5 @@ export async function initializeCategories(): Promise<void> {
   }
 }
 
-// Inicialización automática
-initializeCategories().catch(err => {
-  console.error('[categoryInference] Background initialization failed:', err);
-});
+// Eliminada la auto-inicialización para evitar duplicidades
+// La inicialización se realiza desde App.tsx

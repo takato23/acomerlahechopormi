@@ -5,10 +5,11 @@ import { Card, CardContent } from '@/components/ui/card'; // Usar Card para un c
 
 interface RecipeListProps {
   recipes: Recipe[];
-  // Podríamos pasar aquí las funciones onToggleFavorite y onDelete si las implementamos en RecipeListItem
+  onToggleFavorite: (id: string, isFavorite: boolean) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
-const RecipeList: React.FC<RecipeListProps> = ({ recipes }) => {
+const RecipeList: React.FC<RecipeListProps> = ({ recipes, onToggleFavorite, onDelete }) => {
   if (!recipes || recipes.length === 0) {
     // Aunque RecipeListPage ya maneja el estado vacío, es bueno tener un fallback
     return <p className="text-center text-slate-500 mt-8">No hay recetas para mostrar en la lista.</p>;
@@ -20,7 +21,12 @@ const RecipeList: React.FC<RecipeListProps> = ({ recipes }) => {
         {/* Usar un div en lugar de ul/li para evitar estilos de lista por defecto */}
         <div>
           {recipes.map((recipe) => (
-            <RecipeListItem key={recipe.id} recipe={recipe} />
+            <RecipeListItem
+              key={recipe.id}
+              recipe={recipe}
+              onToggleFavorite={() => onToggleFavorite(recipe.id, !recipe.is_favorite)}
+              onDelete={() => onDelete(recipe.id)}
+            />
           ))}
         </div>
       </CardContent>

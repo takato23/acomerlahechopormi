@@ -1,197 +1,216 @@
-import { PantryItem, Category } from '../types';
-import { PantryListItemRow } from './PantryListItemRow';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useMemo, useEffect } from 'react';
-import { getCategories } from '../../shopping-list/services/categoryService'; // Reutilizar servicio
-import { updatePantryItem, deletePantryItem } from '../pantryService'; // Importar servicios
-import { Tag } from 'lucide-react'; // Placeholder icono
+import { PantryItem } from '@/types/pantryTypes';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Trash2, Edit, Star, Calendar } from 'lucide-react';
+import { Category } from '@/types/categoryTypes';
+// Usar la importación centralizada
+import { getCategories } from '@/features/categories';
+import { updatePantryItem, deletePantryItem } from '../services/pantryService';
+import { usePantryStore } from '../stores/pantryStore';
+import { formatDate } from '@/lib/utils';
 
-interface PantryAccordionListProps {
+interface Props {
   items: PantryItem[];
-  onItemDeleted: (itemId: string) => void; // Callback para actualizar estado en Page
-  onItemUpdated: (updatedItem: PantryItem) => void; // Callback para actualizar estado en Page
-  onEditClick: (item: PantryItem) => void; // Callback para abrir modal en Page
-  onError: (message: string) => void;
+  onEdit: (item: PantryItem) => void;
+  onDelete: (id: string) => void;
+  onToggleFavorite: (id: string, isFavorite: boolean) => void;
 }
 
-export function PantryAccordionList({
-  items,
-  onItemDeleted,
-  onItemUpdated,
-  onEditClick,
-  onError,
-}: PantryAccordionListProps) {
-  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
-  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+export const PantryAccordionList = ({ items, onEdit, onDelete, onToggleFavorite }: Props) => {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [openCategories, setOpenCategories] = useState<string[]>([]); // IDs de categorías abiertas
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState<number | string>('');
+  const [editingUnit, setEditingUnit] = useState<string>('');
+  const [editingExpiry, setEditingExpiry] = useState<string>('');
+  const [editingNotes, setEditingNotes] = useState<string>('');
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const { updateItem, deleteItem } = usePantryStore();
 
-  // Cargar categorías
   useEffect(() => {
-    async function loadCategories() {
+    const loadCategories = async () => {
       try {
-        const cats = await getCategories();
-        setCategories(cats);
-        // Opcional: Abrir todas las categorías por defecto al inicio
-        setOpenCategories(cats.map(c => c.id).concat('uncategorized'));
-      } catch (err) {
-        console.error("Error loading categories for accordion:", err);
-        onError("Error al cargar categorías.");
+        const data = await getCategories();
+        setCategories(data || []);
+      } catch (error) {
+        console.error('Error loading categories:', error);
       }
-    }
+    };
     loadCategories();
-  }, [onError]);
+  }, []);
 
-  // Agrupar y ordenar items (misma lógica que PantryGrid)
-  const groupedAndSortedItems = useMemo(() => {
-    // ... (lógica de agrupación idéntica a PantryGrid, incluyendo defaultCategory) ...
-     if (categories.length === 0 && items.length > 0) {
-        // Si no hay categorías cargadas pero sí items, agrupar todo en 'uncategorized'
-        return { 'uncategorized': items };
-    }
-     if (categories.length === 0) return {}; // Evitar error si no hay categorías
+  const groupedItems = useMemo(() => {
+    const groups: { [key: string]: PantryItem[] } = {};
+    items.forEach(item => {
+      const categoryName = item.category?.name || 'Sin categoría';
+      if (!groups[categoryName]) {
+        groups[categoryName] = [];
+      }
+      groups[categoryName].push(item);
+    });
+    return Object.entries(groups).sort(([nameA], [nameB]) => nameA.localeCompare(nameB));
+  }, [items]);
 
-    const categoryMap = new Map(categories.map(cat => [cat.id, cat]));
-    const defaultCategory: Category = { id: 'uncategorized', name: 'Sin Categoría', order: 999, is_default: true };
-    categoryMap.set(defaultCategory.id, defaultCategory);
+  const handleEditClick = (item: PantryItem) => {
+    setEditingItemId(item.id);
+    setEditingQuantity(item.quantity ?? '');
+    setEditingUnit(item.unit ?? '');
+    setEditingExpiry(item.expiry_date ? item.expiry_date.split('T')[0] : '');
+    setEditingNotes(item.notes ?? '');
+  };
 
-    const grouped = items.reduce((acc, item) => {
-      const categoryId = item.category_id || defaultCategory.id;
-      if (!acc[categoryId]) acc[categoryId] = [];
-      acc[categoryId].push(item);
-      return acc;
-    }, {} as Record<string, PantryItem[]>);
-
-    const sortedGrouped: Record<string, PantryItem[]> = {};
-    Object.keys(grouped)
-      .sort((a, b) => {
-        const catA = categoryMap.get(a);
-        const catB = categoryMap.get(b);
-        const orderA = catA?.order ?? 999;
-        const orderB = catB?.order ?? 999;
-        if (orderA !== orderB) return orderA - orderB;
-        return (catA?.name ?? 'zzz').localeCompare(catB?.name ?? 'zzz');
-      })
-      .forEach(categoryId => {
-        sortedGrouped[categoryId] = grouped[categoryId];
+  const handleSaveEdit = async (itemId: string) => {
+    try {
+      await updateItem(itemId, {
+        quantity: typeof editingQuantity === 'string' ? parseFloat(editingQuantity) : editingQuantity,
+        unit: editingUnit || null,
+        expiry_date: editingExpiry || null,
+        notes: editingNotes || null,
       });
-    return sortedGrouped;
-  }, [items, categories]);
-
-   const categoryMap = useMemo(() => {
-      const map = new Map(categories.map(cat => [cat.id, cat]));
-      map.set('uncategorized', { id: 'uncategorized', name: 'Sin Categoría', order: 999, is_default: true });
-      return map;
-  }, [categories]);
-
-
-  // Handlers (similares a PantryGrid, llaman a callbacks del padre)
-   const handleUpdateQuantity = async (item: PantryItem, delta: number) => {
-    setUpdatingItemId(item.id);
-    try {
-      const currentQuantity = item.quantity ?? 0;
-      const newQuantity = Math.max(0, currentQuantity + delta);
-      if (newQuantity === item.quantity) return;
-      const updateData = { quantity: newQuantity };
-      const updatedItemResult = await updatePantryItem(item.id, updateData);
-      if (updatedItemResult) onItemUpdated(updatedItemResult);
-      else onError('No se pudo actualizar la cantidad.');
+      setEditingItemId(null);
     } catch (error) {
-      onError('Ocurrió un error al actualizar la cantidad.');
-    } finally {
-      setUpdatingItemId(null);
+      console.error('Error updating item:', error);
     }
   };
 
-  const handleDelete = async (itemId: string) => {
-    setDeletingItemId(itemId);
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+  };
+
+  const handleSelectItem = (itemId: string, checked: boolean) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(itemId);
+      } else {
+        newSet.delete(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    const idsToDelete = Array.from(selectedItems);
     try {
-      await deletePantryItem(itemId); // Llamar a delete
-      onItemDeleted(itemId); // Asumir éxito si no hay error y llamar al callback
-      // Quitar el else, el error se maneja en el catch
+      await Promise.all(idsToDelete.map(id => deleteItem(id)));
+      setSelectedItems(new Set());
     } catch (error) {
-      onError('Ocurrió un error al eliminar el item.');
-    } finally {
-      setDeletingItemId(null);
+      console.error('Error deleting selected items:', error);
     }
   };
-
-  // Variantes de animación para los items dentro del acordeón
-  const itemVariants = {
-    hidden: { opacity: 0, height: 0 },
-    visible: { opacity: 1, height: 'auto' },
-    exit: { opacity: 0, height: 0, transition: { duration: 0.2 } },
-  };
-
-  if (items.length === 0) {
-    return <p className="text-muted-foreground">Tu despensa está vacía.</p>;
-  }
 
   return (
-    <Accordion
-        type="multiple" // Permite abrir múltiples secciones
-        value={openCategories} // Controlar secciones abiertas
-        onValueChange={setOpenCategories} // Actualizar estado al abrir/cerrar
-        className="w-full space-y-1"
-    >
-      {Object.entries(groupedAndSortedItems).map(([categoryId, itemsInCategory]) => {
-        const category = categoryMap.get(categoryId);
-        if (!itemsInCategory || itemsInCategory.length === 0) return null;
-
-        // Placeholder para icono de categoría
-        const CategoryIcon = category?.icon ? Tag : null;
-
-        return (
-          <AccordionItem value={categoryId} key={categoryId} className="border-b-0">
-            <AccordionTrigger className="px-3 py-2 text-sm font-medium hover:bg-muted/50 rounded-md [&[data-state=open]]:bg-muted/60">
-               <div className="flex items-center gap-2">
-                 {CategoryIcon && (
-                    <span style={{ color: category?.color ?? 'inherit' }}>
-                        <CategoryIcon className="h-4 w-4" />
-                    </span>
-                 )}
-                 <span>{category?.name ?? 'Desconocido'} ({itemsInCategory.length})</span>
-               </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-1 pb-0">
-              {/* Animar la lista de items dentro del contenido */}
-              <motion.div layout className="overflow-hidden">
-                 <AnimatePresence initial={false}>
-                    {itemsInCategory.map((item) => (
-                       <motion.div
-                         key={item.id}
-                         variants={itemVariants}
-                         initial="hidden"
-                         animate="visible"
-                         exit="exit"
-                         layout // Animar cambios de posición
-                       >
-                         <PantryListItemRow
-                           item={item}
-                           // onUpdateQuantity no existe
-                           onDelete={handleDelete}
-                           onEdit={onEditClick}
-                           // isUpdating no existe
-                           // isDeleting no existe
-                           // Añadir props faltantes con valores por defecto
-                           isSelectionMode={false}
-                           isSelected={false}
-                           onSelectItem={() => {}} // Función vacía
-                         />
-                       </motion.div>
-                    ))}
-                 </AnimatePresence>
-              </motion.div>
+    <div className="space-y-4">
+      {selectedItems.size > 0 && (
+        <div className="flex justify-end mb-4">
+          <Button variant="destructive" onClick={handleDeleteSelected}>
+            Eliminar Seleccionados ({selectedItems.size})
+          </Button>
+        </div>
+      )}
+      <Accordion type="multiple" className="w-full">
+        {groupedItems.map(([categoryName, categoryItems]) => (
+          <AccordionItem key={categoryName} value={categoryName}>
+            <AccordionTrigger className="text-lg font-medium">{categoryName}</AccordionTrigger>
+            <AccordionContent>
+              <ul className="space-y-3">
+                {categoryItems.map((item) => (
+                  <li key={item.id} className="flex items-center space-x-3 p-2 border-b">
+                    <Checkbox
+                      id={`select-${item.id}`}
+                      checked={selectedItems.has(item.id)}
+                      onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
+                    />
+                    <div className="flex-1">
+                      {editingItemId === item.id ? (
+                        <div className="space-y-2">
+                          <p className="font-medium">{item.ingredient?.name}</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label htmlFor={`quantity-${item.id}`}>Cantidad</Label>
+                              <Input
+                                id={`quantity-${item.id}`}
+                                type="number"
+                                value={editingQuantity}
+                                onChange={(e) => setEditingQuantity(e.target.value)}
+                                className="h-8"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`unit-${item.id}`}>Unidad</Label>
+                              <Input
+                                id={`unit-${item.id}`}
+                                type="text"
+                                value={editingUnit}
+                                onChange={(e) => setEditingUnit(e.target.value)}
+                                className="h-8"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor={`expiry-${item.id}`}>Vencimiento</Label>
+                            <Input
+                              id={`expiry-${item.id}`}
+                              type="date"
+                              value={editingExpiry}
+                              onChange={(e) => setEditingExpiry(e.target.value)}
+                              className="h-8"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`notes-${item.id}`}>Notas</Label>
+                            <Input
+                              id={`notes-${item.id}`}
+                              type="text"
+                              value={editingNotes}
+                              onChange={(e) => setEditingNotes(e.target.value)}
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2 mt-2">
+                            <Button size="sm" variant="ghost" onClick={handleCancelEdit}>Cancelar</Button>
+                            <Button size="sm" onClick={() => handleSaveEdit(item.id)}>Guardar</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{item.ingredient?.name}</span>
+                            <div className="flex items-center space-x-2">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onToggleFavorite(item.id, !item.is_favorite)}>
+                                <Star className={`w-4 h-4 ${item.is_favorite ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground'}`} />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(item)}>
+                                <Edit className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(item.id)}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="text-sm text-muted-foreground flex items-center space-x-2">
+                            <span>{item.quantity} {item.unit}</span>
+                            {item.expiry_date && (
+                              <span className="flex items-center text-xs">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                Vence: {formatDate(item.expiry_date)}
+                              </span>
+                            )}
+                          </div>
+                          {item.notes && <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </AccordionContent>
           </AccordionItem>
-        );
-      })}
-    </Accordion>
+        ))}
+      </Accordion>
+    </div>
   );
-}
+};

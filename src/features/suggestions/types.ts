@@ -1,46 +1,39 @@
-import { MealType } from '@/features/planning/types';
-
-export interface SuggestionContext {
-  date: string;
-  mealType: MealType;
-  userId: string;
-  currentPantryItems?: Array<{
-    ingredient_id: string;
-    name: string;
-  }>;
-  favoriteRecipeIds?: string[];
-  planningHistory?: Array<{
-    recipe_id: string;
-    count: number;
-  }>;
-}
-
-export interface Suggestion {
-  type: 'recipe' | 'custom';
+export interface RecipeSuggestion {
+  name: string;
+  description: string;
+  estimatedTime?: string;
+  difficulty?: 'fácil' | 'media' | 'difícil';
+  ingredients?: string[];
   id?: string;
-  title: string;
+  title?: string;
   reason?: string;
 }
 
 export interface SuggestionResponse {
-  pantrySuggestion?: Suggestion;
-  discoverySuggestion?: Suggestion;
-  pendingShoppingListCheck?: {
-    recipeId: string;
-    ingredientsCount: number;
+  suggestions: RecipeSuggestion[];
+  error?: string;
+}
+
+export interface SuggestionRequest {
+  pantryItems: {
+    name: string;
+    quantity: number;
+    unit?: string;
+  }[];
+  dietary?: {
+    vegetarian?: boolean;
+    vegan?: boolean;
+    glutenFree?: boolean;
   };
+  maxTime?: number; // en minutos
+  mealType?: string; // Tipo de comida (Desayuno, Almuerzo, etc.)
 }
 
-export interface IngredientMatch {
-  matched: boolean;
+// Interfaz necesaria para SuggestionsPopover
+export interface Suggestion {
+  id?: string;
+  title: string;
+  description?: string;
   reason?: string;
-  missingQuantity?: number;
-  unit?: string;
-}
-
-export interface MissingIngredient {
-  name: string;
-  quantity: number;
-  unit: string;
-  recipeId?: string;
+  type?: 'recipe' | 'custom';
 }

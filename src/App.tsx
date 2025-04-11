@@ -71,26 +71,34 @@ const LandingPage = () => {
 function App() {
   const { loading, user } = useAuth()
   const [categorySystemInitialized, setCategorySystemInitialized] = useState(false);
+  const [initializingCategories, setInitializingCategories] = useState(false);
 
   const { settings } = useSettings();
 
   // Inicializar sistema de categorías cuando el usuario inicia sesión
   const initializeSystem = useCallback(async () => {
-    if (user && !categorySystemInitialized) {
-      console.log('[App] User logged in, initializing category system...');
+    // Evitar múltiples inicializaciones simultáneas o reinicializaciones innecesarias
+    if ((user && !categorySystemInitialized && !initializingCategories)) {
       try {
+        setInitializingCategories(true);
+        console.log('[App] User logged in, initializing category system...');
         await initializeCategories();
         console.log('[App] Category system initialized successfully');
         setCategorySystemInitialized(true);
       } catch (error) {
         console.error('[App] Failed to initialize category system:', error);
+        // No establecer categorySystemInitialized como true si hay un error
+      } finally {
+        setInitializingCategories(false);
       }
     }
-  }, [user, categorySystemInitialized]);
+  }, [user, categorySystemInitialized, initializingCategories]);
 
   useEffect(() => {
-    initializeSystem();
-  }, [initializeSystem]);
+    if (user && !categorySystemInitialized && !initializingCategories) {
+      initializeSystem();
+    }
+  }, [user, categorySystemInitialized, initializingCategories, initializeSystem]);
 
   useEffect(() => {
     const rootElement = document.documentElement;
@@ -174,6 +182,11 @@ function App() {
           <Route path="shopping-list" element={
             <Suspense fallback={<PageLoader />}>
               <LazyFeatures.ShoppingListPage />
+            </Suspense>
+          } />
+          <Route path="simple-shopping" element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyFeatures.SimpleShoppingPage />
             </Suspense>
           } />
           <Route path="recipes" element={

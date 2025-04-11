@@ -234,3 +234,38 @@ export const clearPantry = async (): Promise<void> => {
 
   if (error) throw error;
 };
+
+/**
+ * Obtiene los items que están por debajo de su nivel mínimo de stock.
+ * @returns Promise<PantryItem[]> Array de items con stock bajo
+ */
+export const fetchLowStockItems = async (): Promise<PantryItem[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
+
+  const { data, error } = await supabase
+    .from('pantry_items')
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)')
+    .eq('user_id', user.id)
+    .not('min_stock', 'is', null)
+    .lt('quantity', 'min_stock')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map(item => ({
+    ...item,
+    ingredient: item.ingredients ? {
+      id: item.ingredients.id,
+      name: normalizeIngredientName(item.ingredients.name, item.quantity ?? 1),
+      image_url: item.ingredients.image_url
+    } : null,
+    category: item.categories ? {
+      id: item.categories.id,
+      name: item.categories.name,
+      icon_name: item.categories.icon_name
+    } : null,
+    ingredients: undefined,
+    categories: undefined
+  }));
+};

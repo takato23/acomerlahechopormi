@@ -5,6 +5,9 @@
 -- ALTER TABLE public.ingredients ENABLE ROW LEVEL SECURITY;
 
 -- Crear la política INSERT
+
+DROP POLICY IF EXISTS "Allow authenticated users to insert ingredients" ON public.ingredients;
+
 CREATE POLICY "Allow authenticated users to insert ingredients"
 ON public.ingredients
 FOR INSERT

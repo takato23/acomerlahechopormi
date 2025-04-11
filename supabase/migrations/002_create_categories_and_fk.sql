@@ -2,7 +2,7 @@
 
 -- 1. Crear la tabla 'categories'
 -- Eliminar tabla si existe para empezar limpio (¡CUIDADO EN PRODUCCIÓN!)
-DROP TABLE IF EXISTS public.categories CASCADE;
+-- DROP TABLE IF EXISTS public.categories CASCADE; -- Comentado temporalmente para depuración
 
 CREATE TABLE public.categories (
   id text PRIMARY KEY, -- Cambiado de UUID a TEXT

@@ -8,10 +8,11 @@ import { cn } from '@/lib/utils';
 
 interface RecipeListItemProps {
   recipe: Recipe;
-  // Podríamos añadir onToggleFavorite y onDelete aquí si queremos botones en la vista de lista
+  onToggleFavorite: () => void;
+  onDelete: () => void;
 }
 
-const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe }) => {
+const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, onToggleFavorite, onDelete }) => {
   const prepTime = recipe.prep_time_minutes ?? 0;
   const cookTime = recipe.cook_time_minutes ?? 0;
   const totalTime = prepTime + cookTime;
@@ -52,12 +53,32 @@ const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe }) => {
             <span>{recipe.servings}</span>
           </div>
         )}
-        {/* Podríamos añadir botones de acción aquí si se decide */}
-        {/* Ejemplo:
-        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-          <Heart className={`h-4 w-4 ${recipe.is_favorite ? "fill-current text-red-500" : ""}`} />
-        </Button>
-        */}
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.preventDefault();
+              onToggleFavorite();
+            }}
+            title={recipe.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+          >
+            <Heart className={cn("h-4 w-4", recipe.is_favorite ? "fill-current text-red-500" : "")} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity text-red-500 hover:text-red-600"
+            onClick={(e) => {
+              e.preventDefault();
+              onDelete();
+            }}
+            title="Eliminar receta"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+  import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from "path"
 import vercel from 'vite-plugin-vercel';
@@ -21,12 +21,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Definir variables globales para reemplazar import.meta.env
-  define: {
-    'process.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
-    'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
-    // Añade otras variables VITE_ que necesites exponer a process.env
-  },
+  // Vite maneja automáticamente las variables VITE_* desde .env a import.meta.env
+  // No es necesario usar 'define' para esto.
   css: {
     postcss: './postcss.config.js',
   },

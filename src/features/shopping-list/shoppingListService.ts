@@ -1,16 +1,21 @@
 import { getPlannedMeals } from '@/features/planning/planningService';
 import type { PlannedMeal } from '@/features/planning/types';
-import type { ShoppingListItem, RawIngredientInfo, AggregatedIngredient } from './types'; // Añadido AggregatedIngredient
+import type { ShoppingListItem, RawIngredientInfo, AggregatedIngredient, DBShoppingListItem } from './types'; // Añadido AggregatedIngredient y DBShoppingListItem
 import { supabase } from '@/lib/supabaseClient';
 import { normalizeUnit, parseQuantity, convertUnits } from '@/lib/ingredientUtils'; // Añadido convertUnits (asumiendo que existe)
 import type { Database } from '@/lib/database.types'; // Importar tipos generados
 
+// Definir el nombre de la tabla para evitar errores tipográficos
+const SHOPPING_LIST_TABLE = 'shopping_list_items';
 // --- Tipos Reales ---
 type RecipeIngredient = Database['public']['Tables']['recipe_ingredients']['Row'];
 type Recipe = Database['public']['Tables']['recipes']['Row'] & {
     recipe_ingredients: RecipeIngredient[];
 };
 type PantryItem = Database['public']['Tables']['pantry_items']['Row'];
+type DBShoppingListItemRow = Database['public']['Tables']['shopping_list_items']['Row'];
+type DBShoppingListItemInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
+type DBShoppingListItemUpdate = Database['public']['Tables']['shopping_list_items']['Update'];
 // --- Fin Tipos Reales ---
 
 // --- Constantes ---
@@ -305,15 +310,188 @@ export async function generateShoppingList(startDate: string, endDate: string, u
 
     console.log(`Lista de compras final generada con ${finalShoppingList.length} ítems.`);
 
-    // Opcional: Ordenar la lista final
+    // Opcional: Ordenar la lista final antes de guardar
     finalShoppingList.sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
 
-    return finalShoppingList;
+    // 9. Sincronizar con la base de datos
+    try {
+        // Pasar los valores del Map 'keyIngredients' que son de tipo AggregatedIngredient
+        await syncShoppingListWithDB(userId, Array.from(keyIngredients.values()));
+        console.log(`Lista de compras sincronizada con la DB para usuario ${userId}.`);
+    } catch (error) {
+        console.error("Error sincronizando la lista de compras con la DB:", error);
+        // Decidir si lanzar el error o devolver la lista generada igualmente
+        // Por ahora, lanzamos para que el store lo maneje
+        throw new Error("Error al guardar la lista de compras generada.");
+    }
+
+    // 10. Devolver la lista generada (ahora también persistida)
+    // Mapear de AggregatedIngredient a ShoppingListItem (que ahora representa el estado de la UI)
+    // Nota: La función getShoppingListItems será la fuente principal para la UI ahora.
+    // Esta función generate podría devolver void o un indicador de éxito.
+    // Por coherencia con la firma original, devolvemos la lista generada,
+    // pero la UI debería refrescarse desde getShoppingListItems.
+    return finalShoppingList.map(item => ({
+        id: item.id, // El ID es el ingredient_id en este punto
+        ingredientName: item.ingredientName,
+        quantity: item.quantity,
+        unit: item.unit,
+        isChecked: false, // Los items recién generados no están marcados
+        recipeSources: item.recipeSources,
+    }));
 }
 
-// --- Funciones Opcionales (Si se persiste la lista) ---
+/**
+ * Sincroniza la lista de compras generada con la base de datos.
+ * Elimina los items no marcados existentes y luego inserta los nuevos.
+ * @param userId ID del usuario.
+ * @param generatedItems Lista de items generados (tipo AggregatedIngredient).
+ */
+async function syncShoppingListWithDB(userId: string, generatedItems: AggregatedIngredient[]): Promise<void> {
+    // 1. Eliminar items no marcados existentes
+    const { error: deleteError } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .delete()
+        .eq('user_id', userId)
+        .eq('is_checked', false);
 
-// async function saveShoppingList(items: ShoppingListItem[]): Promise<void> { ... }
-// async function getSavedShoppingList(): Promise<ShoppingListItem[]> { ... }
-// async function updateShoppingListItem(itemId: string, updates: Partial<ShoppingListItem>): Promise<void> { ... }
-// async function clearShoppingList(): Promise<void> { ... }
+    if (deleteError) {
+        console.error("Error eliminando items antiguos de la lista de compras:", deleteError);
+        throw new Error("Error al limpiar la lista de compras anterior.");
+    }
+    console.log(`Items no marcados eliminados para usuario ${userId}.`);
+
+    // 2. Preparar nuevos items para insertar
+    if (generatedItems.length === 0) {
+        console.log("No hay nuevos items generados para insertar.");
+        return; // No hay nada que insertar
+    }
+
+    const itemsToInsert: DBShoppingListItemInsert[] = generatedItems.map(item => ({
+        user_id: userId, // Asegurarse de incluir user_id
+        name: item.name, // Usar 'name' como espera el tipo generado
+        quantity: item.totalQuantity, // Usar numeric o convertir si es necesario
+        unit: item.unit,
+        is_checked: false,
+        recipe_source: item.recipeSources.join(', ') || null, // Guardar fuentes como texto
+        // id se genera automáticamente por la DB
+    }));
+
+    // 3. Insertar nuevos items
+    const { error: insertError } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .insert(itemsToInsert);
+
+    if (insertError) {
+        console.error("Error insertando nuevos items en la lista de compras:", insertError);
+        throw new Error("Error al guardar los nuevos items de la lista de compras.");
+    }
+    console.log(`${itemsToInsert.length} nuevos items insertados para usuario ${userId}.`);
+}
+
+// --- Funciones CRUD para la Lista de Compras Persistente ---
+
+/**
+ * Obtiene todos los ítems de la lista de compras para el usuario actual.
+ */
+export async function getShoppingListItems(): Promise<DBShoppingListItemRow[]> {
+    const { data, error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .select('*')
+        // .eq('user_id', userId) // RLS se encarga de esto
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching shopping list items:", error);
+        throw new Error("No se pudieron obtener los ítems de la lista de compras.");
+    }
+    return data || [];
+}
+
+/**
+ * Añade un nuevo ítem a la lista de compras.
+ * (Útil para añadir ítems manualmente)
+ */
+// Asegurar que el tipo del parámetro coincida con el Omit usado en el store
+// El tipo generado DBShoppingListItemInsert ya maneja quantity como opcional (number | null | undefined)
+export async function addShoppingListItem(itemData: Omit<DBShoppingListItemInsert, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<DBShoppingListItemRow | null> {
+     const { data, error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .insert({ ...itemData }) // user_id se infiere por RLS/default
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error adding shopping list item:", error);
+        throw new Error("No se pudo añadir el ítem a la lista de compras.");
+    }
+    return data;
+}
+
+/**
+ * Actualiza un ítem de la lista de compras (ej. marcar como comprado).
+ */
+export async function updateShoppingListItem(itemId: string, updates: DBShoppingListItemUpdate): Promise<DBShoppingListItemRow | null> {
+     // Asegurarse de no intentar actualizar user_id o id
+     const { user_id, id, created_at, ...validUpdates } = updates;
+
+     const { data, error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .update(validUpdates)
+        .eq('id', itemId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error(`Error updating shopping list item ${itemId}:`, error);
+        throw new Error("No se pudo actualizar el ítem de la lista de compras.");
+    }
+    return data;
+}
+
+/**
+ * Elimina un ítem específico de la lista de compras.
+ */
+export async function deleteShoppingListItem(itemId: string): Promise<void> {
+    const { error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .delete()
+        .eq('id', itemId);
+
+    if (error) {
+        console.error(`Error deleting shopping list item ${itemId}:`, error);
+        throw new Error("No se pudo eliminar el ítem de la lista de compras.");
+    }
+}
+
+/**
+ * Elimina todos los ítems marcados como comprados (is_purchased = true).
+ */
+export async function clearPurchasedItems(): Promise<void> { // Renombrar función
+    const { error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .delete()
+        // .eq('user_id', userId) // RLS se encarga
+        .eq('is_purchased', true); // Usar is_purchased
+
+    if (error) {
+        console.error("Error clearing purchased shopping list items:", error); // Actualizar mensaje
+        throw new Error("No se pudieron limpiar los ítems comprados."); // Mantener mensaje
+    }
+}
+
+/**
+ * Elimina TODOS los ítems de la lista de compras del usuario.
+ */
+// Exportar también esta función
+export async function clearAllItems(): Promise<void> {
+    const { error } = await supabase
+        .from(SHOPPING_LIST_TABLE)
+        .delete()
+        // .eq('user_id', userId); // RLS se encarga
+
+    if (error) {
+        console.error("Error clearing all shopping list items:", error);
+        throw new Error("No se pudo vaciar la lista de compras.");
+    }
+}

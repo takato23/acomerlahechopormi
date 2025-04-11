@@ -18,9 +18,11 @@ import { searchIngredients } from '@/features/ingredients/ingredientService';
 import type { Ingredient } from '@/types/ingredientTypes'; // Asegúrate que la ruta sea correcta
 import { useDebounce } from '@/hooks/useDebounce'; // Asumiendo que tienes este hook
 
+// Interfaz modificada para aceptar un objeto parcial para value
 interface IngredientComboboxProps {
-  value: Ingredient | null; // El ingrediente seleccionado
-  onChange: (ingredient: Ingredient | null) => void; // Callback al seleccionar
+  // Permitir que value sea un objeto solo con id y name (o Ingredient completo, o null)
+  value: Pick<Ingredient, 'id' | 'name'> | Ingredient | null;
+  onChange: (ingredient: Ingredient | null) => void;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -62,8 +64,8 @@ export const IngredientCombobox: React.FC<IngredientComboboxProps> = ({
   const handleSelect = (selectedIngredient: Ingredient) => {
     onChange(selectedIngredient);
     setOpen(false);
-    setSearchQuery(''); // Limpiar búsqueda después de seleccionar
-    setOptions([]); // Limpiar opciones
+    setSearchQuery('');
+    setOptions([]);
   };
 
   return (
@@ -76,12 +78,13 @@ export const IngredientCombobox: React.FC<IngredientComboboxProps> = ({
           className="w-full justify-between text-slate-700 border-slate-300 hover:bg-slate-50"
           disabled={disabled}
         >
+          {/* Accedemos a name de forma segura, ya que value puede ser parcial */}
           {value ? value.name : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-        <Command shouldFilter={false}> {/* Desactivar filtro interno de Command */}
+        <Command shouldFilter={false}>
           <CommandInput
             placeholder={placeholder}
             value={searchQuery}
@@ -100,11 +103,12 @@ export const IngredientCombobox: React.FC<IngredientComboboxProps> = ({
               {options.map((ingredient) => (
                 <CommandItem
                   key={ingredient.id}
-                  value={ingredient.name} // Usar nombre para búsqueda/valor interno si es necesario
+                  value={ingredient.name}
                   onSelect={() => handleSelect(ingredient)}
                 >
                   <Check
                     className={`mr-2 h-4 w-4 ${
+                      // Comprobación segura con value?.id
                       value?.id === ingredient.id ? 'opacity-100' : 'opacity-0'
                     }`}
                   />

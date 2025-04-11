@@ -1,258 +1,111 @@
-// import { ShoppingItem } from "@/context/AppContext"; // Eliminado - AppContext no existe aquí
+export function normalizeIngredientName(name: string, quantity: number = 1): string {
+  if (!name) return '';
 
-export const BASIC_PANTRY_INGREDIENTS = [
-    "Huevo", "Tomate", "Carne", "Pollo", "Arroz", "Pasta", "Cebolla",
-    "Ajo", "Zanahoria", "Papa", "Queso", "Leche", "Yogur", "Atún",
-    "Harina", "Azúcar", "Manzana", "Plátano", "Frijoles", "Lentejas",
-    "Aceite", "Sal", "Pimienta"
-];
+  let normalizedName = name.toLowerCase().trim();
 
-// Define IngredientCategory as an enum
-export enum IngredientCategory {
-    PRODUCE = 'Frutas y Verduras',
-    PROTEIN = 'Carnes', // Includes fish, poultry, meat, eggs, tofu etc.
-    DAIRY = 'Lácteos',
-    GRAINS = 'Granos', // Includes pasta, rice, bread, flour etc.
-    SPICES = 'Condimentos',
-    CANNED = 'Enlatados',
-    FROZEN = 'Congelados',
-    SNACKS = 'Snacks',
-    BEVERAGES = 'Bebidas',
-    BAKERY = 'Panadería',
-    BASIC_PANTRY = 'Básicos Despensa', // For salt, sugar, oil etc. that might not fit elsewhere easily
-    OTHER = 'Otros'
+  if (quantity === 1) {
+    // Convertir a singular
+    if (normalizedName.endsWith('es')) {
+      normalizedName = normalizedName.slice(0, -2);
+    } else if (normalizedName.endsWith('s') && !normalizedName.endsWith('ís')) {
+      normalizedName = normalizedName.slice(0, -1);
+    }
+  } else {
+    // Convertir a plural
+    if (!normalizedName.endsWith('s')) {
+      if (normalizedName.endsWith('z')) {
+        normalizedName = normalizedName.slice(0, -1) + 'ces';
+      } else if (normalizedName.endsWith('ón')) {
+        normalizedName = normalizedName.slice(0, -2) + 'ones';
+      } else {
+        normalizedName += 's';
+      }
+    }
+  }
+
+  return normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1);
 }
 
-/**
- * Maps a category string value back to its IngredientCategory enum key.
- * Returns IngredientCategory.OTHER if no match is found.
- */
-export const mapStringToIngredientCategory = (categoryString: string): IngredientCategory => {
-    for (const key in IngredientCategory) {
-        if (IngredientCategory[key as keyof typeof IngredientCategory] === categoryString) {
-            return IngredientCategory[key as keyof typeof IngredientCategory];
-        }
-    }
-    // Fallback if the string doesn't match any known category value
-    console.warn(`Unknown category string: "${categoryString}". Defaulting to OTHER.`);
-    return IngredientCategory.OTHER;
-};
+export function cleanIngredientText(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '');
+}
 
+export function parseQuantity(text: string): { amount: number; unit: string } {
+  const defaultResult = { amount: 1, unit: '' };
+  if (!text) return defaultResult;
 
-/**
- * Basic function to clean ingredient text - removes leading numbers, units, and common preparation words.
- * Needs refinement for more complex cases.
- */
-export const cleanIngredientText = (ingredient: string): string => {
-  let cleaned = ingredient.toLowerCase();
-  // Remove leading quantity and unit (e.g., "2 cups ", "100g ")
-  cleaned = cleaned.replace(/^[\d./\s]+(kg|g|ml|l|taza|cucharada|cucharadita|unidad|paquete|lata|botella|cabeza|diente|cdita|cda|unidades|kilos|gramos|litros|mililitros)s?\s+/, '');
-  // Remove common preparation instructions often found after commas or parentheses
-  cleaned = cleaned.split(',')[0]; // Take only text before the first comma
-  cleaned = cleaned.split('(')[0]; // Take only text before the first parenthesis
-  // Remove common words like "picado", "cortado", "fresco", "enlatado", "congelado" etc.
-  cleaned = cleaned.replace(/\b(picado|picada|cortado|cortada|fresco|fresca|enlatado|enlatada|congelado|congelada|grande|pequeño|mediano|al gusto|opcional|dividido|dividida)\b/g, '');
-  return cleaned.trim();
-};
+  // Expresión regular para encontrar números y unidades
+  const match = text.match(/^(\d*\.?\d+)\s*([a-zA-Z]+)?/);
+  if (!match) return defaultResult;
 
-/**
- * Checks if an ingredient name corresponds to a basic pantry item.
- */
-export const isBasicPantryIngredient = (ingredient: string): boolean => {
-  const cleanedName = cleanIngredientText(ingredient).toLowerCase();
-  // Check against a more comprehensive list or keywords
-  const basicKeywords = ['sal', 'pimienta', 'aceite', 'vinagre', 'azúcar', 'harina', 'levadura', 'caldo', 'agua'];
-  return basicKeywords.some(keyword => cleanedName.includes(keyword)) ||
-         BASIC_PANTRY_INGREDIENTS.some(basic => cleanedName.includes(basic.toLowerCase()));
-};
+  const amount = parseFloat(match[1]) || 1;
+  const unit = (match[2] || '').toLowerCase();
 
-/**
- * Assigns a category to an ingredient based on its name.
- * This is a simplified categorization and can be improved.
- */
-export const categorizeIngredient = (ingredient: string): IngredientCategory => {
-    const cleanedName = cleanIngredientText(ingredient).toLowerCase();
+  return { amount, unit };
+}
 
-    if (/\b(manzana|banana|tomate|lechuga|zanahoria|papa|cebolla|ajo|limon|naranja|palta|brocoli|espinaca|pimiento)\b/.test(cleanedName)) return IngredientCategory.PRODUCE;
-    if (/\b(pollo|carne|cerdo|pescado|res|huevo|tofu|jamon)\b/.test(cleanedName)) return IngredientCategory.PROTEIN;
-    if (/\b(leche|queso|yogur|yogurt|crema|manteca)\b/.test(cleanedName)) return IngredientCategory.DAIRY;
-    if (/\b(arroz|frijol|lenteja|pasta|harina|pan|avena|fideos|galletas|galletitas)\b/.test(cleanedName)) return IngredientCategory.GRAINS;
-    if (/\b(sal|pimienta|oregano|comino|canela|pimenton|curry|mostaza|ketchup|mayonesa|salsa de soja)\b/.test(cleanedName)) return IngredientCategory.SPICES;
-    if (/\b(atun|tomate en lata|maiz en lata|arvejas en lata)\b/.test(cleanedName)) return IngredientCategory.CANNED;
-    if (/\b(helado|verduras congeladas)\b/.test(cleanedName)) return IngredientCategory.FROZEN;
-    if (/\b(papas fritas|chocolate|nueces|almendras)\b/.test(cleanedName)) return IngredientCategory.SNACKS;
-    if (/\b(agua|jugo|vino|cerveza|gaseosa|cafe|te|yerba)\b/.test(cleanedName)) return IngredientCategory.BEVERAGES;
-    if (isBasicPantryIngredient(ingredient)) return IngredientCategory.BASIC_PANTRY; // Check basic pantry last before Other
-
-    return IngredientCategory.OTHER;
-};
-
-
-/**
- * Checks if a cleaned ingredient name already exists in the shopping list.
- */
-// Ajustar el tipo ShoppingItem si es necesario
-export const isDuplicateIngredient = (cleanedIngredientName: string, shoppingList: any[]): boolean => { 
-    if (!shoppingList) return false;
-    const lowerCaseName = cleanedIngredientName.toLowerCase();
-    // Ajustar la propiedad 'name' si el tipo ShoppingItem es diferente
-    return shoppingList.some(item => cleanIngredientText(item.name).toLowerCase() === lowerCaseName && !item.completed); 
-};
-
-
-/**
- * Determines a likely default unit for a given ingredient name.
- */
-export const getDefaultUnitForIngredient = (name: string): string => {
-    const lowerName = name.toLowerCase();
-    if (/\b(leche|agua|aceite|jugo|vino|cerveza|gaseosa|caldo)\b/.test(lowerName)) return 'litros';
-    if (/\b(crema|salsa)\b/.test(lowerName)) return 'ml';
-    if (/\b(queso|carne|pollo|pescado|arroz|harina|azucar|sal|papa|tomate|zanahoria|lentejas|garbanzos|frijoles|manteca)\b/.test(lowerName)) return 'kg';
-    if (/\b(jamon|fiambre)\b/.test(lowerName)) return 'gramos';
-    if (/\b(pasta|fideos|galletas|galletitas|yerba|cafe)\b/.test(lowerName)) return 'paquete';
-    if (/\b(ajo)\b/.test(lowerName)) return 'cabeza';
-    if (/\b(pan)\b/.test(lowerName)) return 'unidad';
-    if (/\b(huevo|yogur|manzana|banana|naranja|limon|cebolla|palta|lata|botella)\b/.test(lowerName)) return 'unidad';
-    return 'unidad';
-};
-
-/**
- * Normaliza una unidad de medida a una forma estándar en minúsculas.
- * Maneja plurales simples y variaciones comunes.
- * @param {string | null} unit La unidad a normalizar.
- * @returns {string | null} La unidad normalizada o null.
- */
-export const normalizeUnit = (unit: string | null): string | null => {
-  if (!unit) return null;
-
-  const lowerUnit = unit.toLowerCase().trim();
-
-  // Mapeo de unidades comunes y sus variaciones
-  const unitMap: { [key: string]: string } = {
-    g: 'g',
-    gr: 'g',
-    gramo: 'g',
-    gramos: 'g',
-    kg: 'kg',
-    kilo: 'kg',
-    kilos: 'kg',
-    kilogramo: 'kg',
-    kilogramos: 'kg',
-    l: 'l',
-    litro: 'l',
-    litros: 'l',
-    ml: 'ml',
-    mililitro: 'ml',
-    mililitros: 'ml',
-    taza: 'taza',
-    tazas: 'taza',
-    cucharada: 'cda',
-    cucharadas: 'cda',
-    cda: 'cda',
-    cdas: 'cda',
-    cucharadita: 'cdita',
-    cucharaditas: 'cdita',
-    cdita: 'cdita',
-    cditas: 'cdita',
-    unidad: 'unidad',
-    unidades: 'unidad',
-    diente: 'diente',
-    dientes: 'diente',
-    cabeza: 'cabeza',
-    cabezas: 'cabeza',
-    paquete: 'paquete',
-    paquetes: 'paquete',
-    lata: 'lata',
-    latas: 'lata',
-    botella: 'botella',
-    botellas: 'botella',
-    pizca: 'pizca',
-    pizcas: 'pizca',
-    // Añadir más según sea necesario
+export function normalizeUnit(unit: string): string {
+  const unitMappings: { [key: string]: string } = {
+    'kg': 'kg',
+    'kilo': 'kg',
+    'kilos': 'kg',
+    'kilogramo': 'kg',
+    'kilogramos': 'kg',
+    'g': 'g',
+    'gr': 'g',
+    'grs': 'g',
+    'gramo': 'g',
+    'gramos': 'g',
+    'l': 'l',
+    'lt': 'l',
+    'lts': 'l',
+    'litro': 'l',
+    'litros': 'l',
+    'ml': 'ml',
+    'mililitro': 'ml',
+    'mililitros': 'ml',
+    'cc': 'ml',
+    'taza': 'taza',
+    'tazas': 'taza',
+    'cdta': 'cdta',
+    'cucharadita': 'cdta',
+    'cucharaditas': 'cdta',
+    'cda': 'cda',
+    'cucharada': 'cda',
+    'cucharadas': 'cda',
+    'un': 'un',
+    'unidad': 'un',
+    'unidades': 'un',
   };
 
-  return unitMap[lowerUnit] || lowerUnit; // Devolver normalizado o el original en minúsculas si no hay mapeo
-};
+  const normalizedUnit = unit.toLowerCase().trim();
+  return unitMappings[normalizedUnit] || normalizedUnit;
+}
 
-/**
- * Intenta convertir una cantidad (string o número) a un número.
- * Maneja fracciones simples ('1/2') y rangos ('1-2', toma el primer número).
- * @param {string | number | null} quantity La cantidad a parsear.
- * @returns {number | null} El valor numérico o null si no se puede parsear.
- */
-export const parseQuantity = (quantity: string | number | null): number | null => {
-  if (quantity === null || quantity === undefined) return null;
-  if (typeof quantity === 'number') return isNaN(quantity) ? null : quantity;
-  if (typeof quantity !== 'string') return null;
+export function convertUnits(amount: number, fromUnit: string, toUnit: string): number {
+  const conversions: { [key: string]: { [key: string]: number } } = {
+    'kg': { 'g': 1000 },
+    'g': { 'kg': 0.001 },
+    'l': { 'ml': 1000 },
+    'ml': { 'l': 0.001 },
+  };
 
-  const trimmedQty = quantity.trim();
-  if (trimmedQty === '') return null;
+  const normalized = {
+    from: normalizeUnit(fromUnit),
+    to: normalizeUnit(toUnit)
+  };
 
-  // Intentar parseo directo
-  const directParse = parseFloat(trimmedQty);
-  if (!isNaN(directParse)) return directParse;
+  if (normalized.from === normalized.to) return amount;
 
-  // Manejar fracciones 'X/Y'
-  if (trimmedQty.includes('/')) {
-    const parts = trimmedQty.split('/');
-    if (parts.length === 2) {
-      const numerator = parseFloat(parts[0]);
-      const denominator = parseFloat(parts[1]);
-      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
-        return numerator / denominator;
-      }
-    }
+  const conversion = conversions[normalized.from]?.[normalized.to];
+  if (conversion) {
+    return amount * conversion;
   }
 
-  // Manejar rangos 'X-Y' (tomar el primer número)
-  if (trimmedQty.includes('-')) {
-    const parts = trimmedQty.split('-');
-    if (parts.length >= 1) { // Puede ser solo '1-' o '1-2'
-      const firstNum = parseFloat(parts[0]);
-      if (!isNaN(firstNum)) {
-        return firstNum;
-      }
-    }
-  }
-
-  // Si nada funcionó
-  return null;
-};
-
-
-/**
- * Intenta convertir una cantidad entre unidades compatibles (ej. g y kg).
- * @param {number | null} quantity La cantidad a convertir.
- * @param {string | null} fromUnit Unidad original (normalizada).
- * @param {string | null} toUnit Unidad deseada (normalizada).
- * @returns {number | null} La cantidad convertida o null si no se puede convertir.
- */
-export const convertUnits = (
-  quantity: number | null,
-  fromUnit: string | null,
-  toUnit: string | null
-): number | null => {
-  if (quantity === null || !fromUnit || !toUnit || fromUnit === toUnit) {
-    return quantity; // No necesita o no puede convertir
-  }
-
-  const from = normalizeUnit(fromUnit);
-  const to = normalizeUnit(toUnit);
-
-  if (!from || !to) return null; // No se pudieron normalizar
-
-  // Conversión g <-> kg
-  if ((from === 'g' && to === 'kg') || (from === 'kg' && to === 'g')) {
-    return from === 'g' ? quantity / 1000 : quantity * 1000;
-  }
-
-  // Conversión ml <-> l
-  if ((from === 'ml' && to === 'l') || (from === 'l' && to === 'ml')) {
-    return from === 'ml' ? quantity / 1000 : quantity * 1000;
-  }
-
-  // Añadir más conversiones si es necesario (ej. taza a ml, etc.)
-
-  console.warn(`Conversión no soportada de ${from} a ${to}`);
-  return null; // Conversión no soportada
-};
+  // Si no hay conversión disponible, retornar la cantidad original
+  return amount;
+}

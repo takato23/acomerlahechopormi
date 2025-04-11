@@ -4,6 +4,8 @@
 -- 1. La tabla 'public.categories' debe existir y tener una columna 'id' (PK, UUID).
 -- 2. La tabla 'public.pantry_items' debe existir y tener una columna 'category_id' (UUID, Nullable).
 
+ALTER TABLE public.pantry_items DROP CONSTRAINT IF EXISTS pantry_items_category_id_fkey; -- Añadida
+
 -- Añadir la constraint de Foreign Key
 ALTER TABLE public.pantry_items
 ADD CONSTRAINT pantry_items_category_id_fkey
