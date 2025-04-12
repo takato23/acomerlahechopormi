@@ -11,6 +11,15 @@ export interface RecipeIngredient {
   unit?: string;
 }
 
+export interface NutritionalInfo {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+}
+
 export interface Recipe {
   id: string;
   user_id: string;
@@ -29,6 +38,10 @@ export interface Recipe {
   recipe_ingredients: RecipeIngredient[];
   category?: Category;
   tags?: string[];
+  nutritional_info?: NutritionalInfo;
+  source_api?: string;
+  source_id?: string;
+  is_shared?: boolean;
 }
 
 export interface RecipeFilters {
@@ -58,6 +71,10 @@ export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredi
   isBaseRecipe?: boolean;
   tags?: string[] | null;
   mainIngredients?: string[];
+  nutritional_info?: NutritionalInfo;
+  source_api?: string;
+  source_id?: string;
+  is_shared?: boolean;
 };
 
 export type UpdateRecipeData = Partial<RecipeInputData> & {

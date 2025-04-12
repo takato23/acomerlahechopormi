@@ -13,7 +13,9 @@ import {
   List,
   Home,
   AlertCircle,
-  Loader2
+  Loader2,
+  Download,
+  Plus
 } from 'lucide-react';
 
 // Recipe Categories & Icons
@@ -476,6 +478,13 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-200 pb-4">
           <h1 className="text-3xl md:text-4xl font-bold">Mis Recetas</h1>
           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            {/* --- Botón para Importar Recetas --- */}
+            <Link to="/app/recipes/import">
+              <Button variant="outline" className="w-full">
+                <Download className="mr-2 h-4 w-4" /> Importar Recetas
+              </Button>
+            </Link>
+            
             {/* --- Botón Generar desde Descripción (abre Dialog) --- */}
             <Dialog open={isGenerationDialogOpen} onOpenChange={setIsGenerationDialogOpen}>
               <DialogTrigger asChild>

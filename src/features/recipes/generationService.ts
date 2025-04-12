@@ -24,6 +24,7 @@ interface GeneratedRecipeData {
   seasonalFlags?: any;
   equipmentNeeded?: any;
   tags?: string[] | null; // Añadido basado en uso posterior
+  image_url?: string | null; // <-- Campo añadido
 }
 import { preferencesService } from '@/features/user/services/PreferencesService';
 import { recipeHistoryService } from './services/RecipeHistoryService';
@@ -158,6 +159,7 @@ const parseGeminiResponse = (responseText: string): GeneratedRecipeData | null =
       nutritionalInfo: data.nutritionalInfo,
       seasonalFlags: data.seasonalFlags,
       equipmentNeeded: data.equipmentNeeded,
+      image_url: data.image_url,
     };
   } catch (error) {
     console.error('Error parseando respuesta:', error);
@@ -184,12 +186,46 @@ const isValidRecipeData = (data: any): data is GeneratedRecipeData => {
   );
 };
 
+// Helper function to search for recipe image on Spoonacular
+const fetchRecipeImage = async (title: string): Promise<string | null> => {
+  if (!title) return null;
+  
+  // API key proporcionada por el usuario
+  const SPOONACULAR_API_KEY = '59dd87d383354faa97641d5b9e97e5c6';
+  
+  try {
+    // Usar la API de Spoonacular para buscar recetas por título
+    const searchUrl = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${SPOONACULAR_API_KEY}&query=${encodeURIComponent(title)}&number=1`;
+    console.log(`[fetchRecipeImage] Buscando imagen para "${title}" en Spoonacular`);
+    
+    const response = await fetch(searchUrl);
+    if (!response.ok) {
+      console.warn(`Spoonacular API request failed: ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    if (data.results && data.results.length > 0 && data.results[0].image) {
+      // Imagen encontrada! Spoonacular devuelve URLs de imagen relativas
+      // Convertir a URL completa
+      const imageUrl = `https://spoonacular.com/recipeImages/${data.results[0].image}`;
+      console.log(`[fetchRecipeImage] Found image on Spoonacular: ${imageUrl}`);
+      return imageUrl;
+    }
+    
+    console.log(`[fetchRecipeImage] No image found on Spoonacular for "${title}"`);
+    return null;
+  } catch (error) {
+    console.error('Error fetching image from Spoonacular:', error);
+    return null;
+  }
+};
 
 /**
- * Llama a la API de Gemini
+ * Llama a la API de Gemini y luego busca imagen en TheMealDB
  */
-const callGeminiApi = async (apiKey: string, prompt: string): Promise<GeneratedRecipeData | { error: string }> => {
-  const model = 'gemini-2.0-flash'; // Cambiado según sugerencia del usuario
+const callGeminiAndFetchImage = async (apiKey: string, prompt: string): Promise<GeneratedRecipeData | { error: string }> => {
+  const model = 'gemini-1.5-flash'; // Cambiado según sugerencia del usuario
   console.log(`[callGeminiApi] Usando modelo: ${model}`);
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   // Loguear el prompt antes de enviarlo
@@ -206,7 +242,7 @@ const callGeminiApi = async (apiKey: string, prompt: string): Promise<GeneratedR
             // topK: 40, // Comentado para simplificar
             // topP: 0.9, // Comentado para simplificar
             maxOutputTokens: 1024,
-            // stopSequences: ["\n\n", "```"], // Comentado para simplificar
+            // stopSequences: [\"\\n\\n\", \"```\"], // Comentado para simplificar
           },
           // Usar safetySettings mínimos (BLOCK_NONE es lo más permisivo)
            safetySettings: [
@@ -220,27 +256,81 @@ const callGeminiApi = async (apiKey: string, prompt: string): Promise<GeneratedR
     if (!geminiResponse.ok) {
         const errorText = await geminiResponse.text();
         console.error("Error API Google:", geminiResponse.status, errorText);
-        return { error: `Error API Google (${geminiResponse.status})` };
+        // Devolver error estructurado
+        return { error: `Error API Google (${geminiResponse.status}): ${errorText.substring(0, 200)}` };
     }
     const geminiResult = await geminiResponse.json();
     let responseText: string | undefined;
-    const candidate = geminiResult.candidates?.[0];
+
+    // Check for errors in the response structure itself
+    if (geminiResult.error) {
+       console.error("Error in Gemini Response:", geminiResult.error);
+       return { error: `Error from Gemini API: ${geminiResult.error.message || JSON.stringify(geminiResult.error)}` };
+    }
+     if (!geminiResult.candidates || geminiResult.candidates.length === 0) {
+        // Check for promptFeedback if no candidates
+        if (geminiResult.promptFeedback?.blockReason) {
+             console.error("Prompt blocked by Gemini:", geminiResult.promptFeedback.blockReason, geminiResult.promptFeedback.safetyRatings);
+             return { error: `Prompt bloqueado por Gemini: ${geminiResult.promptFeedback.blockReason}` };
+         } else {
+            console.error("Respuesta inválida (sin candidatos):", JSON.stringify(geminiResult, null, 2));
+            return { error: "Respuesta inválida de Gemini (sin candidatos)" };
+         }
+    }
+
+
+    const candidate = geminiResult.candidates[0];
+
+     // Check for finishReason
+     if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+         console.warn(`Gemini finish reason: ${candidate.finishReason}`);
+         // Optionally return an error or handle specific reasons like 'SAFETY'
+         if (candidate.finishReason === 'SAFETY') {
+              console.error("Generación detenida por seguridad:", candidate.safetyRatings);
+              return { error: "Contenido bloqueado por políticas de seguridad." };
+         }
+         // Consider other reasons potentially problematic
+     }
+
+
     if (candidate?.content?.parts?.[0]?.text) {
       responseText = candidate.content.parts[0].text;
-    } // ... (más lógica de extracción) ...
-    if (!responseText) {
-        console.error("No se pudo extraer texto:", JSON.stringify(geminiResult, null, 2));
-        return { error: "Respuesta inválida (sin texto)" };
+    } else {
+       console.error("No se pudo extraer texto de la respuesta válida:", JSON.stringify(geminiResult, null, 2));
+       return { error: "Respuesta válida pero sin texto extraíble." }; // More specific error
     }
+
+    if (!responseText) {
+        // This case should ideally be covered above, but as a fallback
+        console.error("No se pudo extraer texto (fallback):", JSON.stringify(geminiResult, null, 2));
+        return { error: "Respuesta inválida (sin texto - fallback)" };
+    }
+
     const parsedRecipe = parseGeminiResponse(responseText);
     if (!parsedRecipe) {
-        console.error("No se pudo parsear:", responseText);
-        return { error: "No se pudo parsear la respuesta" };
+        console.error("No se pudo parsear el JSON de la receta:", responseText);
+        // Intentar extraer un mensaje de error si el JSON es inválido pero no vacío
+        let parseErrorMsg = "No se pudo parsear la respuesta como JSON válido.";
+         try {
+             JSON.parse(responseText); // Try parsing again to see if it throws
+         } catch (e: any) {
+             parseErrorMsg += ` Detalles: ${e.message}`;
+         }
+        return { error: parseErrorMsg };
     }
+
+     // --- Búsqueda de imagen en TheMealDB ---
+     const imageUrl = await fetchRecipeImage(parsedRecipe.title);
+     if (imageUrl) {
+       parsedRecipe.image_url = imageUrl; // Añadir la URL al objeto
+     }
+     // --------------------------------------
+
     return parsedRecipe;
-  } catch (error) {
-    console.error('Error en llamada a Gemini:', error);
-    return { error: 'Error procesando solicitud Gemini' };
+  } catch (error: any) { // Catch specific error type if possible
+    console.error('Error general en llamada a Gemini/TheMealDB:', error);
+     // Provide a more generic error message for unexpected issues
+     return { error: `Error inesperado durante la generación: ${error.message || 'Error desconocido'}` };
   }
 };
 
@@ -379,7 +469,7 @@ export const generateRecipeForSlot = async (
         console.log("[generateRecipeForSlot HYBRID] Usando LLM para adaptar...");
         // Pasar 'preferences' que ahora sabemos que no es null
         const creativePrompt = buildCreativePrompt(selectedRecipe, pantryIngredients, preferences, context, mealType, styleModifier, previousRecipesContext);
-        const adaptationResult = await callGeminiApi(apiKey, creativePrompt);
+        const adaptationResult = await callGeminiAndFetchImage(apiKey, creativePrompt);
         if (!('error' in adaptationResult)) {
             generatedData = adaptationResult;
             console.log(`[generateRecipeForSlot HYBRID] Receta adaptada: ${generatedData.title}`);
@@ -392,7 +482,7 @@ export const generateRecipeForSlot = async (
     console.log("[generateRecipeForSlot HYBRID] No hay recetas válidas. Generando con LLM...");
     // Pasar 'preferences' que ahora sabemos que no es null
     const generationPrompt = buildCreativePrompt(null, pantryIngredients, preferences, context, mealType, styleModifier, previousRecipesContext);
-    const generationResult = await callGeminiApi(apiKey, generationPrompt);
+    const generationResult = await callGeminiAndFetchImage(apiKey, generationPrompt);
     if (!('error' in generationResult)) {
       generatedData = generationResult;
       console.log(`[generateRecipeForSlot HYBRID] Receta generada: ${generatedData.title}`);
@@ -431,101 +521,138 @@ export const generateSingleRecipe = async (
 export const generateRecipeVariation = async (
   baseRecipe: Recipe,
   requestText: string
-): Promise<Recipe | null> => {
-  console.log(`Generando variación para receta "${baseRecipe.title}" con solicitud: "${requestText}"`);
-  
+): Promise<GeneratedRecipeData | { error: string }> => {
+  console.log(`[generateRecipeVariation] Iniciando para receta: ${baseRecipe.title}`);
+
+  // 1. Obtener perfil y clave API
+  let apiKey: string | null = null;
+  let userId: string = baseRecipe.user_id; // Obtener userId de la receta base
   try {
-    // Obtener el perfil del usuario actual
-    const userProfile = await getUserProfile(baseRecipe.user_id);
-    if (!userProfile?.gemini_api_key) {
-      console.error('No se encontró API key de Gemini para el usuario');
-      return null;
+    // Pasar el userId a getUserProfile
+    const profile = await getUserProfile(userId);
+    // Usar gemini_api_key y verificar si existe
+    if (!profile || !profile.gemini_api_key) {
+      return { error: 'Perfil de usuario o clave API de Gemini no encontrados.' };
     }
-    
-    // Obtener preferencias del usuario (o usar defaults si no hay)
-    const preferences = await preferencesService.getUserPreferences(baseRecipe.user_id) || DEFAULT_USER_PREFERENCES;
-    
-    // Construir prompt especial para variación
-    const prompt = `
-INSTRUCCIONES:
-Genera una VARIACIÓN de la siguiente receta basada en esta solicitud: "${requestText}"
-Receta original: "${baseRecipe.title}"
+    apiKey = profile.gemini_api_key;
+    // userId ya está asignado
+  } catch (error) {
+    console.error("Error obteniendo perfil:", error);
+    return { error: 'Error al obtener el perfil del usuario.' };
+  }
 
-Formato JSON requerido:
-{
-  "title": "Título de la variación",
-  "description": "Descripción breve",
-  "ingredients": [
-    {"name": "Ingrediente 1", "quantity": 2, "unit": "unidades"},
-    {"name": "Ingrediente 2", "quantity": 100, "unit": "gramos"}
-  ],
-  "instructions": [
-    "Paso 1 de la preparación",
-    "Paso 2 de la preparación"
-  ],
-  "prepTimeMinutes": 15,
-  "cookTimeMinutes": 20,
-  "servings": 4,
-  "mainIngredients": ["ingrediente principal 1", "ingrediente principal 2"]
-}
+  if (!apiKey) { // Solo necesitamos verificar apiKey aquí
+     return { error: 'Falta información clave del usuario (API Key).' };
+  }
 
-RECETA ORIGINAL A MODIFICAR:
+  // 2. Obtener Preferencias y Despensa (opcional pero recomendado para contexto)
+   let preferences: UserPreferences = DEFAULT_USER_PREFERENCES;
+   let pantryItems: PantryItem[] = [];
+   try {
+       const prefPromise = preferencesService.getUserPreferences(userId);
+       // Obtener todos los items, el servicio interno filtrará por usuario si es necesario
+       const pantryPromise = getPantryItems();
+       const [prefResult, pantryResult] = await Promise.allSettled([prefPromise, pantryPromise]);
+
+       if (prefResult.status === 'fulfilled') {
+           preferences = prefResult.value;
+       } else {
+           console.warn("Error obteniendo preferencias para variación:", prefResult.reason);
+       }
+       if (pantryResult.status === 'fulfilled') {
+           // Asumiendo que getPantryItems() devuelve PantryItem[] directamente
+           pantryItems = pantryResult.value;
+       } else {
+           console.warn("Error obteniendo despensa para variación:", pantryResult.reason);
+       }
+   } catch (error) {
+       console.error("Error obteniendo contexto para variación:", error);
+       // Continuar sin contexto si falla, pero loguear el error
+   }
+
+   // Corregir acceso al nombre del ingrediente
+   const pantryIngredientNames = pantryItems
+       .map(item => item.ingredient?.name) // Usar optional chaining y acceder a la propiedad correcta
+       .filter((name): name is string => !!name); // Filtrar nombres nulos o undefined y asegurar tipo string
+
+
+  // 3. Construir Prompt Específico para Variación
+  const prompt = buildVariationPrompt(baseRecipe, requestText, preferences, pantryIngredientNames);
+
+  // 4. Llamar a Gemini (y ahora buscar imagen)
+  const generatedData = await callGeminiAndFetchImage(apiKey, prompt);
+
+  if ('error' in generatedData) {
+    console.error(`[generateRecipeVariation] Error de Gemini: ${generatedData.error}`);
+    return { error: generatedData.error };
+  }
+
+  // Devolver los datos generados (que ahora incluyen image_url si se encontró)
+  return generatedData;
+};
+
+// --- Nueva función para construir prompt de variación ---
+const buildVariationPrompt = (
+  baseRecipe: Recipe,
+  requestText: string,
+  preferences: UserPreferences,
+  pantryIngredients: string[]
+): string => {
+   // Simplificar el ejemplo, la IA debería entender el formato
+   const exampleFormat = `{
+    "title": "Título de la variación",
+    "description": "Descripción breve",
+    "ingredients": [
+      {"name": "Ingrediente 1", "quantity": 2, "unit": "unidades"}
+    ],
+    "instructions": [
+      "Paso 1"
+    ],
+    "prepTimeMinutes": 10,
+    "cookTimeMinutes": 15,
+    "servings": 2,
+    "mainIngredients": ["principal1"],
+    "image_url": null
+  }`;
+
+   // Construcción más limpia del prompt
+   let prompt = `INSTRUCCIONES:
+Genera una VARIACIÓN de la siguiente receta base, incorporando la petición del usuario: "${requestText}".
+Formato de salida: JSON EXACTAMENTE como este ejemplo (ignora los valores, enfócate en la estructura y los tipos):
+${exampleFormat}
+
+RECETA BASE:
 Título: ${baseRecipe.title}
-Descripción: ${baseRecipe.description || ''}
-Ingredientes: ${JSON.stringify(baseRecipe.recipe_ingredients || [])}
-Instrucciones: ${JSON.stringify(baseRecipe.instructions || [])}
-Tiempo de preparación: ${baseRecipe.prep_time_minutes || 0} minutos
-Tiempo de cocción: ${baseRecipe.cook_time_minutes || 0} minutos
-Porciones: ${baseRecipe.servings || 4}
+Descripción: ${baseRecipe.description || 'N/A'}
+Ingredientes Base: ${baseRecipe.recipe_ingredients?.map(i => `${i.ingredient_name} (${i.quantity ?? ''} ${i.unit || ''})`).join(', ') || 'N/A'}
+Instrucciones Base:
+${baseRecipe.instructions?.join('\n') || 'N/A'}
 
-REQUISITOS DE LA VARIACIÓN:
-${requestText}
+PETICIÓN DE VARIACIÓN: "${requestText}"
 
 REGLAS:
-1. CAMBIAR la receta según la solicitud, pero mantener su esencia.
-2. NO repetir exactamente la receta original.
-3. SOLO devolver JSON válido con comillas dobles.
-4. Si la solicitud pide reducir/incrementar algo, AJUSTAR cantidades o ingredientes adecuadamente.
-
-IMPORTANTE: RETORNA SOLO JSON VÁLIDO.
+1. SOLO JSON VÁLIDO. Sin texto antes o después.
+2. Mantén la esencia de la receta base pero aplica la variación solicitada.
+3. USA comillas dobles. Campos numéricos sin comillas. String para descripción e ingredientes, array de strings para instrucciones.
+4. TODOS los campos del ejemplo JSON son OBLIGATORIOS. Si no aplica (ej. cookTime), usa null o 0. Incluye image_url: null.
+5. El nuevo título debe reflejar la variación.
 `;
 
-    // Llamar a la API de Gemini con el prompt de variación
-    const generatedData = await callGeminiApi(userProfile.gemini_api_key, prompt);
-    
-    // Verificar si hubo error
-    if ('error' in generatedData) {
-      console.error('Error generando variación:', generatedData.error);
-      return null;
-    }
-    
-    // Convertir el resultado a una receta completa
-    const newRecipe: Recipe = {
-      id: '', // Se generará al guardar
-      user_id: baseRecipe.user_id,
-      title: generatedData.title,
-      description: generatedData.description || '',
-      instructions: generatedData.instructions,
-      prep_time_minutes: generatedData.prepTimeMinutes || 0,
-      cook_time_minutes: generatedData.cookTimeMinutes || 0,
-      servings: generatedData.servings || 4,
-      image_url: undefined, // La variación no hereda la imagen
-      created_at: new Date().toISOString(),
-      recipe_ingredients: generatedData.ingredients.map(ing => ({
-        id: '', // Se generará al guardar
-        recipe_id: '', // Se generará al guardar
-        ingredient_name: ing.name,
-        quantity: ing.quantity || 0,
-        unit: ing.unit || ''
-      })),
-      is_favorite: false,
-      is_public: baseRecipe.is_public,
-      tags: generatedData.tags || baseRecipe.tags
-    };
-    
-    return newRecipe;
-  } catch (error) {
-    console.error('Error generando variación de receta:', error);
-    return null;
+  // Contexto adicional
+  if (pantryIngredients.length > 0) {
+    prompt += `\nCONTEXTO DESPENSA: Ingredientes disponibles: ${pantryIngredients.join(', ')}. Úsalos si encajan.\n`;
   }
+  if (preferences.dietaryRestrictions?.length > 0) {
+     prompt += `Restricciones dietéticas: ${preferences.dietaryRestrictions.join(', ')}.\n`;
+  }
+  if (preferences.dislikedIngredients?.length > 0) {
+     prompt += `Evitar ingredientes: ${preferences.dislikedIngredients.join(', ')}.\n`;
+  }
+   if (preferences.cuisinePreferences?.length > 0) {
+     prompt += `Preferencias de cocina: ${preferences.cuisinePreferences.join(', ')}.\n`;
+  }
+
+  prompt += '\nIMPORTANTE: RETORNA SOLO EL JSON VÁLIDO DE LA NUEVA RECETA VARIADA.\n';
+  return prompt;
+
 };

@@ -29,5 +29,6 @@ export const LazyFeatures = {
   RecipeListPage: lazy(() => import('../features/recipes/pages/RecipeListPage').then(m => ({ default: m.RecipeListPage }))) as any,
   AddEditRecipePage: lazy(() => import('../features/recipes/pages/AddEditRecipePage')),
   RecipeDetailPage: lazy(() => import('../features/recipes/pages/RecipeDetailPage')),
+  ImportRecipePage: lazy(() => import('../features/recipes/pages/ImportRecipePage')),
   SimpleShoppingPage: lazy(() => import('../features/shopping-list/SimpleShoppingPage')),
 };

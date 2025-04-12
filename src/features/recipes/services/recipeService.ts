@@ -15,6 +15,11 @@ export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredi
   isBaseRecipe?: boolean;
   tags?: string[] | null;
   mainIngredients?: string[];
+  image_url?: string | null;
+  nutritional_info?: string | null;
+  source_api?: string | null;
+  source_id?: string | null;
+  is_shared?: boolean;
 };
 
 interface GetRecipesParams {
@@ -49,7 +54,11 @@ function mapDBDataToRecipe(dbData: any): Recipe {
   return {
     ...dbData,
     recipe_ingredients: dbData.recipe_ingredients || [],
-    instructions: instructionsToArray(dbData.instructions)
+    instructions: instructionsToArray(dbData.instructions),
+    nutritional_info: dbData.nutritional_info || null,
+    source_api: dbData.source_api || null,
+    source_id: dbData.source_id || null,
+    is_shared: dbData.is_shared || false
   };
 }
 
@@ -144,7 +153,12 @@ export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe
     is_generated_base: recipeInput.isBaseRecipe || false,
     is_favorite: false,
     tags: recipeInput.tags || null,
-    main_ingredients: recipeInput.mainIngredients || null
+    main_ingredients: recipeInput.mainIngredients || null,
+    image_url: recipeInput.image_url,
+    nutritional_info: recipeInput.nutritional_info || null,
+    source_api: recipeInput.source_api || null,
+    source_id: recipeInput.source_id || null,
+    is_shared: recipeInput.is_shared || false
   };
 
   // Insertar la receta principal

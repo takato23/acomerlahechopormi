@@ -209,6 +209,11 @@ function App() {
               <LazyFeatures.RecipeDetailPage />
             </Suspense>
           } />
+          <Route path="recipes/import" element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyFeatures.ImportRecipePage />
+            </Suspense>
+          } />
         </Route>
 
         {/* Ruta 404 */}

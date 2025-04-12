@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Trash2 } from 'lucide-react'; // Añadir Trash2
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthContext';
-import { getRecipeById } from '@/features/recipes/services/recipeService'; // Mantener getRecipeById
+import { getRecipeById, updateRecipe } from '@/features/recipes/services/recipeService'; // Mantener getRecipeById y updateRecipe
 import type { RecipeIngredient, Recipe, RecipeInputData } from '@/types/recipeTypes';
 import type { Ingredient } from '@/types/ingredientTypes'; // Importar Ingredient
 import ImageUpload from '@/components/common/ImageUpload'; // Importar ImageUpload
@@ -212,10 +212,30 @@ const RecipePageContent: React.FC = () => {
 
     try {
       if (recipeId) {
-        console.warn("Llamada a handleSaveRecipe en modo edición - Actualización vía Edge no implementada.");
-        toast.info("La actualización de recetas mediante Función Edge aún no está implementada.");
-        setIsSaving(false);
-        return;
+        console.log("Actualizando receta existente:", recipeId);
+        
+        // Utilizamos el servicio updateRecipe para editar
+        const updatedRecipe = await updateRecipe(recipeId, {
+          user_id: user.id,
+          title,
+          description,
+          instructions: instructions.length > 0 ? instructions : [],
+          prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
+          cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
+          servings: servings ? parseInt(String(servings), 10) : undefined,
+          ingredients: ingredients
+            .filter(ing => ing.name && ing.name.trim() !== '')
+            .map(ing => ({
+              name: ing.name.trim(),
+              quantity: ing.quantity !== null && ing.quantity.trim() !== '' ? ing.quantity : null,
+              unit: ing.unit || null,
+            })),
+          image_url: imageUrl || undefined,
+          tags: Array.isArray(tags) ? tags : undefined
+        });
+        
+        toast.success("Receta actualizada exitosamente!");
+        navigate(`/app/recipes/${recipeId}`);
       } else {
         const { data, error: functionError } = await supabase.functions.invoke(
           'create-recipe-handler',
@@ -374,7 +394,6 @@ const RecipePageContent: React.FC = () => {
                     <div className="flex-grow">
                         <Label htmlFor={`ingredient-name-${ingredient.localId}`} className="sr-only">Nombre Ingrediente</Label>
                         <IngredientCombobox
-                          id={`ingredient-name-${ingredient.localId}`}
                           value={ingredient.ingredient_id ? { id: ingredient.ingredient_id, name: ingredient.name } : null}
                           onChange={(selectedIngredient) => handleIngredientChange(index, 'ingredient_id', selectedIngredient)}
                           disabled={isSaving}
