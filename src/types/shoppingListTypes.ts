@@ -1,41 +1,54 @@
-import { Database } from '@/lib/database.types'; // Importar tipos generados por Supabase
+import { Database } from '@/lib/database.types';
+import { Recipe } from './recipeTypes';
+import { Category } from './categoryTypes';
 
-// Tipo principal para un ítem de la lista de compras, basado en Supabase
-export type ShoppingListItem = Database['public']['Tables']['shopping_list_items']['Row'] & {
-  // Añadir relaciones si son necesarias y no están en el tipo base
-  // Ejemplo: Si hubiera una relación con 'ingredients' o 'categories'
-  // ingredients?: Database['public']['Tables']['ingredients']['Row'] | null;
-  // categories?: Database['public']['Tables']['categories']['Row'] | null;
-};
+export type ShoppingListItemRow = Database['public']['Tables']['shopping_list_items']['Row'];
 
-// Tipo para crear un nuevo ítem en la lista de compras
-// Omitimos campos generados por la BD o gestionados por el servicio
-export type NewShoppingListItem = Omit<ShoppingListItem,
-  'id' |
-  'user_id' |
-  'created_at' |
-  'updated_at' |
-  'is_purchased' // is_purchased se establece en false por defecto en el servicio
-> & {
-  // Campos opcionales o requeridos específicamente para la creación
-  name: string; // Requerido al crear
-  quantity?: number | string | null; // Permitir string para parseo inicial
+export interface ShoppingListItem extends ShoppingListItemRow {
+  recipes?: Pick<Recipe, 'id' | 'title' | 'description' | 'image_url'> | null;
+  categories?: Category | null;
+}
+
+export interface CreateShoppingListItem {
+  ingredient_name: string;
+  quantity?: number | null;
   unit?: string | null;
-  category_id?: string | null; // Opcional al crear
-  notes?: string | null; // Opcional al crear
-};
+  category_id?: string | null;
+  notes?: string | null;
+  recipe_id?: string | null;
+}
 
-// Tipo para actualizar un ítem existente
-// Usamos Partial para permitir actualizar solo algunos campos
-export type UpdateShoppingListItem = Partial<Omit<ShoppingListItem,
-  'id' |        // No se actualiza el ID
-  'user_id' |   // No se actualiza el user_id
-  'created_at'  // No se actualiza created_at
->>;
+export interface UpdateShoppingListItem {
+  ingredient_name?: string;
+  quantity?: number | null;
+  unit?: string | null;
+  category_id?: string | null;
+  is_checked?: boolean;
+  notes?: string | null;
+  recipe_id?: string | null;
+}
 
-// Ejemplo de cómo se podría usar UpdateShoppingListItem:
-// const updates: UpdateShoppingListItem = {
-//   is_purchased: true,
-//   quantity: 5,
-//   notes: "Comprar marca específica"
-// };
+export interface ShoppingListState {
+  items: ShoppingListItem[];
+  loading: boolean;
+  error: string | null;
+  filters: ShoppingListFilters;
+}
+
+export interface ShoppingListFilters {
+  showChecked: boolean;
+  searchTerm: string;
+  categories: string[];
+  sortBy: 'created_at' | 'ingredient_name' | 'category';
+  sortOrder: 'asc' | 'desc';
+}
+
+export type ShoppingListAction =
+  | { type: 'SET_ITEMS'; payload: ShoppingListItem[] }
+  | { type: 'ADD_ITEM'; payload: ShoppingListItem }
+  | { type: 'UPDATE_ITEM'; payload: ShoppingListItem }
+  | { type: 'DELETE_ITEM'; payload: string }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'UPDATE_FILTERS'; payload: Partial<ShoppingListFilters> }
+  | { type: 'RESET_STATE' };

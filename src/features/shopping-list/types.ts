@@ -33,3 +33,18 @@ export interface AggregatedIngredient {
     unit: string | null; // Unidad normalizada (la primera encontrada o la más común)
     recipeSources: string[]; // Nombres de las recetas que lo requieren
 }
+
+/**
+ * Representa la estructura de un ítem en la tabla shopping_list_items de la DB.
+ */
+export interface DBShoppingListItem {
+  id: string;
+  user_id: string;
+  ingredient_name: string;
+  quantity: number | null; // Corresponde a 'numeric' en SQL
+  unit: string | null;
+  is_checked: boolean;
+  recipe_source: string | null;
+  created_at: string;
+  updated_at: string;
+}

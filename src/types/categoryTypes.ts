@@ -1,10 +1,28 @@
-/**
- * Representa una categoría de ingredientes.
- * Utilizada para organizar ingredientes en la despensa, listas de compras, etc.
- */
-export interface Category {
-  id: string; // ID único de la categoría (TEXT en la base de datos)
-  name: string; // Nombre de la categoría (ej. "Lácteos", "Frutas", "Carnes")
-  icon?: string | null; // Nombre o identificador del icono asociado (opcional)
-  color?: string | null; // Color asociado a la categoría (ej. código hexadecimal) (opcional)
+import { Database } from '@/lib/database.types';
+
+export type Category = Database['public']['Tables']['categories']['Row'];
+
+export interface CreateCategoryData {
+  name: string;
+  icon_name?: string | null;
 }
+
+export interface UpdateCategoryData {
+  name?: string;
+  icon_name?: string | null;
+}
+
+export interface CategoryState {
+  categories: Category[];
+  loading: boolean;
+  error: string | null;
+}
+
+export type CategoryAction =
+  | { type: 'SET_CATEGORIES'; payload: Category[] }
+  | { type: 'ADD_CATEGORY'; payload: Category }
+  | { type: 'UPDATE_CATEGORY'; payload: Category }
+  | { type: 'DELETE_CATEGORY'; payload: string }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'RESET_STATE' };

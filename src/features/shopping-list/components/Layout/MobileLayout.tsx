@@ -2,35 +2,35 @@ import React from 'react';
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { MapPin } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface MobileLayoutProps {
-  listAndSearch: React.ReactNode;
+  shoppingList: React.ReactNode;
   map: React.ReactNode;
 }
 
-export function MobileLayout({ listAndSearch, map }: MobileLayoutProps) {
-  // TODO: Implementar layout de 1 columna + Bottom Sheet para el mapa
+export function MobileLayout({ shoppingList, map }: MobileLayoutProps) {
+  // Layout de 1 columna principal para móvil
   return (
-    <div className="h-full flex flex-col">
-      {/* Contenido principal (Lista + Búsqueda) */}
-      <div className="flex-grow overflow-y-auto">
-        {listAndSearch}
+    <div className="flex flex-col h-full p-2 gap-2"> {/* Padding más pequeño, flex-col */}
+      {/* Contenido Principal: Lista */}
+      <div className="flex-grow"> {/* Permitir que crezca, sin overflow explícito aquí */}
+        {shoppingList} {/* Renderizar shoppingList directamente */}
       </div>
-      {/* Botón y Panel Deslizable para el Mapa */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="outline" className="fixed bottom-4 right-4 z-10 shadow-lg rounded-full p-3 h-auto">
-            <MapPin className="h-5 w-5" />
-            <span className="sr-only">Ver Mapa</span> {/* Accesibilidad */}
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col"> {/* Ajustar altura y padding */}
-           {/* Añadir un pequeño encabezado o handle si se desea */}
-          <div className="flex-grow"> {/* Asegurar que el mapa ocupe el espacio */}
+      
+      {/* Contenido Secundario: Mapa (quizás colapsable en el futuro) */}
+      <div className="flex-shrink-0"> {/* Evitar que crezca demasiado */}
+        <Card className="shadow-lg overflow-hidden"> 
+          <CardHeader className="p-2 pb-1"> {/* Padding reducido */}
+            <CardTitle className="text-base font-medium flex items-center gap-1"> {/* Tamaño reducido */}
+              <MapPin className="h-4 w-4 text-primary" /> Mapa
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 aspect-video"> {/* Ratio para mapa */}
             {map}
-          </div>
-        </SheetContent>
-      </Sheet>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

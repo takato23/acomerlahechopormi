@@ -13,7 +13,10 @@ import { Checkbox } from '@/components/ui/checkbox'; // Añadido Checkbox
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
-import { MealType } from '@/features/planning/types'; // Importar solo MealType
+import { MealType } from '@/features/planning/types';
+import { type StyleModifier } from '@/features/recipes/generationService'; // Importar StyleModifier
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Importar Select
+import { Input } from '@/components/ui/input'; // Importar Input
 
 // Definir DayOfWeek localmente o usar string directamente. Usaremos string.
 type DayOfWeek = string; // O simplemente usar string[] abajo
@@ -27,8 +30,10 @@ type AutocompleteMode = 'optimize-pantry' | 'flexible-suggestions';
 
 export interface AutocompleteConfig {
   mode: AutocompleteMode;
-  days: string[]; // Usar string[] para los días
+  days: string[];
   meals: MealType[];
+  styleModifier?: StyleModifier | null; // Añadir modificador de estilo opcional
+  cocinaEspecificaValue?: string; // Añadir valor para cocina específica opcional
 }
 
 /**
@@ -61,6 +66,8 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
   const [selectedMode, setSelectedMode] = useState<AutocompleteMode>(initialConfig.mode ?? 'optimize-pantry');
   const [selectedDays, setSelectedDays] = useState<string[]>(initialConfig.days ?? [...ALL_DAYS]); // Usar string[]
   const [selectedMeals, setSelectedMeals] = useState<MealType[]>(initialConfig.meals ?? [...ALL_MEALS]);
+  const [selectedStyleModifier, setSelectedStyleModifier] = useState<StyleModifier | null>(initialConfig.styleModifier ?? null);
+  const [selectedCocinaValue, setSelectedCocinaValue] = useState<string>(initialConfig.cocinaEspecificaValue ?? '');
   // Debug: Log state changes
   useEffect(() => {
     console.log('State updated:', { selectedDays, selectedMeals });
@@ -74,6 +81,8 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
       setSelectedMode(initialConfig.mode ?? 'optimize-pantry');
       setSelectedDays(initialConfig.days ?? [...ALL_DAYS]);
       setSelectedMeals(initialConfig.meals ?? [...ALL_MEALS]);
+      setSelectedStyleModifier(initialConfig.styleModifier ?? null); // Resetear estilo
+      setSelectedCocinaValue(initialConfig.cocinaEspecificaValue ?? ''); // Resetear valor cocina
     }
   }, [isOpen]); // Depender SOLO de isOpen para el reset
 
@@ -118,6 +127,9 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
       mode: selectedMode,
       days: selectedDays,
       meals: selectedMeals,
+      styleModifier: selectedStyleModifier, // Incluir modificador
+      // Incluir valor solo si el modificador es 'cocina-especifica'
+      cocinaEspecificaValue: selectedStyleModifier === 'cocina-especifica' ? selectedCocinaValue : undefined,
     };
     onConfirm(config);
   };
@@ -225,6 +237,47 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
                })}
             </div>
           </div>
+        </div>
+
+        {/* Style Modifier Selection */}
+        <div>
+          <Label className="text-base font-semibold mb-2 block">Estilo de Receta (Opcional)</Label>
+          <Select
+             value={selectedStyleModifier ?? '_none'} // Usar '_none' para valor nulo/default
+             onValueChange={(value) => {
+                 const newModifier = value === '_none' ? null : value as StyleModifier;
+                 setSelectedStyleModifier(newModifier);
+                 // Limpiar valor de cocina si se cambia a otro estilo
+                 if (newModifier !== 'cocina-especifica') {
+                     setSelectedCocinaValue('');
+                 }
+             }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Estilo por defecto..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">Estilo por defecto</SelectItem>
+              <SelectItem value="rapido">Rápido y Fácil</SelectItem>
+              <SelectItem value="saludable">Saludable y Ligero</SelectItem>
+              <SelectItem value="creativo">Creativo / Aventurero</SelectItem>
+              <SelectItem value="cocina-especifica">Cocina Específica...</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Input para Cocina Específica (condicional) */}
+          {selectedStyleModifier === 'cocina-especifica' && (
+             <div className="mt-2">
+                 <Label htmlFor="cocina-especifica-value">Tipo de cocina</Label>
+                 <Input
+                     id="cocina-especifica-value"
+                     value={selectedCocinaValue}
+                     onChange={(e) => setSelectedCocinaValue(e.target.value)}
+                     placeholder="Ej: Italiana, Mexicana, Asiática..."
+                     className="mt-1"
+                 />
+             </div>
+          )}
         </div>
         <DialogFooter>
           <DialogClose asChild>

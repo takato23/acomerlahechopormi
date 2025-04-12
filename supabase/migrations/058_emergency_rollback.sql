@@ -1,0 +1,1 @@
+SELECT 'Skipping emergency rollback script during initial setup.';

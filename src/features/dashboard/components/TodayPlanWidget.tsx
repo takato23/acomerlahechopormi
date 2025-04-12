@@ -29,10 +29,16 @@ const contentVariants = {
   visible: { opacity: 1, transition: { duration: 0.3 } }
 };
 
-export function TodayPlanWidget({ meals, today }: TodayPlanWidgetProps) { 
-  const sortedMeals = [...meals].sort((a, b) => 
-    mealTypesOrder.indexOf(a.meal_type) - mealTypesOrder.indexOf(b.meal_type)
-  );
+export function TodayPlanWidget({ meals = [], today }: TodayPlanWidgetProps) { 
+  // Asegurar que meals sea un array
+  const validMeals = Array.isArray(meals) ? meals : [];
+  
+  // Ordenar las comidas solo si hay alguna
+  const sortedMeals = validMeals.length > 0 
+    ? [...validMeals].sort((a, b) => 
+        mealTypesOrder.indexOf(a?.meal_type || '') - mealTypesOrder.indexOf(b?.meal_type || '')
+      )
+    : [];
 
   return (
     <Card className="h-full flex flex-col bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden hover:shadow-lg">
@@ -62,18 +68,18 @@ export function TodayPlanWidget({ meals, today }: TodayPlanWidgetProps) {
           {sortedMeals.length > 0 ? (
             <ul className="space-y-2 overflow-y-auto h-full pr-1">
               {sortedMeals.map((meal) => (
-                <li key={meal.id} className="flex items-center justify-between p-1.5 rounded-md bg-slate-50 hover:bg-slate-100 text-sm">
+                <li key={meal?.id || Math.random()} className="flex items-center justify-between p-1.5 rounded-md bg-slate-50 hover:bg-slate-100 text-sm">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{mealVisuals[meal.meal_type]?.emoji || '🍽️'}</span> 
-                    <span className="font-medium text-slate-700">{meal.meal_type}</span>
+                    <span className="text-sm">{mealVisuals[meal?.meal_type]?.emoji || '🍽️'}</span> 
+                    <span className="font-medium text-slate-700">{meal?.meal_type || 'Comida'}</span>
                   </div>
                   <span className="text-slate-900 truncate max-w-[120px] sm:max-w-[150px] text-right">
-                    {meal.recipe_id && meal.recipes ? (
+                    {meal?.recipe_id ? (
                       <Link to={`/app/recipes/${meal.recipe_id}`} className="hover:underline hover:text-emerald-600">
-                        {meal.recipes.name} 
+                        {meal?.recipes?.title || (meal?.recipes?.name) || 'Receta'}
                       </Link>
                     ) : (
-                      meal.custom_meal_name || 'Comida personalizada'
+                      meal?.custom_meal_name || 'Comida personalizada'
                     )}
                   </span>
                 </li>

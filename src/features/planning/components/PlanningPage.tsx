@@ -8,6 +8,8 @@ import { AutocompleteConfigDialog } from './AutocompleteConfigDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/Spinner';
 import { usePlanningStore } from '@/stores/planningStore';
+import { ShoppingCart } from 'lucide-react';
+import { ShoppingListDisplay } from './ShoppingListDisplay'; // Importar nuevo componente
 
 export function PlanningPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -23,7 +25,9 @@ export function PlanningPage() {
     isLoading,
     error,
     isAutocompleting,
-    handleAutocompleteWeek
+    handleAutocompleteWeek,
+    calculateShoppingListForWeek, // Importar acción
+    isCalculatingShoppingList // Importar estado de carga
   } = usePlanningStore();
 
   const handlePreviousWeek = () => {
@@ -65,6 +69,14 @@ export function PlanningPage() {
           >
             Autocompletar
           </Button>
+          <Button
+            variant="default" // O el variant que prefieras
+            onClick={() => calculateShoppingListForWeek(format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'))}
+            disabled={isCalculatingShoppingList || isLoading} // Deshabilitar si está cargando comidas o lista
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            {isCalculatingShoppingList ? 'Generando...' : 'Lista de Compras'}
+          </Button>
         </div>
       </div>
 
@@ -85,6 +97,9 @@ export function PlanningPage() {
           </ScrollArea>
         )}
       </div>
+
+      {/* Mostrar la lista de compras generada */}
+      <ShoppingListDisplay />
 
       {/* Diálogos */}
       <SaveTemplateDialog

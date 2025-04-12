@@ -1,0 +1,122 @@
+{
+  "mcpServers": {
+    "@21st-dev-magic-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@21st-dev/magic-mcp",
+        "--config",
+        "{\"TWENTY_FIRST_API_KEY\":\"da04b92d6b40a51917fccb9e0b91c8b74a63ddc109c81609019a15932e613c51\"}"
+      ],
+      "disabled": true,
+      "alwaysAllow": [
+        "21st_magic_component_builder",
+        "logo_search",
+        "21st_magic_component_inspiration"
+      ],
+      "timeout": 300
+    },
+    "ragdocs": {
+      "command": "npx",
+      "args": [
+        "--silent",
+        "-y",
+        "@hannesrudolph/mcp-ragdocs"
+      ],
+      "env": {
+        "QDRANT_URL": "https://b966fe2f-4261-4cd8-8ec2-3c949b9a5b54.us-west-1-0.aws.cloud.qdrant.io",
+        "QDRANT_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.4jLbihVdvMDeUqqozKgaUusyKkHfR1ppKSLuwF_kDrQ"
+      },
+      "alwaysAllow": [
+        "search_documentation"
+      ],
+      "disabled": false
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "--silent",
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "disabled": false,
+      "alwaysAllow": [
+        "puppeteer_navigate",
+        "puppeteer_fill",
+        "puppeteer_click",
+        "puppeteer_screenshot",
+        "puppeteer_evaluate"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "--silent",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "disabled": false,
+      "alwaysAllow": [
+        "sequentialthinking"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "--silent",
+        "-y",
+        "@executeautomation/playwright-mcp-server"
+      ],
+      "disabled": false,
+      "alwaysAllow": [
+        "playwright_get",
+        "playwright_navigate",
+        "playwright_screenshot",
+        "playwright_click",
+        "playwright_iframe_click"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "--no-install",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users"
+      ],
+      "env": {
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "PORT": "3000"
+      },
+      "alwaysAllow": [
+        "move_file",
+        "read_file",
+        "read_multiple_files",
+        "write_file",
+        "edit_file"
+      ],
+      "disabled": false
+    },
+    "gemini-flash-mcp": {
+      "command": "node",
+      "args": [
+        "/path/to/gemini-flash-mcp/build/index.js"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "AIzaSyAFiItwVUS09Z9UW6jOrUrKvSZYfw2PSCc"
+      },
+      "alwaysAllow": [],
+      "disabled": false
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_ce41e30982f4b35f97ef2fc2fec8e27b2ca689ce"
+      ]
+    }
+  }
+}

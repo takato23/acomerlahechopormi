@@ -9,12 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Trash2 } from 'lucide-react'; // Añadir Trash2
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthContext';
-import { addRecipe, updateRecipe, getRecipeById } from '@/features/recipes/services/recipeService'; // Importar getRecipeById
-import type { GeneratedRecipeData, RecipeIngredient, Recipe } from '@/types/recipeTypes'; // Importar Recipe
+import { getRecipeById } from '@/features/recipes/services/recipeService'; // Mantener getRecipeById
+import type { RecipeIngredient, Recipe, RecipeInputData } from '@/types/recipeTypes';
 import type { Ingredient } from '@/types/ingredientTypes'; // Importar Ingredient
 import ImageUpload from '@/components/common/ImageUpload'; // Importar ImageUpload
 import { IngredientCombobox } from '../components/IngredientCombobox'; // Importar Combobox
 import InstructionsEditor from '../components/InstructionsEditor'; // Importar el nuevo editor
+import { supabase } from '@/lib/supabaseClient'; // Asegurarse de importar el cliente supabase
+
 // Interfaz para los inputs de ingredientes en el estado local
 interface RecipeIngredientInput {
   // localId se usa solo para el key en el map, no se guarda en BD
@@ -23,6 +25,20 @@ interface RecipeIngredientInput {
   name: string; // Nombre para mostrar (puede venir del ingrediente maestro o ser temporal)
   quantity: string | null;
   unit: string | null;
+}
+
+// Definir un tipo local temporal si GeneratedRecipeData no está definido globalmente
+// Ajusta los campos según lo que realmente viene en location.state.generatedRecipe
+interface GeneratedRecipeDataTemp {
+  title?: string | null;
+  description?: string | null;
+  ingredients?: Array<{ name?: string | null; quantity?: number | string | null; unit?: string | null }> | null;
+  instructions?: string[] | string | null;
+  prepTimeMinutes?: number | null;
+  cookTimeMinutes?: number | null;
+  servings?: number | null;
+  tags?: string[] | null;
+  // ... otros campos si existen
 }
 
 const RecipePageContent: React.FC = () => {
@@ -48,72 +64,81 @@ const RecipePageContent: React.FC = () => {
 
   // --- Lógica de Carga Inicial ---
   useEffect(() => {
-    const recipeData = location.state?.generatedRecipe as GeneratedRecipeData | undefined;
+    const recipeData = location.state?.generatedRecipe as GeneratedRecipeDataTemp | undefined;
+
     if (recipeData && !recipeId) {
-      console.log("Receta generada recibida, poblando formulario:", recipeData);
       setTitle(recipeData.title || '');
       setDescription(recipeData.description || '');
+
       // Mapear ingredientes de GeneratedRecipeData a RecipeIngredientInput
       setIngredients(recipeData.ingredients?.map((ing, index) => ({
         localId: crypto.randomUUID(), // Generar ID local único
         ingredient_id: null, // No tenemos ID maestro aquí
         name: ing.name || '',
-        quantity: String(ing.quantity ?? ''),
+        // Convertir quantity a string para el estado local
+        quantity: ing.quantity != null ? String(ing.quantity) : '', 
         unit: ing.unit || null, // Asegurar que sea string | null
       })) || []);
-      setInstructions(recipeData.instructions || []);
-      setPrepTime(String(recipeData.prepTimeMinutes ?? ''));
-      setCookTime(String(recipeData.cookTimeMinutes ?? ''));
-      setServings(recipeData.servings ?? '');
+
+      // Manejar instructions (puede ser string o array desde la generación)
+      let instructionsArray: string[] = [];
+      if (Array.isArray(recipeData.instructions)) {
+        instructionsArray = recipeData.instructions;
+      } else if (typeof recipeData.instructions === 'string') {
+        instructionsArray = recipeData.instructions.split('\n').filter((line: string) => line.trim() !== '');
+      }
+      setInstructions(instructionsArray);
+
+      // Convertir tiempos y porciones a string para el estado local
+      setPrepTime(recipeData.prepTimeMinutes != null ? String(recipeData.prepTimeMinutes) : '');
+      setCookTime(recipeData.cookTimeMinutes != null ? String(recipeData.cookTimeMinutes) : '');
+      setServings(recipeData.servings != null ? String(recipeData.servings) : '');
+      
       setImageUrl(null); // No hay imagen en receta generada inicialmente
       setTags(recipeData.tags?.join(', ') || ''); // Unir tags si existen
 
       // Limpiar el estado de location para evitar repoblar si se navega atrás/adelante
-      window.history.replaceState({}, document.title)
+      // ¡Importante! Hacer esto DESPUÉS de leer todos los datos necesarios.
+      window.history.replaceState({}, document.title);
 
     } else if (recipeId) {
-      // --- Lógica para cargar receta existente (simplificada) ---
-      // TODO: Implementar carga real desde el servicio getRecipeById(recipeId).
-      // Cuando se haga, asegurar que recipe.instructions (string con \n) se convierta a string[]:
-      // const loadedInstructions = loadedRecipe.instructions ? loadedRecipe.instructions.split('\n').filter(line => line.trim() !== '') : [];
-      // setInstructions(loadedInstructions);
-      console.log("Modo Edición - ID:", recipeId);
       setIsLoading(true);
-      // Simulación de carga - Reemplazar con llamada a getRecipeById(recipeId)
-      setTimeout(() => {
-        const mockRecipe: Partial<Recipe> = { // Usar Partial<Recipe> para simulación
-            id: recipeId,
-            title: "Receta de Ejemplo Cargada",
-            description: "Esta es una descripción cargada.",
-            // Usar la estructura de RecipeIngredient para el mock
-            ingredients: [{ id: 'mock-ing-1', recipe_id: recipeId, ingredient_id: 'mock-ing-id-1', ingredient_name: "Ingrediente Mock 1", quantity: 1, unit: "unidad" }],
-            instructions: ["Paso 1 cargado", "Paso 2 cargado"], // Esto ya es string[]
-            prep_time_minutes: 10,
-            cook_time_minutes: 25,
-            servings: 2,
-            image_url: 'https://via.placeholder.com/150', // URL de ejemplo
-            tags: ['cargada', 'ejemplo'],
-        };
-        setTitle(mockRecipe.title || '');
-        setDescription(mockRecipe.description || '');
-        // Mapear correctamente de RecipeIngredient (mock) a RecipeIngredientInput (local)
-        setIngredients(mockRecipe.ingredients?.map(ing => ({
-            localId: crypto.randomUUID(), // Generar ID local único
-            ingredient_id: ing.ingredient_id || null, // Usar el ID del mock si existe
-            name: ing.ingredient_name || '',
-            quantity: String(ing.quantity ?? ''),
-            unit: ing.unit || null,
-        })) || []);
-        setInstructions(mockRecipe.instructions || []); // mockRecipe.instructions ya es string[]
-        setPrepTime(String(mockRecipe.prep_time_minutes ?? ''));
-        setCookTime(String(mockRecipe.cook_time_minutes ?? ''));
-        setServings(mockRecipe.servings ?? '');
-        setImageUrl(mockRecipe.image_url || null);
-        setTags(mockRecipe.tags?.join(', ') || '');
-        setIsLoading(false);
-      }, 1000);
+      const loadRecipe = async () => {
+           try {
+             const fetchedRecipe = await getRecipeById(recipeId);
+             if (fetchedRecipe) {
+               setTitle(fetchedRecipe.title);
+               setDescription(fetchedRecipe.description || '');
+               setIngredients(fetchedRecipe.recipe_ingredients?.map(ing => ({
+                 localId: crypto.randomUUID(),
+                 ingredient_id: ing.ingredient_id || null,
+                 name: ing.ingredient_name || '',
+                 quantity: String(ing.quantity ?? ''),
+                 unit: ing.unit || null,
+               })) || []);
+               
+               // Simplificar manejo de instructions basado en el tipo Recipe
+               setInstructions(fetchedRecipe.instructions || []);
+               setPrepTime(String(fetchedRecipe.prep_time_minutes ?? ''));
+               setCookTime(String(fetchedRecipe.cook_time_minutes ?? ''));
+               setServings(fetchedRecipe.servings ?? '');
+               setImageUrl(fetchedRecipe.image_url || null);
+               setTags(fetchedRecipe.tags?.join(', ') || '');
+             } else {
+                 toast.error("No se encontró la receta solicitada");
+                 navigate('/app/recipes');
+             }
+           } catch (error) {
+             console.error("Error al cargar la receta:", error);
+             toast.error("Error al cargar la receta. Inténtalo de nuevo más tarde.");
+             navigate('/app/recipes');
+           } finally {
+             setIsLoading(false);
+           }
+         };
+         loadRecipe();
     }
-  }, [location.state, recipeId]);
+  }, [location.state, recipeId, navigate]);
 
   // --- Helpers para Textarea (Eliminados ya que no se usarán) ---
   // const formatIngredientsForTextarea = ...
@@ -123,17 +148,17 @@ const RecipePageContent: React.FC = () => {
   // --- Handlers para la lista de ingredientes ---
   const handleIngredientChange = (index: number, field: keyof RecipeIngredientInput, value: any) => {
     const newIngredients = [...ingredients];
-    // Si cambia el ingrediente desde el combobox, 'value' será el objeto Ingredient completo
-    if (field === 'ingredient_id' && typeof value === 'object' && value !== null) {
-        newIngredients[index] = {
-            ...newIngredients[index],
-            ingredient_id: value.id,
-            name: value.name, // Actualizar el nombre para mostrar
-        };
-    } else {
-        // @ts-ignore // Permitir asignación dinámica, TypeScript puede quejarse aquí
-        newIngredients[index][field] = value;
-    }
+    if (field === 'ingredient_id' && typeof value === 'object' && value !== null && 'id' in value && 'name' in value) {
+      newIngredients[index] = {
+          ...newIngredients[index],
+          ingredient_id: value.id as string,
+          name: value.name as string,
+      };
+  } else if (field === 'name') {
+      newIngredients[index][field] = value as string ?? '';
+  } else if (field === 'quantity' || field === 'unit') {
+      newIngredients[index][field] = value as string | null;
+  }
     setIngredients(newIngredients);
   };
 
@@ -168,60 +193,57 @@ const RecipePageContent: React.FC = () => {
     setIsSaving(true);
     setSaveError(null);
 
-    const recipeDataToSave = {
-      user_id: user.id,
+    const payloadForFunction = {
       title: title.trim(),
       description: description.trim() || null,
-      // Mantener instrucciones como array, el servicio se encargará de convertir si es necesario
-      // Pasar el array de instrucciones directamente (el servicio se encarga de la conversión a string para la BD)
-      // Filtrar pasos vacíos antes de enviar
-      instructions: Array.isArray(instructions) ? instructions.filter(inst => inst.trim() !== '') : [],
-      prep_time_minutes: prepTime ? parseInt(prepTime, 10) || null : null,
-      cook_time_minutes: cookTime ? parseInt(cookTime, 10) || null : null,
+      instructions: Array.isArray(instructions) ? instructions.filter((inst: string) => inst.trim() !== '') : [],
+      prep_time: prepTime ? parseInt(prepTime, 10) || null : null,
+      cook_time: cookTime ? parseInt(cookTime, 10) || null : null,
       servings: servings ? parseInt(String(servings), 10) || null : null,
-      // Mapeo de ingredientes usando la nueva estructura RecipeIngredientInput
       ingredients: ingredients
-        .filter(ing => ing.ingredient_id || (ing.name && ing.name.trim() !== '')) // Guardar si tiene ID o nombre
+        .filter(ing => ing.name && ing.name.trim() !== '') 
         .map(ing => ({
-          // El servicio usará findOrCreateIngredient, así que solo necesitamos el nombre si no hay ID
           name: ing.name.trim(),
-          quantity: ing.quantity, // El servicio parseará esto
+          quantity: ing.quantity !== null && ing.quantity.trim() !== '' ? Number(ing.quantity) : null, 
           unit: ing.unit || null,
-          // ingredient_id se manejará en el servicio al llamar a findOrCreateIngredient
-          // No necesitamos pasarlo explícitamente aquí si el servicio lo deriva del nombre.
-          // Sin embargo, el servicio actual SÍ espera el ID si lo tenemos, así que lo pasamos.
-          // CORRECCIÓN: El servicio NO espera el ID, usa findOrCreate. Solo pasamos name, quantity, unit.
       })),
-      image_url: imageUrl, // Usar el estado imageUrl
-      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-      is_favorite: false, // Añadir valor por defecto para nueva receta
+      image_url: imageUrl || null,
     };
 
     try {
-      let savedRecipe: Recipe | null = null;
       if (recipeId) {
-        // Usar updateRecipe (asegúrate que esté importado y exista en el servicio)
-        // El tipo recipeDataToSave ahora debería coincidir con Partial<RecipeInputData>
-        // (asumiendo que updateRecipe maneja la conversión de quantity string a number si es necesario)
-        savedRecipe = await updateRecipe(recipeId, recipeDataToSave);
-        toast.success("Receta actualizada con éxito!");
+        console.warn("Llamada a handleSaveRecipe en modo edición - Actualización vía Edge no implementada.");
+        toast.info("La actualización de recetas mediante Función Edge aún no está implementada.");
+        setIsSaving(false);
+        return;
       } else {
-        // Usar addRecipe
-        // El tipo recipeDataToSave ahora debería coincidir con RecipeInputData
-        savedRecipe = await addRecipe(recipeDataToSave);
-        toast.success("Receta guardada con éxito!");
-      }
-      navigate('/app/recipes');
+        const { data, error: functionError } = await supabase.functions.invoke(
+          'create-recipe-handler',
+          { body: payloadForFunction }
+        );
 
+        if (functionError) {
+          throw functionError;
+        }
+
+        toast.success("Receta creada exitosamente!");
+        const newRecipeId = data?.recipe_id?.id;
+        if (newRecipeId) {
+            navigate(`/app/recipes/${newRecipeId}`);
+        } else {
+            navigate('/app/recipes');
+        }
+      }
     } catch (error: any) {
-      console.error("Error al guardar receta:", error);
-      setSaveError(error.message || "Ocurrió un error desconocido al guardar.");
-      toast.error(`Error al guardar: ${error.message || "desconocido"}`);
+      console.error("Error al guardar la receta:", error);
+      setSaveError(error.message || "Ocurrió un error desconocido.");
+      const functionErrorMessage = error?.context?.errorMessage || error.message;
+      toast.error(`Error al guardar: ${functionErrorMessage || "Inténtalo de nuevo."}`);
     } finally {
       setIsSaving(false);
     }
   }, [
-    user, title, description, ingredients, instructions, prepTime, cookTime, servings, imageUrl, tags, recipeId, navigate // Añadir imageUrl y tags a dependencias
+    user, title, description, ingredients, instructions, prepTime, cookTime, servings, imageUrl, tags, recipeId, navigate, supabase
   ]);
 
 
@@ -236,264 +258,257 @@ const RecipePageContent: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-6 text-slate-900">
+    <div className="max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+      <h1 className="text-2xl md:text-3xl font-bold mb-6 text-slate-900">
         {recipeId ? 'Editar Receta' : 'Crear Nueva Receta'}
       </h1>
-      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-slate-900">Información General</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Título */}
-            <div className="space-y-1">
-              <Label htmlFor="title" className="text-slate-700">Título</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ej: Tarta de Manzana Simple"
-                disabled={isSaving}
-                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
 
-            {/* Descripción */}
-            <div className="space-y-1">
-              <Label htmlFor="description" className="text-slate-700">Descripción</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Una breve descripción de la receta..."
-                disabled={isSaving}
-                className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
+      {isLoading && (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
+          </div>
+      )}
 
-            {/* Tiempos y Porciones */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {!isLoading && (
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveRecipe(); }}>
+          {/* Card para Información General */}
+          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-slate-900">Información General</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-1">
-                <Label htmlFor="prepTimeMinutes" className="text-slate-700">Tiempo Prep. (min)</Label>
+                <Label htmlFor="title" className="text-slate-700">Título</Label>
                 <Input
-                  id="prepTimeMinutes"
-                  type="number"
-                  value={prepTime}
-                  onChange={(e) => setPrepTime(e.target.value)}
-                  placeholder="Ej: 15"
+                  id="title"
+                  value={title}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+                  placeholder="Nombre de la receta"
+                  required
                   disabled={isSaving}
-                  min="0"
+                  className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                  aria-required="true"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="description" className="text-slate-700">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                  placeholder="Una breve descripción de la receta..."
+                  disabled={isSaving}
                   className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cookTimeMinutes" className="text-slate-700">Tiempo Cocción (min)</Label>
-                <Input
-                  id="cookTimeMinutes"
-                  type="number"
-                  value={cookTime}
-                  onChange={(e) => setCookTime(e.target.value)}
-                  placeholder="Ej: 30"
-                  disabled={isSaving}
-                   min="0"
-                   className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="servings" className="text-slate-700">Porciones</Label>
-                <Input
-                  id="servings"
-                  type="number"
-                  value={servings}
-                  onChange={(e) => setServings(e.target.value)}
-                  placeholder="Ej: 4"
-                  disabled={isSaving}
-                   min="1"
-                   className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Card para Imagen */}
-      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-slate-900">Imagen de la Receta</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ImageUpload
-            bucketName="recipe_images" // Nombre del bucket definido en la migración
-            initialImageUrl={imageUrl}
-            onUploadSuccess={(url) => {
-              console.log("Imagen subida, URL:", url);
-              setImageUrl(url);
-            }}
-            onRemoveImage={() => {
-              console.log("Imagen eliminada");
-              setImageUrl(null);
-            }}
-            onUploadError={(error) => {
-              console.error("Error en ImageUpload:", error);
-              // El toast de error ya se muestra dentro del componente ImageUpload
-            }}
-            disabled={isSaving}
-            label="Selecciona o arrastra una imagen"
-          />
-        </CardContent>
-      </Card>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="prepTime" className="text-slate-700">Tiempo de Preparación (min)</Label>
+                    <Input
+                      id="prepTime"
+                      type="number"
+                      value={prepTime}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPrepTime(e.target.value)}
+                      placeholder="Ej: 15"
+                      disabled={isSaving}
+                      className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                      min="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="cookTime" className="text-slate-700">Tiempo de Cocción (min)</Label>
+                    <Input
+                      id="cookTime"
+                      type="number"
+                      value={cookTime}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCookTime(e.target.value)}
+                      placeholder="Ej: 30"
+                      disabled={isSaving}
+                      className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                      min="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="servings" className="text-slate-700">Porciones</Label>
+                    <Input
+                      id="servings"
+                      type="number"
+                      value={servings}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServings(e.target.value)}
+                      placeholder="Ej: 4"
+                      disabled={isSaving}
+                      className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                      min="1"
+                    />
+                  </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Card para Ingredientes (Nueva UI) */}
-      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
-        <CardHeader>
-          <CardTitle id="ingredients-heading" className="text-slate-900">Ingredientes</CardTitle> {/* Añadir ID */}
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3" aria-labelledby="ingredients-heading"> {/* Asociar con heading */}
-            {ingredients.map((ingredient, index) => (
-              <div key={ingredient.localId} className="flex items-center space-x-2">
-                {/* Combobox para Nombre/ID */}
-                <div className="flex-grow">
-                   <IngredientCombobox
-                     value={ingredient.ingredient_id ? { id: ingredient.ingredient_id, name: ingredient.name } as Ingredient : null}
-                     onChange={(selected) => handleIngredientChange(index, 'ingredient_id', selected)}
-                     placeholder="Buscar o escribir nombre..."
-                     disabled={isSaving}
-                   />
-                   {/* Input oculto o lógica para manejar nombre si no se selecciona ID */}
-                   {/* Input para nombre manual si no se selecciona del combobox */}
-                   {!ingredient.ingredient_id && (
-                     <>
-                       <Label htmlFor={`ingredient-name-${ingredient.localId}`} className="sr-only">Nombre del ingrediente (manual)</Label>
+          {/* Card para Imagen */}
+          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-slate-900">Imagen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ImageUpload
+                initialImageUrl={imageUrl}
+                onUploadSuccess={(url: string) => setImageUrl(url)}
+                bucketName="recipe-images"
+                disabled={isSaving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Card para Ingredientes */}
+          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+            <CardHeader>
+              <CardTitle id="ingredients-heading" className="text-slate-900">Ingredientes</CardTitle> {/* Añadir ID */}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {ingredients.map((ingredient, index) => (
+                  <div key={ingredient.localId} className="flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-200">
+                    {/* Combobox para seleccionar ingrediente */}
+                    <div className="flex-grow">
+                        <Label htmlFor={`ingredient-name-${ingredient.localId}`} className="sr-only">Nombre Ingrediente</Label>
+                        <IngredientCombobox
+                          id={`ingredient-name-${ingredient.localId}`}
+                          value={ingredient.ingredient_id ? { id: ingredient.ingredient_id, name: ingredient.name } : null}
+                          onChange={(selectedIngredient) => handleIngredientChange(index, 'ingredient_id', selectedIngredient)}
+                          disabled={isSaving}
+                          aria-label={`Seleccionar ingrediente ${index + 1}`}
+                        />
+                        {/* Mostrar input de texto si no hay ingrediente seleccionado o para edición manual? */}
+                        {/* Podría ser útil si el combobox permite crear nuevos */}
+                        {!ingredient.ingredient_id && (
+                          <Input
+                            type="text"
+                            value={ingredient.name}
+                            onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                            placeholder="O escribe un nuevo ingrediente"
+                            className="mt-1 w-full border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                            disabled={isSaving}
+                          />
+                         )}
+                    </div>
+
+                    {/* Input para Cantidad */}
+                    <div className="flex-shrink-0">
+                       <Label htmlFor={`ingredient-quantity-${ingredient.localId}`} className="sr-only">Cantidad</Label>
                        <Input
-                         id={`ingredient-name-${ingredient.localId}`}
-                         type="text"
-                         value={ingredient.name}
-                         onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                         placeholder="Nombre (si no se selecciona)"
-                         className="mt-1 text-xs border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                         id={`ingredient-quantity-${ingredient.localId}`}
+                         type="text" // Cambiado a text para permitir "al gusto" o fracciones
+                         value={ingredient.quantity ?? ''}
+                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleIngredientChange(index, 'quantity', e.target.value)}
+                         placeholder="Cantidad"
+                         className="w-24 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
                          disabled={isSaving}
-                         aria-label="Nombre del ingrediente (manual)" // Aria-label como alternativa si el label oculto falla
+                         aria-label={`Cantidad para ${ingredient.name || 'ingrediente'}`}
                        />
-                     </>
-                   )}
-                </div>
+                    </div>
 
-                {/* Input para Cantidad */}
-                {/* Input para Cantidad */}
-                <div> {/* Contenedor para Label + Input */}
-                  <Label htmlFor={`ingredient-quantity-${ingredient.localId}`} className="sr-only">Cantidad</Label>
-                  <Input
-                    id={`ingredient-quantity-${ingredient.localId}`}
-                    type="text" // Usar text para permitir fracciones o rangos como "1/2" o "1-2"
-                    value={ingredient.quantity ?? ''}
-                    onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                    placeholder="Cant."
-                    className="w-20 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                    disabled={isSaving}
-                    aria-label={`Cantidad para ${ingredient.name || 'ingrediente'}`} // Aria-label más específico
-                  />
-                </div>
+                     {/* Input para Unidad */}
+                    <div className="flex-shrink-0">
+                       <Label htmlFor={`ingredient-unit-${ingredient.localId}`} className="sr-only">Unidad</Label>
+                       <Input
+                         id={`ingredient-unit-${ingredient.localId}`}
+                         type="text"
+                         value={ingredient.unit ?? ''}
+                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleIngredientChange(index, 'unit', e.target.value)}
+                         placeholder="Unidad"
+                         className="w-24 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                         disabled={isSaving}
+                         aria-label={`Unidad para ${ingredient.name || 'ingrediente'}`}
+                       />
+                    </div>
 
-                {/* Input para Unidad */}
-                {/* Input para Unidad */}
-                 <div> {/* Contenedor para Label + Input */}
-                   <Label htmlFor={`ingredient-unit-${ingredient.localId}`} className="sr-only">Unidad</Label>
-                   <Input
-                    id={`ingredient-unit-${ingredient.localId}`}
-                    type="text"
-                    value={ingredient.unit ?? ''}
-                    onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                    placeholder="Unidad"
-                    className="w-24 border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-                    disabled={isSaving}
-                    aria-label={`Unidad para ${ingredient.name || 'ingrediente'}`} // Aria-label más específico
-                  />
-                 </div>
-
-                {/* Botón Eliminar */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeIngredientRow(index)}
-                  disabled={isSaving}
-                  className="text-red-500 hover:bg-red-100"
-                  aria-label="Eliminar ingrediente"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                    {/* Botón Eliminar */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeIngredientRow(index)}
+                      disabled={isSaving}
+                      className="text-red-500 hover:bg-red-100"
+                      aria-label="Eliminar ingrediente"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
-            ))}
+              <Button
+                variant="outline"
+                onClick={addIngredientRow}
+                disabled={isSaving}
+                className="mt-4 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+              >
+                Añadir Ingrediente
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Card para Instrucciones */}
+          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+             <CardHeader>
+               <CardTitle id="instructions-heading" className="text-slate-900">Instrucciones</CardTitle>
+             </CardHeader>
+             <CardContent>
+                <InstructionsEditor
+                  value={instructions}
+                  onChange={setInstructions}
+                  disabled={isSaving}
+                  aria-labelledby="instructions-heading"
+                />
+             </CardContent>
+          </Card>
+
+          {/* Card para Tags */}
+          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+            <CardHeader>
+              <CardTitle className="text-slate-900">Etiquetas (Tags)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1">
+                <Label htmlFor="tags" className="text-slate-700">Tags (separados por comas)</Label>
+                <Input
+                  id="tags"
+                  value={tags}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTags(e.target.value)}
+                  placeholder="Ej: postre, fácil, rápido, vegano"
+                  disabled={isSaving}
+                  className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+                <p className="text-xs text-slate-500">Ayudan a categorizar y encontrar la receta.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Mensaje de Error de Guardado */}
+          {saveError && (
+            <p className="text-red-500 text-sm text-center mb-4">{saveError}</p>
+          )}
+
+          {/* Botones */}
+          <div className="flex justify-end space-x-2 mt-4">
+            <Button type="button" variant="outline" onClick={() => navigate('/app/recipes')} disabled={isSaving} className="border-slate-300 text-slate-700 hover:bg-slate-50">
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSaving || !title.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {recipeId ? 'Actualizar Receta' : 'Guardar Receta'}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            onClick={addIngredientRow}
-            disabled={isSaving}
-            className="mt-4 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
-          >
-            Añadir Ingrediente
-          </Button>
-        </CardContent>
-      </Card>
-
-       {/* Card para Instrucciones */}
-      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
-         <CardHeader>
-           <CardTitle id="instructions-heading" className="text-slate-900">Instrucciones</CardTitle> {/* Añadir ID */}
-         </CardHeader>
-         <CardContent>
-            <InstructionsEditor
-              value={instructions}
-              onChange={setInstructions} // Pasar directamente el setter del estado
-              disabled={isSaving}
-              aria-labelledby="instructions-heading" // Asociar con heading
-            />
-         </CardContent>
-      </Card>
-
-      {/* Card para Tags */}
-      <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-slate-900">Etiquetas (Tags)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1">
-            <Label htmlFor="tags" className="text-slate-700">Tags (separados por comas)</Label>
-            <Input
-              id="tags"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="Ej: postre, fácil, rápido, vegano"
-              disabled={isSaving}
-              className="border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-            <p className="text-xs text-slate-500">Ayudan a categorizar y encontrar la receta.</p>
-          </div>
-        </CardContent>
-      </Card>
-      {/* Mensaje de Error de Guardado */}
-       {saveError && (
-         <p className="text-red-500 text-sm text-center mb-4">{saveError}</p>
-       )}
-
-      {/* Botones */}
-      <div className="flex justify-end space-x-2 mt-4">
-         <Button variant="outline" onClick={() => navigate('/app/recipes')} disabled={isSaving} className="border-slate-300 text-slate-700 hover:bg-slate-50">
-           Cancelar
-         </Button>
-         <Button onClick={handleSaveRecipe} disabled={isSaving || !title.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-           {recipeId ? 'Actualizar Receta' : 'Guardar Receta'}
-         </Button>
-      </div>
-
+        </form>
+      )}
     </div>
   );
 };
 
 const AddEditRecipePage: React.FC = () => {
+  // Puedes añadir lógica aquí si es necesario, como cargar datos globales
+  // o envolver con otros providers específicos de esta página.
   return <RecipePageContent />;
 };
 

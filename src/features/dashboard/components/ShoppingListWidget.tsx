@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'; 
 import { Button } from '@/components/ui/button';
@@ -6,9 +6,11 @@ import { ListChecks, ArrowRight } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner'; 
 import { AddItemForm } from '@/features/shopping-list/components/AddItemForm';
 import { useShoppingListStore } from '@/stores/shoppingListStore';
+import { supabase } from '@/lib/supabaseClient'; // Importamos supabase directamente
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { parseShoppingInput, ParsedShoppingInput } from '@/features/shopping-list/lib/inputParser'; // Importar parser y tipo
+import { useAuth } from '@/features/auth/AuthContext'; // Corregir ruta
 
 interface ShoppingListWidgetProps { 
   itemCount: number; 
@@ -23,28 +25,47 @@ const contentVariants = {
 
 export function ShoppingListWidget({ itemCount, isLoading, error }: ShoppingListWidgetProps) { 
   const { addItem } = useShoppingListStore();
+  const [isAdding, setIsAdding] = useState(false);
+  const { user } = useAuth(); // Obtener el usuario del contexto
 
-  // Modificar handleAddItem para aceptar ParsedShoppingInput
   const handleAddItem = async (parsedItem: ParsedShoppingInput) => {
-    // Extraer el nombre del objeto parseado
     const itemName = parsedItem.name;
     if (!itemName) {
         toast.error("No se pudo identificar el nombre del ítem.");
         throw new Error("Parsed item name is missing");
     }
-    // Usar el nombre extraído y potencialmente otros datos de parsedItem si addItem los necesita
-    const success = await addItem({
-        name: itemName,
-        // Podríamos pasar quantity y unit si addItem los soporta
-        // quantity: parsedItem.quantity,
-        // unit: parsedItem.unit,
-     });
-    if (success) {
-      toast.success(`"${itemName}" añadido a la lista.`);
-    } else {
-      toast.error(`Error al añadir "${itemName}".`);
+
+    // Asegurarse que el usuario está autenticado
+    if (!user?.id) {
+      toast.error("Debes iniciar sesión para añadir ítems.");
+      throw new Error("User not authenticated");
     }
-    if (!success) throw new Error("Failed to add item via store"); 
+    
+    setIsAdding(true);
+    
+    try {
+      // Usar el store en lugar de supabase directamente
+      console.log('[ShoppingListWidget] Usando addItem del store con:', itemName);
+      
+      const newItem = await addItem({
+        ingredient_name: itemName.trim(),
+        quantity: parsedItem.quantity,
+        unit: parsedItem.unit,
+        // user_id se maneja automáticamente en el store
+      });
+      
+      if (newItem) {
+        toast.success(`"${itemName}" añadido a la lista.`);
+      } else {
+        console.error("Error al añadir item con el store");
+        toast.error(`No se pudo añadir "${itemName}" a la lista.`);
+      }
+    } catch (error) {
+      console.error("Error inesperado:", error);
+      toast.error(`Error inesperado al añadir "${itemName}".`);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   return (
@@ -88,7 +109,10 @@ export function ShoppingListWidget({ itemCount, isLoading, error }: ShoppingList
         )}
       </CardContent>
       <CardFooter className="p-2 border-t border-slate-200">
-         <AddItemForm onAddItem={handleAddItem} />
+         <AddItemForm 
+           onAddItem={handleAddItem} 
+           isAdding={isAdding} 
+         />
       </CardFooter>
     </Card>
   );

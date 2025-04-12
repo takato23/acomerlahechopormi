@@ -1,75 +1,113 @@
-import { FormEvent, useState } from 'react'
-import { useAuth } from './AuthContext'
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '@/lib/supabaseClient';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Spinner } from '@/components/ui/Spinner';
 
 export default function Login() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { login } = useAuth() // <-- Cambiar a login
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (event: FormEvent) => {
-    event.preventDefault()
-    setLoading(true)
-    setError(null)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
     try {
-      await login(email, password) // <-- Usar la función login del contexto
-      if (error) throw error
-      // La redirección se maneja por el cambio de estado en AuthContext
-    } catch (error: any) {
-      setError(error.message || 'Error al iniciar sesión')
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      navigate('/app');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Error al iniciar sesión'
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-muted/40">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-          <CardDescription>
-            Ingresa tu email y contraseña para acceder a tu cuenta.
-          </CardDescription>
+          <h1 className="text-2xl font-bold text-center">Iniciar Sesión</h1>
         </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
+        
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="tu@email.com"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                required
+                placeholder="tu@email.com"
               />
             </div>
-            <div className="grid gap-2">
+
+            <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                required
+                placeholder="••••••••"
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Ingresando...' : 'Ingresar'}
+
+          <CardFooter className="flex flex-col space-y-4">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? <Spinner size="sm" /> : 'Iniciar Sesión'}
             </Button>
+
+            <div className="text-sm text-center space-y-2">
+              <Link
+                to="/forgot-password"
+                className="text-primary hover:underline block"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+              
+              <p>
+                ¿No tienes una cuenta?{' '}
+                <Link
+                  to="/register"
+                  className="text-primary hover:underline"
+                >
+                  Regístrate
+                </Link>
+              </p>
+            </div>
           </CardFooter>
         </form>
       </Card>
     </div>
-  )
+  );
 }
