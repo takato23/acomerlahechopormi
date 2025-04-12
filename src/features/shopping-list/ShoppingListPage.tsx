@@ -31,6 +31,8 @@ import { parseShoppingInput, ParsedShoppingInput } from './lib/inputParser'; // 
 import { supabase } from '@/lib/supabaseClient'; // Importar supabase directamente
 import ResponsiveLayout from './components/Layout/ResponsiveLayout'; // IMPORTAR RESPONSIVE LAYOUT
 import { getDisplayCategory } from './utils/categorization'; // Importar la función de display
+// --- NUEVO: Importar componentes de Tabs ---
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // --- ANALYTICS HELPER ---
 // Función para categorizar el número de resultados (Paso 2.2)
@@ -453,11 +455,11 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // Función para renderizar el contenido principal (MODIFICADA para pasar categorías)
   const renderShoppingListContent = () => (
-    <div className="flex flex-col h-full gap-4"> 
-      <div className="p-4 pb-0"> 
+    <div className="flex flex-col h-full flex-grow"> 
+      <div className="p-4 pb-2 flex-shrink-0"> {/* Reducir padding inferior, evitar encogimiento */}
         <AddItemForm 
           onAddItem={async (parsedItem) => { 
-             const success = await handleAddItemSubmit(parsedItem); // Llamar y esperar resultado
+             const success = await handleAddItemSubmit(parsedItem);
              if (success) {
                setSearchTerm(''); // <-- Limpiar el input/búsqueda SOLO si tuvo éxito
              }
@@ -471,125 +473,139 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
         /> 
       </div>
 
-      {/* Mostrar resultados de búsqueda de precios (Pasar handler) */}
-      {(priceResults !== null) && (
-        <div className="px-4 flex-shrink-0 max-h-[45vh] overflow-y-auto">
-            <PriceResultsDisplay
-              results={priceResults}
-              itemName={itemForPriceSearch}
-              isLoading={isSearchingPrices}
-              onStoreSelect={handleStoreSelect} // <-- PASAR NUEVO HANDLER
-              storeFilter={storeFilter} // <-- PASAR ESTADO DEL FILTRO
-              onStoreFilterChange={setStoreFilter} // <-- PASAR FUNCION PARA CAMBIAR FILTRO
-            />
-        </div>
-       )}
-
-      {/* Lista de Compras AGRUPADA */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col m-4 mt-0"> 
-        <CardHeader className="p-4 border-b flex-shrink-0"> {/* Añadir flex-shrink-0 al header */}
-           <CardTitle className="text-lg font-semibold">
-             Mi Lista de Compras {generatedRange ? formatRange(generatedRange) : ''}
-           </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 flex-grow overflow-y-auto"> 
-          {isLoading ? (
-             <div className="flex items-center justify-center h-full p-6"> <Spinner /> </div>
-          ) : error ? (
-             <Alert variant="destructive" className="m-4"> {error} </Alert> // Mostrar mensaje de error
-          ) : listItems.length === 0 ? (
-             <p className="text-slate-500 text-center p-6 italic">Tu lista está vacía.</p>
-          ) : Object.keys(groupedAndSortedItems).length === 0 && searchTerm ? ( // Cambiado para verificar grupos
-             <p className="text-slate-500 text-center p-6 italic">
-               No se encontraron ítems para "{searchTerm}".
-             </p>
-          ) : (
-            // Iterar sobre las CATEGORÍAS AGRUPADAS Y ORDENADAS
-            <div> {/* Contenedor para las secciones */} 
-              {Object.entries(groupedAndSortedItems).map(([category, itemsInCategory]) => (
-                <div key={category} className="mb-1"> {/* Espacio entre categorías */}
-                  {/* Encabezado de Categoría - MODIFICADO */}
-                  <h3 className="bg-slate-100 text-slate-700 px-4 py-1.5 text-sm font-semibold sticky top-0 z-10 border-b border-slate-200 flex items-center gap-2"> {/* Sticky header, flex y gap */} 
-                    {getDisplayCategory(category)} {/* <-- USAR LA NUEVA FUNCIÓN */}
-                    <span className="text-xs text-slate-500 font-normal">({itemsInCategory.length})</span> {/* Contador aparte */}
-                  </h3>
-                  {/* Lista de ítems para esta categoría */}
-                  <ul className="divide-y divide-slate-100"> {/* Divisor más suave */} 
-                    {itemsInCategory.map((item) => (
-                      // El renderizado del <li> individual no cambia
-                      <li key={item.id} className={`flex items-center justify-between px-4 py-3 ${item.is_checked ? 'opacity-50 bg-slate-50' : ''}`}> 
-                        <div className="flex items-center gap-3"> 
-                          <Checkbox
-                            id={`item-${item.id}`}
-                            checked={item.is_checked}
-                            onCheckedChange={() => handleToggleItem(item.id, item.is_checked)}
-                            aria-label={`Marcar ${item.ingredient_name} como ${item.is_checked ? 'no comprado' : 'comprado'}`}
-                          />
-                          <label
-                            htmlFor={`item-${item.id}`}
-                            className={`flex flex-col cursor-pointer ${item.is_checked ? 'line-through' : ''}`} 
-                          >
-                            <span className="font-medium text-slate-800">{item.ingredient_name}</span>
-                            {(item.quantity || item.unit) && (
-                              <span className="text-xs text-slate-500">
-                                {item.quantity} {item.unit}
-                                {item.notes && ` - ${item.notes}`} 
-                              </span>
-                            )}
-                          </label>
-                        </div>
-                        <div className="flex items-center gap-1"> 
-                           <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-slate-500 hover:text-blue-600" 
-                              onClick={() => handleSearchItemPrice(item)} 
-                              disabled={isSearchingPrices} 
-                              aria-label={`Buscar precios para ${item.ingredient_name}`}
-                           > 
-                               <Search className="h-4 w-4" />
-                           </Button>
-                           <Button
-                             variant="ghost"
-                             size="icon"
-                             className="h-7 w-7 text-slate-500 hover:text-red-600"
-                             onClick={async () => {
-                               const success = await deleteItem(item.id);
-                               if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
-                               else toast.error("Error al eliminar el ítem.");
-                             }}
-                             aria-label={`Eliminar ${item.ingredient_name}`}
-                           >
-                             <Trash2 className="h-4 w-4" />
-                           </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+      {/* --- NUEVO: Contenedor de Tabs --- */}
+      {/* flex-grow permite que ocupe espacio, overflow-hidden para contener */}
+      <Tabs defaultValue="lista" className="flex-grow flex flex-col overflow-hidden px-4 pb-4"> 
+        <TabsList className="mb-2 flex-shrink-0"> {/* Evitar encogimiento de la lista de tabs */}
+          <TabsTrigger value="lista">Mi Lista</TabsTrigger>
+          {priceResults !== null && ( /* Mostrar solo si hay resultados */
+            <TabsTrigger value="resultados">Resultados ({priceResults?.length || 0})</TabsTrigger>
           )}
-        </CardContent>
-        {listItems.length > 0 && (
-          <CardFooter className="p-2 border-t border-slate-200 flex justify-end gap-2"> {/* Flex y gap para botones */}
-            <Button variant="outline" size="sm" onClick={async () => {
-              const success = await clearPurchased();
-              if (success) toast.success("Ítems comprados eliminados.");
-              else toast.error("Error al eliminar ítems comprados.");
-            }} disabled={listItems.every(i => !i.is_checked)} className="text-xs"> {/* Deshabilitar si no hay marcados */}
-              <XCircle className="mr-1 h-3 w-3" /> Limpiar Comprados
-            </Button>
-            <Button variant="destructive" size="sm" onClick={async () => {
-              const success = await clearAll();
-              if (success) toast.success("Lista vaciada correctamente.");
-              else toast.error("Error al vaciar la lista.");
-            }} className="text-xs">
-              <Trash2 className="mr-1 h-3 w-3" /> Vaciar Lista
-            </Button>
-          </CardFooter>
+        </TabsList>
+
+        {/* --- Contenido Pestaña "Mi Lista" --- */}
+        {/* h-full y flex para que el Card pueda usar flex-grow */}
+        <TabsContent value="lista" className="flex-grow flex flex-col overflow-hidden p-0 m-0"> 
+          {/* Lista de Compras AGRUPADA (Card) */}
+          {/* Quitar margen (m-4 mt-0), ya se maneja en Tabs */}
+          <Card className="bg-white border border-slate-200 shadow-sm rounded-lg flex-grow flex flex-col overflow-hidden"> 
+            <CardHeader className="p-4 border-b flex-shrink-0"> 
+               <CardTitle className="text-lg font-semibold">
+                 Mi Lista de Compras {generatedRange ? formatRange(generatedRange) : ''}
+               </CardTitle>
+            </CardHeader>
+            {/* CardContent ya tenía flex-grow y overflow-y-auto, debería funcionar */}
+            <CardContent className="p-0 flex-grow overflow-y-auto"> 
+              {isLoading ? (
+                 <div className="flex items-center justify-center h-full p-6"> <Spinner /> </div>
+              ) : error ? (
+                 <Alert variant="destructive" className="m-4"> {error} </Alert>
+              ) : listItems.length === 0 ? (
+                 <p className="text-slate-500 text-center p-6 italic">Tu lista está vacía.</p>
+              ) : Object.keys(groupedAndSortedItems).length === 0 && searchTerm ? (
+                 <p className="text-slate-500 text-center p-6 italic">
+                   No se encontraron ítems para "{searchTerm}".
+                 </p>
+              ) : (
+                <div> 
+                  {Object.entries(groupedAndSortedItems).map(([category, itemsInCategory]) => (
+                     <div key={category} className="mb-1">
+                       <h3 className="bg-slate-100 text-slate-700 px-4 py-1.5 text-sm font-semibold sticky top-0 z-10 border-b border-slate-200 flex items-center gap-2"> {/* Sticky header */} 
+                         {getDisplayCategory(category)}
+                         <span className="text-xs text-slate-500 font-normal">({itemsInCategory.length})</span>
+                       </h3>
+                       <ul className="divide-y divide-slate-100">
+                         {itemsInCategory.map((item) => (
+                           <li key={item.id} className={`flex items-center justify-between px-4 py-3 ${item.is_checked ? 'opacity-50 bg-slate-50' : ''}`}> 
+                             <div className="flex items-center gap-3"> 
+                               <Checkbox
+                                 id={`item-${item.id}`}
+                                 checked={item.is_checked}
+                                 onCheckedChange={() => handleToggleItem(item.id, item.is_checked)}
+                                 aria-label={`Marcar ${item.ingredient_name} como ${item.is_checked ? 'no comprado' : 'comprado'}`}
+                               />
+                               <label
+                                 htmlFor={`item-${item.id}`}
+                                 className={`flex flex-col cursor-pointer ${item.is_checked ? 'line-through' : ''}`} 
+                               >
+                                 <span className="font-medium text-slate-800">{item.ingredient_name}</span>
+                                 {(item.quantity || item.unit) && (
+                                   <span className="text-xs text-slate-500">
+                                     {item.quantity} {item.unit}
+                                     {item.notes && ` - ${item.notes}`} 
+                                   </span>
+                                 )}
+                               </label>
+                             </div>
+                             <div className="flex items-center gap-1"> 
+                                <Button 
+                                   variant="ghost" 
+                                   size="icon" 
+                                   className="h-7 w-7 text-slate-500 hover:text-blue-600" 
+                                   onClick={() => handleSearchItemPrice(item)} 
+                                   disabled={isSearchingPrices} 
+                                   aria-label={`Buscar precios para ${item.ingredient_name}`}
+                                > 
+                                    <Search className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-slate-500 hover:text-red-600"
+                                  onClick={async () => {
+                                    const success = await deleteItem(item.id);
+                                    if (success) toast.success(`"${item.ingredient_name}" eliminado.`);
+                                    else toast.error("Error al eliminar el ítem.");
+                                  }}
+                                  aria-label={`Eliminar ${item.ingredient_name}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                             </div>
+                           </li>
+                         ))}
+                       </ul>
+                     </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+            {listItems.length > 0 && (
+              <CardFooter className="p-2 border-t flex-shrink-0 flex justify-end gap-2"> {/* Añadir flex-shrink-0 */}
+                 <Button variant="outline" size="sm" onClick={async () => {
+                   const success = await clearPurchased();
+                   if (success) toast.success("Ítems comprados eliminados.");
+                   else toast.error("Error al eliminar ítems comprados.");
+                 }} disabled={listItems.every(i => !i.is_checked)} className="text-xs"> {/* Deshabilitar si no hay marcados */}
+                   <XCircle className="mr-1 h-3 w-3" /> Limpiar Comprados
+                 </Button>
+                 <Button variant="destructive" size="sm" onClick={async () => {
+                   const success = await clearAll();
+                   if (success) toast.success("Lista vaciada correctamente.");
+                   else toast.error("Error al vaciar la lista.");
+                 }} className="text-xs">
+                   <Trash2 className="mr-1 h-3 w-3" /> Vaciar Lista
+                 </Button>
+               </CardFooter>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* --- Contenido Pestaña "Resultados" --- */}
+        {priceResults !== null && (
+           <TabsContent value="resultados" className="flex-grow overflow-y-auto p-0 m-0"> 
+                {/* Quitar div wrapper anterior con max-h, el TabsContent maneja scroll */}
+                <PriceResultsDisplay
+                  results={priceResults}
+                  itemName={itemForPriceSearch}
+                  isLoading={isSearchingPrices}
+                  onStoreSelect={handleStoreSelect}
+                  storeFilter={storeFilter}
+                  onStoreFilterChange={setStoreFilter}
+                />
+           </TabsContent>
         )}
-      </Card>
+      </Tabs> 
     </div>
   );
 

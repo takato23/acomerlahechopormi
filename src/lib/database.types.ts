@@ -151,6 +151,36 @@ export type Database = {
           },
         ]
       }
+      meal_plans: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          name: string
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          name?: string
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          name?: string
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       migration_history: {
         Row: {
           created_at: string | null
@@ -249,6 +279,54 @@ export type Database = {
             columns: ["ingredient_id"]
             isOneToOne: false
             referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planned_recipes: {
+        Row: {
+          assigned_day: string
+          created_at: string
+          id: string
+          meal_plan_id: string
+          meal_type: string | null
+          recipe_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_day: string
+          created_at?: string
+          id?: string
+          meal_plan_id: string
+          meal_type?: string | null
+          recipe_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_day?: string
+          created_at?: string
+          id?: string
+          meal_plan_id?: string
+          meal_type?: string | null
+          recipe_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planned_recipes_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planned_recipes_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
             referencedColumns: ["id"]
           },
         ]
@@ -629,6 +707,7 @@ export type Database = {
       }
       shopping_list_items: {
         Row: {
+          brand: string | null
           category: string | null
           created_at: string
           id: string
@@ -642,6 +721,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brand?: string | null
           category?: string | null
           created_at?: string
           id?: string
@@ -655,6 +735,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          brand?: string | null
           category?: string | null
           created_at?: string
           id?: string
