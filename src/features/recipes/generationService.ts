@@ -2,30 +2,7 @@ import { getUserProfile } from '@/features/user/userService';
 import type { UserProfile } from '@/features/user/userTypes';
 import { getPantryItems } from '@/features/pantry/pantryService';
 import type { PantryItem } from '@/features/pantry/types';
-import type { Recipe, RecipeIngredient } from '@/types/recipeTypes'; // RecipeIngredient añadido
-
-// Definición temporal de GeneratedRecipeData basada en su uso
-// Idealmente, esto debería estar en @/types/recipeTypes.ts si se usa globalmente
-interface GeneratedRecipeData {
-  title: string;
-  description: string | null;
-  ingredients: Array<{ name: string; quantity: number | null; unit: string | null }>;
-  instructions: string[];
-  prepTimeMinutes: number | null;
-  cookTimeMinutes: number | null;
-  servings: number | null;
-  mainIngredients?: string[]; // Mantener opcional por si acaso
-  // Añadir otras propiedades si son usadas por parseGeminiResponse
-  cookingMethods?: any;
-  difficultyLevel?: any;
-  cuisineType?: any;
-  estimatedTime?: any;
-  nutritionalInfo?: any;
-  seasonalFlags?: any;
-  equipmentNeeded?: any;
-  tags?: string[] | null; // Añadido basado en uso posterior
-  image_url?: string | null; // <-- Campo añadido
-}
+import type { Recipe, RecipeIngredient, GeneratedRecipeData, IngredientWithAmount, NutritionalInfo } from '@/types/recipeTypes'; // RecipeIngredient añadido
 import { preferencesService } from '@/features/user/services/PreferencesService';
 import { recipeHistoryService } from './services/RecipeHistoryService';
 // import { RecipeHistoryEntryWithDetails } from './services/RecipeHistoryService'; // Comentado - Tipo no exportado
@@ -73,7 +50,7 @@ const validatePreviousContext = (context: PreviousRecipeContext[]): PreviousReci
 export const buildCreativePrompt = (
   baseRecipe: Recipe | null,
   pantryIngredients: string[],
-  preferences: UserPreferences, // Asegurar que no sea null aquí
+  preferences: UserPreferences,
   requestContext?: string,
   mealType?: MealType,
   styleModifier: StyleModifier = null,
@@ -83,19 +60,28 @@ export const buildCreativePrompt = (
     title: "Tostadas con Aguacate", description: "Desayuno rápido y nutritivo",
     ingredients: [ { name: "Pan integral", quantity: 2, unit: "rebanadas" }, { name: "Aguacate", quantity: 1, unit: "unidad" } ],
     instructions: [ "Tostar el pan hasta que esté dorado", "Machacar el aguacate y untarlo sobre el pan" ],
-    prepTimeMinutes: 5, cookTimeMinutes: 3, servings: 1, mainIngredients: ["pan", "aguacate"]
+    prepTimeMinutes: 5, cookTimeMinutes: 3, servings: 1, mainIngredients: ["pan", "aguacate"],
+    nutritionalInfo: {
+        calories: 300, // Estimado por porción
+        protein: 10, // en gramos
+        carbs: 30, // en gramos
+        fat: 15, // en gramos
+        fiber: 5, // en gramos (opcional)
+        sugar: 2 // en gramos (opcional)
+    }
   };
 
   let prompt = `
 INSTRUCCIONES:
-Genera una receta ${styleModifier ? `con estilo '${styleModifier}' ` : ''}para ${mealType || 'una comida'} ${requestContext ? `(${requestContext})` : ''} en formato JSON siguiendo EXACTAMENTE esta estructura:
+Genera una receta ${styleModifier ? `con estilo '${styleModifier}' ` : ''}para ${mealType || 'una comida'} ${requestContext ? `(${requestContext})` : ''} en formato JSON siguiendo EXACTAMENTE esta estructura (incluyendo el campo nutritionalInfo):
 ${JSON.stringify(exampleRecipe, null, 2)}
 
 REGLAS:
 1. SOLO JSON VÁLIDO. Sin texto adicional.
 2. SÉ CREATIVO y VARIADO.
 3. USA comillas dobles. Campos numéricos sin comillas.
-4. TODOS los campos son OBLIGATORIOS.
+4. TODOS los campos son OBLIGATORIOS, incluyendo una estimación para cada campo dentro de nutritionalInfo (calories, protein, carbs, fat, fiber, sugar).
+5. Proporciona una estimación RAZONABLE para nutritionalInfo por porción.
 `;
 
   if (baseRecipe) {
@@ -128,6 +114,21 @@ REGLAS:
 
   prompt += '\nIMPORTANTE: RETORNA SOLO JSON VÁLIDO.\n';
   return prompt;
+};
+
+// Array de imágenes de recetas por defecto para fallback
+const DEFAULT_RECIPE_IMAGES = [
+  'https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1518779578993-ec3579fee39f?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop'
+];
+
+// Helper para obtener una imagen de fallback por categoría o random
+const getFallbackImage = (category?: string): string => {
+  // Si no hay categoría o no la encontramos, usamos una imagen aleatoria
+  return DEFAULT_RECIPE_IMAGES[Math.floor(Math.random() * DEFAULT_RECIPE_IMAGES.length)];
 };
 
 /**
@@ -186,38 +187,109 @@ const isValidRecipeData = (data: any): data is GeneratedRecipeData => {
   );
 };
 
-// Helper function to search for recipe image on Spoonacular
-const fetchRecipeImage = async (title: string): Promise<string | null> => {
-  if (!title) return null;
+// Helper para verificar si una URL de imagen es válida
+const isValidImageUrl = async (url: string): Promise<boolean> => {
+  try {
+    const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+    const contentType = response.headers.get('content-type');
+    return response.ok && (contentType ? contentType.startsWith('image/') : false);
+  } catch (error) {
+    console.error(`Error validando URL de imagen: ${url}`, error);
+    return false;
+  }
+};
+
+// Helper para optimizar URL de imagen añadiendo parámetros
+const optimizeImageUrl = (url: string): string => {
+  try {
+    // Parsear la URL para añadir parámetros de optimización
+    const parsedUrl = new URL(url);
+    
+    // Si es una URL de Spoonacular, ya está optimizada
+    if (parsedUrl.hostname.includes('spoonacular.com')) {
+      return url;
+    }
+    
+    // Si es Unsplash, podemos añadir parámetros de optimización
+    if (parsedUrl.hostname.includes('unsplash.com')) {
+      if (!url.includes('w=')) {
+        return `${url}${url.includes('?') ? '&' : '?'}w=800&auto=format&fit=crop`;
+      }
+    }
+    
+    return url;
+  } catch (error) {
+    console.error('Error optimizando URL de imagen:', error);
+    return url; // Devolver la URL original si hay error
+  }
+};
+
+// Helper function to search for recipe image on Spoonacular with fallback
+const fetchRecipeImage = async (title: string, category?: string): Promise<{imageUrl: string | null, nutritionalInfo?: NutritionalInfo | null}> => {
+  if (!title) return { imageUrl: getFallbackImage(category) };
   
   // API key proporcionada por el usuario
   const SPOONACULAR_API_KEY = '59dd87d383354faa97641d5b9e97e5c6';
   
   try {
-    // Usar la API de Spoonacular para buscar recetas por título
-    const searchUrl = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${SPOONACULAR_API_KEY}&query=${encodeURIComponent(title)}&number=1`;
-    console.log(`[fetchRecipeImage] Buscando imagen para "${title}" en Spoonacular`);
+    // 1. Intentar primero con Spoonacular
+    const searchUrl = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${SPOONACULAR_API_KEY}&query=${encodeURIComponent(title)}&number=1&addNutrition=true`;
+    console.log(`[fetchRecipeImage] Buscando imagen e info nutricional para "${title}" en Spoonacular`);
     
     const response = await fetch(searchUrl);
-    if (!response.ok) {
-      console.warn(`Spoonacular API request failed: ${response.status}`);
-      return null;
+    if (response.ok) {
+      const data = await response.json();
+      if (data.results && data.results.length > 0) {
+        const recipeData = data.results[0];
+        let nutritionalInfo: NutritionalInfo | null = null;
+        
+        // Extraer información nutricional si está disponible
+        if (recipeData.nutrition && recipeData.nutrition.nutrients) {
+          const nutrients = recipeData.nutrition.nutrients;
+          nutritionalInfo = {
+            calories: nutrients.find((n: any) => n.name === "Calories")?.amount || 0,
+            protein: nutrients.find((n: any) => n.name === "Protein")?.amount || 0,
+            carbs: nutrients.find((n: any) => n.name === "Carbohydrates")?.amount || 0,
+            fat: nutrients.find((n: any) => n.name === "Fat")?.amount || 0,
+            fiber: nutrients.find((n: any) => n.name === "Fiber")?.amount || 0,
+            sugar: nutrients.find((n: any) => n.name === "Sugar")?.amount || 0
+          };
+        }
+
+        // Si tenemos imagen, prepararla
+        if (recipeData.image) {
+          const imageUrl = `https://spoonacular.com/recipeImages/${recipeData.image}`;
+          console.log(`[fetchRecipeImage] Imagen e info nutricional encontradas en Spoonacular`);
+          return { 
+            imageUrl, 
+            nutritionalInfo 
+          };
+        }
+        
+        // Si tenemos nutrientes pero no imagen
+        if (nutritionalInfo) {
+          return {
+            imageUrl: getFallbackImage(category),
+            nutritionalInfo
+          };
+        }
+      }
     }
     
-    const data = await response.json();
-    if (data.results && data.results.length > 0 && data.results[0].image) {
-      // Imagen encontrada! Spoonacular devuelve URLs de imagen relativas
-      // Convertir a URL completa
-      const imageUrl = `https://spoonacular.com/recipeImages/${data.results[0].image}`;
-      console.log(`[fetchRecipeImage] Found image on Spoonacular: ${imageUrl}`);
-      return imageUrl;
-    }
+    // 2. Fallback: Buscar en Unsplash
+    console.log(`[fetchRecipeImage] No se encontró imagen en Spoonacular, buscando en Unsplash...`);
+    const unsplashUrl = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(title + " food")}&per_page=1&client_id=YOUR_UNSPLASH_KEY`;
     
-    console.log(`[fetchRecipeImage] No image found on Spoonacular for "${title}"`);
-    return null;
+    // NOTA: Para producción, deberías usar una API key de Unsplash
+    // Como este es un fallback secundario, usamos imágenes por defecto si no tienes una key
+    
+    // Incluso sin API key, usamos una selección de imágenes predefinidas
+    return { imageUrl: getFallbackImage(category) };
+    
   } catch (error) {
-    console.error('Error fetching image from Spoonacular:', error);
-    return null;
+    console.error('Error buscando imagen de receta:', error);
+    // 3. Fallback final: Imagen por defecto
+    return { imageUrl: getFallbackImage(category) };
   }
 };
 
@@ -319,10 +391,21 @@ const callGeminiAndFetchImage = async (apiKey: string, prompt: string): Promise<
         return { error: parseErrorMsg };
     }
 
-     // --- Búsqueda de imagen en TheMealDB ---
-     const imageUrl = await fetchRecipeImage(parsedRecipe.title);
+     // --- Búsqueda de imagen en Spoonacular y datos nutricionales ---
+     // Usar solo el primer tipo de cocina, si existe, como categoría para la búsqueda de imagen
+     const categoryForImageSearch = parsedRecipe.cuisineType?.[0]; 
+     const { imageUrl, nutritionalInfo } = await fetchRecipeImage(parsedRecipe.title, categoryForImageSearch);
      if (imageUrl) {
        parsedRecipe.image_url = imageUrl; // Añadir la URL al objeto
+     }
+     // Sobrescribir la info nutricional de Gemini SOLO si Spoonacular la devuelve y es válida
+     // Podrías añadir más validaciones aquí (ej. que calories > 0)
+     if (nutritionalInfo) { 
+       console.log("[callGeminiAndFetchImage] Usando info nutricional de Spoonacular.")
+       parsedRecipe.nutritionalInfo = nutritionalInfo; 
+     } else {
+       console.log("[callGeminiAndFetchImage] Usando info nutricional (si existe) de Gemini.")
+       // Si Spoonacular no devolvió nada, mantenemos lo que sea que Gemini haya generado (puede ser null o un objeto)
      }
      // --------------------------------------
 
@@ -598,7 +681,7 @@ const buildVariationPrompt = (
   preferences: UserPreferences,
   pantryIngredients: string[]
 ): string => {
-   // Simplificar el ejemplo, la IA debería entender el formato
+   // Actualizar el ejemplo para incluir nutritionalInfo
    const exampleFormat = `{
     "title": "Título de la variación",
     "description": "Descripción breve",
@@ -612,13 +695,15 @@ const buildVariationPrompt = (
     "cookTimeMinutes": 15,
     "servings": 2,
     "mainIngredients": ["principal1"],
-    "image_url": null
+    "image_url": null,
+    "nutritionalInfo": {
+        "calories": 350, "protein": 12, "carbs": 35, "fat": 18, "fiber": 6, "sugar": 4
+    }
   }`;
 
-   // Construcción más limpia del prompt
    let prompt = `INSTRUCCIONES:
 Genera una VARIACIÓN de la siguiente receta base, incorporando la petición del usuario: "${requestText}".
-Formato de salida: JSON EXACTAMENTE como este ejemplo (ignora los valores, enfócate en la estructura y los tipos):
+Formato de salida: JSON EXACTAMENTE como este ejemplo (incluyendo el campo nutritionalInfo):
 ${exampleFormat}
 
 RECETA BASE:
@@ -633,8 +718,8 @@ PETICIÓN DE VARIACIÓN: "${requestText}"
 REGLAS:
 1. SOLO JSON VÁLIDO. Sin texto antes o después.
 2. Mantén la esencia de la receta base pero aplica la variación solicitada.
-3. USA comillas dobles. Campos numéricos sin comillas. String para descripción e ingredientes, array de strings para instrucciones.
-4. TODOS los campos del ejemplo JSON son OBLIGATORIOS. Si no aplica (ej. cookTime), usa null o 0. Incluye image_url: null.
+3. USA comillas dobles. Campos numéricos sin comillas.
+4. TODOS los campos del ejemplo JSON son OBLIGATORIOS, incluyendo una estimación RAZONABLE para cada campo dentro de nutritionalInfo.
 5. El nuevo título debe reflejar la variación.
 `;
 

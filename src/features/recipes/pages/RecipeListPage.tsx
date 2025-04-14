@@ -48,16 +48,18 @@ import type { UserProfile } from '@/features/user/userTypes';
 import type { PantryItem } from '@/features/pantry/types';
 import { DEFAULT_USER_PREFERENCES } from '@/types/userPreferences';
 import type { UserPreferences } from '@/types/userPreferences';
+import { SuggestionRequest, RecipeSuggestion } from '@/features/suggestions/types';
 
 // Stores & Services
 import { useRecipeStore } from '@/stores/recipeStore';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getUserProfile } from '@/features/user/userService';
 import { getPantryItems } from '@/features/pantry/services/pantryService'; // Corregir ruta
-import { getRecipes, addRecipe, updateRecipe, deleteRecipe, toggleRecipeFavorite } from '../services/recipeService';
+import { getRecipes, addRecipe, updateRecipe, deleteRecipe, toggleRecipeFavorite, getRecipeById } from '../services/recipeService';
 import { preferencesService } from '@/features/user/services/PreferencesService'; // Importar servicio de preferencias
 import { debugLogger } from '@/lib/utils';
 import { buildCreativePrompt } from '../generationService';
+import { getSuggestions } from '@/features/suggestions/suggestionService';
 
 // Inicialización del logger
 // No crear una instancia de logger aquí, llamar directamente a debugLogger
@@ -173,7 +175,9 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
     showOnlyFavorites = false,
     sortOption = 'created_at_desc',
     categoryId = null,
-    viewMode = 'card'
+    viewMode = 'card',
+    showOnlyPublic = false,
+    quickRecipes = false
   } = filters;
 
   // Estados locales para la UI
@@ -452,15 +456,54 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
         return;
       }
       console.log("Solicitando sugerencia de receta desde la despensa con", pantryItems.length, "items.");
-      // const suggestedRecipe = await suggestSingleRecipeFromPantry(pantryItems); // Función no disponible
-      // if (suggestedRecipe) { // Comentado porque suggestedRecipe ya no se obtiene
-      //   console.log("Receta sugerida recibida, navegando a edición:", suggestedRecipe);
-      //   navigate('/app/recipes/new', { state: { generatedRecipe: suggestedRecipe } });
-      // } else {
-      //   console.log("No se pudo obtener una sugerencia de receta.");
-      //   toast.info("No pudimos generar una sugerencia con tus ingredientes actuales.");
-      //   setSuggestionError("No se pudo generar una sugerencia con los ingredientes de tu despensa.");
-      // }
+      
+      // Preparar el contexto para getSuggestions - asegurarnos de la compatibilidad de tipos
+      const context: SuggestionRequest = {
+        pantryItems: pantryItems
+          .filter(item => item.ingredient?.name) // Solo incluir items con nombre
+          .map(item => ({
+            name: item.ingredient?.name || '', // Usar nombre del ingrediente
+            quantity: item.quantity || 0,
+            unit: item.unit || undefined // Convertir null a undefined
+          })),
+        mealType: 'Almuerzo'
+      };
+      
+      // Obtener sugerencias
+      const response = await getSuggestions(context);
+      
+      if (response.suggestions && response.suggestions.length > 0) {
+        // Usar la primera sugerencia que esté basada en la despensa
+        const pantrySuggestion = response.suggestions.find(s => 
+          s.reason?.includes('despensa') || s.reason?.includes('ingredientes'));
+          
+        if (pantrySuggestion && pantrySuggestion.id) {
+          // Navegar a la página de detalles si tiene un ID
+          console.log("Receta sugerida encontrada, navegando a la receta:", pantrySuggestion);
+          
+          // Verificar primero si la receta existe
+          try {
+            const recipeExists = await getRecipeById(pantrySuggestion.id);
+            if (recipeExists) {
+              navigate(`/app/recipes/${pantrySuggestion.id}`);
+            } else {
+              throw new Error("Receta no encontrada");
+            }
+          } catch (error) {
+            console.error("Error verificando receta:", error);
+            toast.error("No se pudo encontrar la receta sugerida. Inténtalo de nuevo.");
+            setSuggestionError("Receta no encontrada o error al obtenerla.");
+          }
+        } else {
+          console.log("No se encontró una sugerencia con ID válido.");
+          toast.info("No pudimos encontrar una sugerencia adecuada con tus ingredientes actuales.");
+          setSuggestionError("No se encontró una receta con tus ingredientes.");
+        }
+      } else {
+        console.log("No se pudo obtener una sugerencia de receta.");
+        toast.info("No pudimos generar una sugerencia con tus ingredientes actuales.");
+        setSuggestionError("No se pudo generar una sugerencia con los ingredientes de tu despensa.");
+      }
     } catch (error: any) {
       console.error("Error al sugerir receta desde la despensa:", error);
       const errorMessage = error.message || "Ocurrió un error inesperado al obtener la sugerencia.";
@@ -662,6 +705,55 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="favorites"
+                    checked={showOnlyFavorites}
+                    onCheckedChange={(checked) => {
+                      setFilters({ showOnlyFavorites: !!checked });
+                    }}
+                  />
+                  <label htmlFor="favorites">Solo favoritas</label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="publics"
+                    checked={filters.showOnlyPublic || false}
+                    onCheckedChange={(checked) => {
+                      setFilters({ showOnlyPublic: !!checked });
+                    }}
+                  />
+                  <label htmlFor="publics">Solo recetas públicas</label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="quick"
+                    checked={filters.quickRecipes || false}
+                    onCheckedChange={(checked) => {
+                      setFilters({ quickRecipes: !!checked });
+                    }}
+                  />
+                  <label htmlFor="quick">Recetas rápidas (menos de 30 min)</label>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="sort">Ordenar por</Label>
+                  <Select
+                    value={sortOption}
+                    onValueChange={(value) => {
+                      setFilters({ sortOption: value });
+                    }}
+                  >
+                    {sortOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </Select>
                 </div>
               </div>
               <SheetFooter className="mt-4 flex flex-col sm:flex-row sm:justify-between gap-2">

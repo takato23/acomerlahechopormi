@@ -102,7 +102,7 @@ export function AppLayout() {
         />
       )}
 
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1">
         <header className="flex items-center justify-between h-14 px-4 border-b bg-card md:px-6">
           <div className="flex-1" />
           <div className="flex items-center gap-4">
@@ -136,26 +136,23 @@ export function AppLayout() {
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-20 md:pb-8">
           <Outlet />
         </main>
+
+        {user && (
+          <>
+            <FavoriteItemsSheet
+              isOpen={isFavoriteItemsSheetOpen}
+              onOpenChange={handleFavoriteItemsSheetOpenChange}
+              onEditItem={handleEditItemFromSheet}
+              onDeleteItem={handleDeleteItemFromSheet}
+            />
+            <FavoriteRecipesSheet
+              open={isFavoriteRecipesSheetOpen}
+              onOpenChange={handleFavoriteRecipesSheetOpenChange}
+            />
+            <BottomNavBar onOpenFavoriteRecipes={handleOpenFavoriteRecipes} />
+          </>
+        )}
       </div>
-
-      {/* Sheets solo se muestran si hay usuario autenticado */}
-      {user && (
-        <>
-          <FavoriteItemsSheet
-            isOpen={isFavoriteItemsSheetOpen}
-            onOpenChange={handleFavoriteItemsSheetOpenChange}
-            onEditItem={handleEditItemFromSheet}
-            onDeleteItem={handleDeleteItemFromSheet}
-          />
-
-          <FavoriteRecipesSheet
-            open={isFavoriteRecipesSheetOpen}
-            onOpenChange={handleFavoriteRecipesSheetOpenChange}
-          />
-
-          <BottomNavBar onOpenFavoriteRecipes={handleOpenFavoriteRecipes} />
-        </>
-      )}
     </div>
   );
 }

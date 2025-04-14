@@ -278,23 +278,21 @@ const RecipePageContent: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+    <div className="container mx-auto px-4 py-6 max-w-5xl">
       <h1 className="text-2xl md:text-3xl font-bold mb-6 text-slate-900">
         {recipeId ? 'Editar Receta' : 'Crear Nueva Receta'}
       </h1>
 
-      {isLoading && (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
-          </div>
-      )}
-
-      {!isLoading && (
-        <form onSubmit={(e) => { e.preventDefault(); handleSaveRecipe(); }}>
-          {/* Card para Información General */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-12 w-12 animate-spin text-emerald-500" />
+        </div>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveRecipe(); }} className="space-y-8">
+          {/* Información Básica */}
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
-              <CardTitle className="text-slate-900">Información General</CardTitle>
+              <CardTitle className="text-slate-900">Información Básica</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
@@ -367,7 +365,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Imagen */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle className="text-slate-900">Imagen</CardTitle>
             </CardHeader>
@@ -382,7 +380,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Ingredientes */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle id="ingredients-heading" className="text-slate-900">Ingredientes</CardTitle> {/* Añadir ID */}
             </CardHeader>
@@ -469,7 +467,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Instrucciones */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
              <CardHeader>
                <CardTitle id="instructions-heading" className="text-slate-900">Instrucciones</CardTitle>
              </CardHeader>
@@ -484,7 +482,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Tags */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle className="text-slate-900">Etiquetas (Tags)</CardTitle>
             </CardHeader>
