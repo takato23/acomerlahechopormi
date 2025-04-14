@@ -13,6 +13,7 @@ import { UserPreferences, ComplexityLevel } from '@/types/userPreferences'; // I
 import { recipeHistoryService } from './RecipeHistoryService';
 import { varietyMetricsService } from './VarietyMetricsService';
 import { preferencesService } from '@/features/user/services/PreferencesService';
+import { RecipeIngredient } from '@/types/recipeTypes'; // Importar el tipo RecipeIngredient
 
 /**
  * Servicio para filtrar recetas basado en contexto y preferencias
@@ -65,8 +66,8 @@ class RecipeFilterService {
     return recipes.filter(recipe => {
       // Excluir por ingredientes no deseados
       if (preferences.dislikedIngredients.length > 0) {
-        const recipeIngredients = recipe.ingredients.map(i => i.ingredient_name?.toLowerCase());
-        if (recipeIngredients.some(ri => preferences.dislikedIngredients.includes(ri ?? ''))) {
+        const recipeIngredients = recipe.recipe_ingredients?.map((i: RecipeIngredient) => i.ingredient_name?.toLowerCase());
+        if (recipeIngredients?.some(ri => preferences.dislikedIngredients.includes(ri ?? ''))) {
           return false;
         }
       }
@@ -79,23 +80,23 @@ class RecipeFilterService {
       }
 
       // Filtrar por complejidad preferida
-      if (preferences.complexityPreference && recipe.difficulty_level) { // Usar snake_case
-        if (recipe.difficulty_level !== preferences.complexityPreference) {
-          return false;
-        }
-      }
+      // if (preferences.complexityPreference && recipe.difficulty_level) { 
+      //   if (recipe.difficulty_level !== preferences.complexityPreference) {
+      //     return false;
+      //   }
+      // }
       
       // Filtrar por tipo de cocina preferida
-      if (criteria.cuisineTypes && criteria.cuisineTypes.length > 0) {
-        if (!recipe.cuisine_type?.some((ct: CuisineType) => criteria.cuisineTypes!.includes(ct))) { // Usar snake_case y tipo explícito
-            return false;
-        }
-      } else if (preferences.cuisinePreferences.length > 0) {
-        if (!recipe.cuisine_type?.some((ct: CuisineType) => preferences.cuisinePreferences.includes(ct))) { // Usar snake_case y tipo explícito
-            // Opción: excluir si no es ninguna de las preferidas
-            // return false; 
-        }
-      }
+      // if (criteria.cuisineTypes && criteria.cuisineTypes.length > 0) {
+      //   if (!recipe.cuisine_type?.some((ct: CuisineType) => criteria.cuisineTypes!.includes(ct))) { 
+      //       return false;
+      //   }
+      // } else if (preferences.cuisinePreferences.length > 0) {
+      //   if (!recipe.cuisine_type?.some((ct: CuisineType) => preferences.cuisinePreferences.includes(ct))) { 
+      //       // Opción: excluir si no es ninguna de las preferidas
+      //       // return false; 
+      //   }
+      // }
 
       return true;
     });
@@ -129,23 +130,23 @@ class RecipeFilterService {
       }
 
       // Lógica de rotación de proteínas
-      if (proteinMetrics && recipe.main_ingredients && recipe.main_ingredients.length > 0) {
-        const mainProtein = recipe.main_ingredients[0]; // Asume primer ingrediente principal
-        const lastUsedProtein = proteinMetrics.lastUsed[mainProtein];
-        if (lastUsedProtein) {
-          const daysSinceLast = (new Date().getTime() - new Date(lastUsedProtein).getTime()) / (1000 * 60 * 60 * 24);
-          if (daysSinceLast < VARIETY_THRESHOLDS.MIN_DAYS_BETWEEN_REPEAT) {
-            // return false; // Podría ser un filtro estricto
-          }
-        }
-      }
+      // if (proteinMetrics && recipe.main_ingredients && recipe.main_ingredients.length > 0) {
+      //   const mainProtein = recipe.main_ingredients[0]; // Asume primer ingrediente principal
+      //   const lastUsedProtein = proteinMetrics.lastUsed[mainProtein];
+      //   if (lastUsedProtein) {
+      //     const daysSinceLast = (new Date().getTime() - new Date(lastUsedProtein).getTime()) / (1000 * 60 * 60 * 24);
+      //     if (daysSinceLast < VARIETY_THRESHOLDS.MIN_DAYS_BETWEEN_REPEAT) {
+      //       // return false; // Podría ser un filtro estricto
+      //     }
+      //   }
+      // }
       
       // Lógica de variedad de cocina
-      if (cuisineMetrics && recipe.cuisine_type && recipe.cuisine_type.length > 0) { // Usar snake_case
-         const mainCuisine = recipe.cuisine_type[0];
-         const cuisineCount = cuisineMetrics.frequencyCount[mainCuisine] || 0;
-         // if (cuisineCount >= VARIETY_THRESHOLDS.MAX_SAME_CUISINE_PER_WEEK) return false;
-      }
+      // if (cuisineMetrics && recipe.cuisine_type && recipe.cuisine_type.length > 0) { 
+      //    const mainCuisine = recipe.cuisine_type[0];
+      //    const cuisineCount = cuisineMetrics.frequencyCount[mainCuisine] || 0;
+      //    // if (cuisineCount >= VARIETY_THRESHOLDS.MAX_SAME_CUISINE_PER_WEEK) return false;
+      // }
 
       return true;
     });
@@ -159,24 +160,26 @@ class RecipeFilterService {
     criteria: RecipeSearchCriteria
   ): Recipe[] {
     return recipes.filter(recipe => {
-      if (criteria.difficulty && recipe.difficulty_level !== criteria.difficulty) { // Usar snake_case
+      // if (criteria.difficulty && recipe.difficulty_level !== criteria.difficulty) { 
+      //   return false;
+      // }
+      // if (criteria.maxTime && (recipe.estimated_time ?? Infinity) > criteria.maxTime) { 
+      //   return false;
+      // }
+      // if (criteria.cookingMethods && !recipe.cooking_methods?.some((cm: CookingMethod) => criteria.cookingMethods!.includes(cm))) { 
+      //   return false;
+      // }
+      // if (criteria.seasonalFlag && !recipe.seasonal_flags?.includes(criteria.seasonalFlag)) { 
+      //   return false;
+      // }
+      // if (criteria.preferredEquipment && !recipe.equipment_needed?.some((eq: string) => criteria.preferredEquipment!.includes(eq))) { 
+      //   // return false; // Podría ser un filtro estricto
+      // }
+
+      if (criteria.excludeIngredients && recipe.recipe_ingredients?.some((i: RecipeIngredient) => criteria.excludeIngredients!.includes(i.ingredient_name ?? ''))) {
         return false;
       }
-      if (criteria.maxTime && (recipe.estimated_time ?? Infinity) > criteria.maxTime) { // Usar snake_case
-        return false;
-      }
-      if (criteria.cookingMethods && !recipe.cooking_methods?.some((cm: CookingMethod) => criteria.cookingMethods!.includes(cm))) { // Usar snake_case y tipo explícito
-        return false;
-      }
-      if (criteria.seasonalFlag && !recipe.seasonal_flags?.includes(criteria.seasonalFlag)) { // Usar snake_case
-        return false;
-      }
-      if (criteria.excludeIngredients && recipe.ingredients.some(i => criteria.excludeIngredients!.includes(i.ingredient_name ?? ''))) {
-        return false;
-      }
-      if (criteria.preferredEquipment && !recipe.equipment_needed?.some((eq: string) => criteria.preferredEquipment!.includes(eq))) { // Usar snake_case y tipo explícito
-        // return false; // Podría ser un filtro estricto
-      }
+
       if (criteria.mealType) {
          // Lógica futura para filtrar por adecuación al tipo de comida
       }

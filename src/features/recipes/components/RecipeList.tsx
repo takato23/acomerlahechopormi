@@ -16,21 +16,23 @@ const RecipeList: React.FC<RecipeListProps> = ({ recipes, onToggleFavorite, onDe
   }
 
   return (
-    <Card className="border shadow-sm rounded-lg overflow-hidden"> {/* Contenedor con estilo */}
-      <CardContent className="p-0"> {/* Sin padding interno en CardContent */}
-        {/* Usar un div en lugar de ul/li para evitar estilos de lista por defecto */}
-        <div>
-          {recipes.map((recipe) => (
-            <RecipeListItem
-              key={recipe.id}
-              recipe={recipe}
-              onToggleFavorite={() => onToggleFavorite(recipe.id, !recipe.is_favorite)}
-              onDelete={() => onDelete(recipe.id)}
-            />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="w-full max-w-full overflow-x-hidden">
+      <Card className="border shadow-sm rounded-lg overflow-x-hidden max-w-full w-full">
+        <CardContent className="p-0 overflow-x-hidden w-full max-w-full">
+          {/* Usar un div en lugar de ul/li para evitar estilos de lista por defecto */}
+          <div className="overflow-x-hidden w-full max-w-full">
+            {recipes.map((recipe) => (
+              <RecipeListItem
+                key={recipe.id}
+                recipe={recipe}
+                onToggleFavorite={() => onToggleFavorite(recipe.id, !recipe.is_favorite)}
+                onDelete={() => onDelete(recipe.id)}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

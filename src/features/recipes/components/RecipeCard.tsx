@@ -40,7 +40,7 @@ export default function RecipeCard({
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      <Link to={`/recipes/${recipe.id}`}>
+      <Link to={`/app/recipes/${recipe.id}`}>
         <CardHeader className="p-0">
           {recipe.image_url ? (
             <img

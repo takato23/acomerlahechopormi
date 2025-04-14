@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Trash2 } from 'lucide-react'; // Añadir Trash2
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthContext';
-import { getRecipeById } from '@/features/recipes/services/recipeService'; // Mantener getRecipeById
+import { getRecipeById, updateRecipe } from '@/features/recipes/services/recipeService'; // Mantener getRecipeById y updateRecipe
 import type { RecipeIngredient, Recipe, RecipeInputData } from '@/types/recipeTypes';
 import type { Ingredient } from '@/types/ingredientTypes'; // Importar Ingredient
 import ImageUpload from '@/components/common/ImageUpload'; // Importar ImageUpload
@@ -212,10 +212,30 @@ const RecipePageContent: React.FC = () => {
 
     try {
       if (recipeId) {
-        console.warn("Llamada a handleSaveRecipe en modo edición - Actualización vía Edge no implementada.");
-        toast.info("La actualización de recetas mediante Función Edge aún no está implementada.");
-        setIsSaving(false);
-        return;
+        console.log("Actualizando receta existente:", recipeId);
+        
+        // Utilizamos el servicio updateRecipe para editar
+        const updatedRecipe = await updateRecipe(recipeId, {
+          user_id: user.id,
+          title,
+          description,
+          instructions: instructions.length > 0 ? instructions : [],
+          prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
+          cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
+          servings: servings ? parseInt(String(servings), 10) : undefined,
+          ingredients: ingredients
+            .filter(ing => ing.name && ing.name.trim() !== '')
+            .map(ing => ({
+              name: ing.name.trim(),
+              quantity: ing.quantity !== null && ing.quantity.trim() !== '' ? ing.quantity : null,
+              unit: ing.unit || null,
+            })),
+          image_url: imageUrl || undefined,
+          tags: Array.isArray(tags) ? tags : undefined
+        });
+        
+        toast.success("Receta actualizada exitosamente!");
+        navigate(`/app/recipes/${recipeId}`);
       } else {
         const { data, error: functionError } = await supabase.functions.invoke(
           'create-recipe-handler',
@@ -258,23 +278,21 @@ const RecipePageContent: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+    <div className="container mx-auto px-4 py-6 max-w-5xl">
       <h1 className="text-2xl md:text-3xl font-bold mb-6 text-slate-900">
         {recipeId ? 'Editar Receta' : 'Crear Nueva Receta'}
       </h1>
 
-      {isLoading && (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
-          </div>
-      )}
-
-      {!isLoading && (
-        <form onSubmit={(e) => { e.preventDefault(); handleSaveRecipe(); }}>
-          {/* Card para Información General */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-12 w-12 animate-spin text-emerald-500" />
+        </div>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveRecipe(); }} className="space-y-8">
+          {/* Información Básica */}
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
-              <CardTitle className="text-slate-900">Información General</CardTitle>
+              <CardTitle className="text-slate-900">Información Básica</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
@@ -347,7 +365,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Imagen */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle className="text-slate-900">Imagen</CardTitle>
             </CardHeader>
@@ -362,7 +380,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Ingredientes */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle id="ingredients-heading" className="text-slate-900">Ingredientes</CardTitle> {/* Añadir ID */}
             </CardHeader>
@@ -374,7 +392,6 @@ const RecipePageContent: React.FC = () => {
                     <div className="flex-grow">
                         <Label htmlFor={`ingredient-name-${ingredient.localId}`} className="sr-only">Nombre Ingrediente</Label>
                         <IngredientCombobox
-                          id={`ingredient-name-${ingredient.localId}`}
                           value={ingredient.ingredient_id ? { id: ingredient.ingredient_id, name: ingredient.name } : null}
                           onChange={(selectedIngredient) => handleIngredientChange(index, 'ingredient_id', selectedIngredient)}
                           disabled={isSaving}
@@ -450,7 +467,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Instrucciones */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
              <CardHeader>
                <CardTitle id="instructions-heading" className="text-slate-900">Instrucciones</CardTitle>
              </CardHeader>
@@ -465,7 +482,7 @@ const RecipePageContent: React.FC = () => {
           </Card>
 
           {/* Card para Tags */}
-          <Card className="mb-6 bg-white border border-slate-200 shadow-md rounded-lg">
+          <Card className="border border-slate-200 shadow-sm rounded-lg overflow-visible">
             <CardHeader>
               <CardTitle className="text-slate-900">Etiquetas (Tags)</CardTitle>
             </CardHeader>

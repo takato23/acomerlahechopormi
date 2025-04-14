@@ -1,104 +1,104 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Star, ArrowRight, ImageOff, HeartCrack } from 'lucide-react'; // Añadir HeartCrack
-import { Spinner } from '@/components/ui/Spinner'; 
-import { motion, AnimatePresence } from 'framer-motion'; 
-import { EmptyState } from '@/components/common/EmptyState'; // Importar EmptyState
-type Recipe = any;
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, Star, BookOpen } from 'lucide-react';
+import { useRecipeStore } from '../../../stores/recipeStore'; // Ajustar ruta si es necesario
+import type { Recipe } from '@/types/recipeTypes';
+import { cn } from '@/lib/utils';
 
-interface FavoriteRecipesWidgetProps { 
-  favoriteRecipes: Recipe[];
-  isLoading: boolean;
-  error: string | null;
+// Propiedades del componente (opcional, podríamos obtener todo del store)
+interface FavoriteRecipesWidgetProps {
+  maxItems?: number;
 }
 
-const contentVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.3 } }
-};
+export function FavoriteRecipesWidget({ maxItems = 4 }: FavoriteRecipesWidgetProps) {
+  // Obtener datos del store
+  const allRecipes = useRecipeStore(state => state.recipes || []);
+  const isLoading = useRecipeStore(state => state.isLoading);
+  // Asumimos que un error en la carga general de recetas es relevante aquí
+  const error = useRecipeStore(state => state.error);
 
-const listItemVariants = {
-  hidden: { opacity: 0, y: -10 },
-  visible: { opacity: 1, y: 0 },
-  exit: { opacity: 0, x: -10 } 
-};
+  // Filtrar y limitar favoritos
+  const favoriteRecipes = useMemo(() => 
+    allRecipes.filter(r => r.is_favorite).slice(0, maxItems), 
+    [allRecipes, maxItems]
+  );
 
-export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: FavoriteRecipesWidgetProps) { 
   return (
-    <Card className="h-full flex flex-col bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden hover:shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-lg font-medium flex items-center gap-2">
-          <Star className="h-4 w-4 text-muted-foreground" /> 
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg font-semibold flex items-center">
+          <Star className="h-5 w-5 mr-2 text-primary" />
           Recetas Favoritas
         </CardTitle>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-sm" asChild>
-            <Link to="/app/recipes?view=favorites"> 
-              Ver Todas <ArrowRight className="ml-1 h-3 w-3" />
-            </Link>
-          </Button>
-        </motion.div>
       </CardHeader>
-      <CardContent className="pt-0 flex-grow min-h-0"> 
+      <CardContent>
         {isLoading ? (
-           <div className="flex items-center justify-center h-full"> 
-             <Spinner size="sm" /> 
+          // Esqueleto: simular una cuadrícula de mini-cards
+          <div className="grid grid-cols-2 gap-3">
+            {[...Array(maxItems)].map((_, i) => (
+              <div key={i} className="space-y-1.5">
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {typeof error === 'string' ? error : (error instanceof Error ? error.message : 'Error desconocido')}
+            </AlertDescription>
+          </Alert>
+        ) : favoriteRecipes.length > 0 ? (
+          // Cuadrícula de recetas favoritas (mantener 2 columnas)
+          <div className="grid grid-cols-2 gap-3"> {/* Siempre 2 columnas */}
+            {favoriteRecipes.map((recipe) => (
+              <Link 
+                key={recipe.id} 
+                to={`/app/recipes/${recipe.id}`} // Enlace a la vista de detalle
+                className="group flex flex-col items-center space-y-1 p-2 rounded-md hover:bg-muted transition-colors"
+              >
+                {/* Imagen (si existe) o Placeholder */}
+                <div className="w-full h-16 bg-muted rounded-md overflow-hidden mb-1">
+                  {recipe.image_url ? (
+                    <img 
+                      src={recipe.image_url} 
+                      alt={recipe.title} 
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-secondary text-muted-foreground">
+                      {/* Placeholder si no hay imagen */}
+                      <BookOpen className="h-6 w-6" />
+                    </div>
+                  )}
+                </div>
+                {/* Título */}
+                <p className="text-xs font-medium text-center text-foreground truncate w-full">
+                  {recipe.title}
+                </p>
+              </Link>
+            ))}
           </div>
         ) : (
-          <motion.div 
-            initial="hidden"
-            animate="visible"
-            variants={contentVariants}
-            className="h-full" 
-          >
-            {error ? (
-               <p className="text-sm text-destructive text-center py-4">{error}</p>
-            ) : favoriteRecipes.length > 0 ? (
-              <ul className="space-y-1.5 overflow-y-auto h-full pr-1"> 
-                <AnimatePresence initial={false}>
-                  {favoriteRecipes.slice(0, 5).map((recipe) => ( 
-                    <motion.li 
-                      key={recipe.id} 
-                      variants={listItemVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      layout
-                      className="hover:bg-slate-100 rounded"
-                    >
-                      <Link 
-                        to={`/app/recipes/${recipe.id}`} 
-                        className="flex items-center gap-2 p-1.5 text-sm text-slate-900 hover:text-emerald-600"
-                      >
-                         <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                            <ImageOff className="h-4 w-4 text-slate-400" />
-                         </div>
-                         <span className="truncate flex-grow"> 
-                           {recipe.name || 'Receta sin nombre'}
-                         </span>
-                      </Link>
-                    </motion.li>
-                  ))}
-                </AnimatePresence>
-                {favoriteRecipes.length > 5 && (
-                  <li className="text-xs text-slate-500 text-center pt-1">
-                    ...y {favoriteRecipes.length - 5} más
-                  </li>
-                )}
-              </ul>
-            ) : (
-               // Usar EmptyState
-               <EmptyState
-                 icon={<HeartCrack />}
-                 title="Sin favoritas"
-                 description="Marca tus recetas preferidas con una estrella para verlas aquí."
-                 className="h-full justify-center py-6" 
-               />
-            )}
-          </motion.div>
+          // Mensaje si no hay favoritos
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Aún no has marcado recetas como favoritas.
+          </p>
         )}
+        
+        {/* Enlace a "Ver más" si hay más favoritos que los mostrados */}
+        {/* TODO: Añadir lógica para contar todos los favoritos y mostrar este enlace */}
+        {/* {allRecipes.filter(r => r.is_favorite).length > maxItems && (
+          <div className="mt-4 text-center">
+            <Link to="/app/recipes?filter=favorites" className="text-sm text-primary hover:underline">
+              Ver todas las favoritas
+            </Link>
+          </div>
+        )} */}
       </CardContent>
     </Card>
   );
