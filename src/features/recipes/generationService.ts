@@ -5,16 +5,19 @@ import type { PantryItem } from '@/features/pantry/types';
 import type { Recipe, RecipeIngredient, GeneratedRecipeData, IngredientWithAmount, NutritionalInfo } from '@/types/recipeTypes'; // RecipeIngredient añadido
 import { preferencesService } from '@/features/user/services/PreferencesService';
 import { recipeHistoryService } from './services/RecipeHistoryService';
-// import { RecipeHistoryEntryWithDetails } from './services/RecipeHistoryService'; // Comentado - Tipo no exportado
+import { RecipeHistoryEntryWithDetails } from '@/types/recipeRecommendationTypes';
 import { recipeFilterService } from './services/RecipeFilterService';
 import { recipeDataService } from './services/RecipeDataService';
 import { RecipeSearchCriteria } from '@/types/recipeRecommendationTypes';
-import { UserPreferences, DEFAULT_USER_PREFERENCES, CuisineType } from '@/types/userPreferences'; // Importar UserPreferences y defaults
+import { UserPreferences, DEFAULT_USER_PREFERENCES, CuisineType, MealType } from '@/types/userPreferences';
+import { supabase } from '@/lib/supabaseClient';
+import { Button } from '@/components/ui/button';
+import { HomeIcon, UtensilsIcon, Download, Wand2, ShoppingBasket, ChefHat } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
 
 // --- Tipos para Estrategias y Contexto ---
 export type BaseStrategy = 'foco-despensa' | 'creacion-equilibrada' | 'variedad-maxima';
 export type StyleModifier = 'rapido' | 'saludable' | 'creativo' | 'cocina-especifica' | null;
-export type MealType = 'Desayuno' | 'Almuerzo' | 'Cena' | 'Merienda';
 
 export interface PreviousRecipeContext {
   title: string;
@@ -429,157 +432,143 @@ export const generateRecipeForSlot = async (
   cocinaEspecificaValue?: string,
   previousRecipesContext: PreviousRecipeContext[] = []
 ): Promise<GeneratedRecipeData | { error: string }> => {
-  console.log(`[generateRecipeForSlot HYBRID] Iniciando para ${userId}, Slot: ${context}, Meal: ${mealType}`);
+  console.log(`[generateRecipeForSlot] Iniciando para ${context}, Meal: ${mealType}`);
 
-  // 1. Obtener Contexto Enriquecido
-  let preferences: UserPreferences = DEFAULT_USER_PREFERENCES; // Iniciar con defaults
+  // *** INICIO: Cargar Contexto Necesario ***
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Usuario no autenticado" };
+
+  let preferences: UserPreferences = DEFAULT_USER_PREFERENCES;
   let pantryItems: PantryItem[] = [];
+  let history: RecipeHistoryEntryWithDetails[] = [];
   let apiKeyProfile: UserProfile | null = null;
 
   try {
-      // Usar Promise.allSettled para manejar errores individuales
-      const results = await Promise.allSettled([
-          preferencesService.getUserPreferences(userId),
-          getPantryItems(),
-          getUserProfile(userId)
-      ]);
+      const prefPromise = preferencesService.getUserPreferences(userId);
+      const pantryPromise = getPantryItems(); 
+      const historyPromise = recipeHistoryService.getUserHistory(userId, 30);
+      const profilePromise = getUserProfile(userId);
 
-      if (results[0].status === 'fulfilled') {
-          preferences = results[0].value;
-      } else {
-          console.warn("Error obteniendo preferencias, usando defaults:", results[0].reason);
-      }
-      if (results[1].status === 'fulfilled') {
-          pantryItems = results[1].value;
-      } else {
-          console.warn("Error obteniendo despensa:", results[1].reason);
-      }
-      if (results[2].status === 'fulfilled') {
-          apiKeyProfile = results[2].value;
-      } else {
-          console.warn("Error obteniendo perfil:", results[2].reason);
-      }
+      // Ejecutar en paralelo
+      const prefResult = await prefPromise;
+      preferences = prefResult;
 
-  } catch (err) {
-      // Catch general por si Promise.allSettled falla (poco probable)
-      console.error("Error crítico obteniendo contexto inicial:", err);
-      return { error: "Error interno al cargar datos necesarios." };
+      const pantryResult = await pantryPromise;
+      pantryItems = pantryResult;
+
+      const historyResult = await historyPromise;
+      history = historyResult;
+
+      const profileResult = await profilePromise;
+      apiKeyProfile = profileResult; // Puede ser null si no se encuentra
+
+  } catch (error) {
+      console.warn("[generateRecipeForSlot] Error cargando contexto completo, se usará lo disponible y defaults:", error);
+      // preferences ya tiene DEFAULT_USER_PREFERENCES
   }
-
+  
   const pantryIngredients = normalizeIngredients(
     pantryItems.map(item => item.ingredient?.name).filter((name): name is string => !!name)
   );
-  console.log(`[generateRecipeForSlot HYBRID] Ingredientes despensa: ${pantryIngredients.length}`);
+  console.log(`[generateRecipeForSlot] Contexto: ${pantryIngredients.length} despensa, ${history.length} historial.`);
+  // *** FIN: Cargar Contexto Necesario ***
 
-  // 2. Obtener API Key
-  let apiKey: string | undefined | null = null;
-  let apiKeySource: string = 'N/A';
+  // Hybrid approach: prioritize existing recipes, fallback to LLM generation
+  if (baseStrategy === 'foco-despensa' || baseStrategy === 'creacion-equilibrada') {
+    try {
+      // Obtener recetas candidatas (simplificado)
+      // const candidateRecipes = await recipeDataService.getRecipes(userId, {}, 1, 100); 
+      const candidateRecipes: Recipe[] = []; // Placeholder temporal
+      console.log(`[generateRecipeForSlot HYBRID] ${candidateRecipes.length} candidatas obtenidas (temporalmente 0).`);
 
-  if (apiKeyProfile?.gemini_api_key) {
-      apiKey = apiKeyProfile.gemini_api_key;
-      apiKeySource = 'User Profile';
-  } else if (import.meta.env.VITE_GEMINI_API_KEY) {
-      apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      apiKeySource = 'Environment Variable';
+      // 2. CORREGIDO: Llamar a filterRecipes y ajustar argumentos
+      console.log(`[generateRecipeForSlot HYBRID] Filtrando recetas...`);
+      const searchCriteria: RecipeSearchCriteria = {
+        mealType: mealType as MealType | undefined, 
+      };
+      const filteredRecipes = await recipeFilterService.filterRecipes(
+        userId,
+        candidateRecipes, // Pasará array vacío temporalmente
+        searchCriteria
+      );
+      console.log(`[generateRecipeForSlot HYBRID] ${filteredRecipes.length} recetas filtradas.`);
+
+      // *** INICIO: Filtro de calidad adicional ***
+      const MIN_TITLE_LENGTH = 4;
+      const MIN_DESC_LENGTH = 10;
+      const MIN_INSTR_LENGTH = 10; 
+
+      // 3. CORREGIDO: Usar filteredRecipes
+      const qualityFilteredRecipes = filteredRecipes.filter((recipe: Recipe) => {
+        const title = recipe.title?.trim();
+        const description = recipe.description?.trim();
+        
+        // Simplificado: Asumiendo que recipe.instructions es siempre string[]
+        const instructionsText = recipe.instructions.join(' ').trim();
+
+        const hasGoodTitle = title && title.length >= MIN_TITLE_LENGTH;
+        const hasGoodDescription = description && description.length >= MIN_DESC_LENGTH;
+        const hasGoodInstructions = instructionsText && instructionsText.length >= MIN_INSTR_LENGTH;
+
+        // Log para depuración
+        // if (!(hasGoodTitle && hasGoodDescription && hasGoodInstructions)) {
+        //   console.log(`[generateRecipeForSlot HYBRID] Filtrando receta de baja calidad: ${title} (Título: ${hasGoodTitle}, Desc: ${hasGoodDescription}, Instr: ${hasGoodInstructions})`);
+        // }
+
+        return hasGoodTitle && hasGoodDescription && hasGoodInstructions;
+      });
+      console.log(`[generateRecipeForSlot HYBRID] ${qualityFilteredRecipes.length} recetas restantes tras filtro de calidad.`);
+      // *** FIN: Filtro de calidad adicional ***
+
+      // Seleccionar la mejor receta existente si hay alguna después del filtro de calidad
+      if (qualityFilteredRecipes.length > 0) {
+        // Lógica de selección (podría mejorarse con ranking si se implementa)
+        const selectedRecipe = qualityFilteredRecipes[0]; // Tomar la primera válida por ahora
+        console.log(`[generateRecipeForSlot HYBRID] Receta seleccionada: ${selectedRecipe.title}`);
+        
+        // Formatear receta existente a GeneratedRecipeData
+        const generatedData: GeneratedRecipeData = {
+          title: selectedRecipe.title,
+          description: selectedRecipe.description,
+          ingredients: (selectedRecipe.recipe_ingredients || []).map((ing: RecipeIngredient) => ({
+              name: ing.ingredient_name ?? 'Desconocido',
+              quantity: ing.quantity ?? null,
+              unit: ing.unit ?? null
+          })),
+          instructions: selectedRecipe.instructions,
+          prepTimeMinutes: selectedRecipe.prep_time_minutes,
+          cookTimeMinutes: selectedRecipe.cook_time_minutes,
+          servings: selectedRecipe.servings,
+          mainIngredients: [], // Placeholder - Propiedad comentada en filtro
+          // Añadir más campos si es necesario mapearlos desde Recipe a GeneratedRecipeData
+        };
+        return generatedData;
+      } else {
+        console.log("[generateRecipeForSlot HYBRID] No hay recetas existentes válidas tras filtros. Se intentará generar una nueva.");
+      }
+    } catch (error) {
+      console.error("[generateRecipeForSlot HYBRID] Error al buscar/filtrar recetas existentes:", error);
+      // Continuar para intentar generar con LLM
+    }
   }
+  
+  // Fallback o estrategia directa: Generar con LLM
+  console.log("[generateRecipeForSlot] Generando receta con LLM...");
 
-  // Loguear la fuente de la API Key
-  console.log(`[generateRecipeForSlot HYBRID] API Key Source: ${apiKeySource}`);
-
+  const apiKey = apiKeyProfile?.gemini_api_key || import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('[generateRecipeForSlot HYBRID] No API Key found from profile or environment variable.');
-    return { error: 'No se encontró API Key para Gemini.' };
+      console.error("[generateRecipeForSlot] No API Key found.");
+      return { error: "No se encontró API Key para Gemini." };
   }
-  // Loguear solo los últimos caracteres para verificación (NUNCA la clave completa)
-  console.log(`[generateRecipeForSlot HYBRID] Using API Key ending with: ...${apiKey.slice(-4)}`);
-
-  // 3. Definir Criterios de Búsqueda Iniciales
-  const searchCriteria: RecipeSearchCriteria = {
-    // @ts-ignore - Sabemos que mealType no es undefined aquí, pero el tipo lo espera opcional.
-    mealType: mealType,
-    difficulty: preferences.complexityPreference,
-    ...(styleModifier === 'rapido' && { maxTime: 45 }),
-    ...(styleModifier === 'cocina-especifica' && { cuisineTypes: [cocinaEspecificaValue as CuisineType] }),
-    excludeIngredients: preferences.dislikedIngredients,
-  };
-
-  // 4. Obtener Recetas Candidatas y Filtrar
-  console.log("[generateRecipeForSlot HYBRID] Obteniendo recetas candidatas...");
-  const candidateRecipes = await recipeDataService.getCandidateRecipes();
-  console.log(`[generateRecipeForSlot HYBRID] ${candidateRecipes.length} candidatas obtenidas.`);
-
-  console.log("[generateRecipeForSlot HYBRID] Filtrando recetas...");
-  const filteredRecipes = await recipeFilterService.filterRecipes(
-    userId,
-    candidateRecipes,
-    searchCriteria
-  );
-  console.log(`[generateRecipeForSlot HYBRID] ${filteredRecipes.length} recetas filtradas.`);
-
-  // 5. Estrategia de Selección/Generación
-  let selectedRecipe: Recipe | null = null;
-  let generatedData: GeneratedRecipeData | null = null;
-
-  if (filteredRecipes.length > 0) {
-    selectedRecipe = filteredRecipes[Math.floor(Math.random() * filteredRecipes.length)];
-    console.log(`[generateRecipeForSlot HYBRID] Receta seleccionada: ${selectedRecipe.title}`);
-    generatedData = {
-        title: selectedRecipe.title,
-        description: selectedRecipe.description ?? null, // Convertir undefined a null
-        // Usar recipe_ingredients en lugar de ingredients y añadir tipo a 'ing'
-        // Convertir undefined a null para quantity y unit
-        ingredients: (selectedRecipe.recipe_ingredients || []).map((ing: RecipeIngredient) => ({
-            name: ing.ingredient_name ?? 'Desconocido',
-            quantity: ing.quantity ?? null,
-            unit: ing.unit ?? null
-        })),
-        instructions: selectedRecipe.instructions,
-        prepTimeMinutes: selectedRecipe.prep_time_minutes ?? null, // Convertir undefined a null
-        cookTimeMinutes: selectedRecipe.cook_time_minutes ?? null, // Convertir undefined a null
-        servings: selectedRecipe.servings ?? null, // Convertir undefined a null
-        tags: selectedRecipe.tags,
-        // mainIngredients: selectedRecipe.main_ingredients ?? undefined, // No existe
-        // cookingMethods: selectedRecipe.cooking_methods, // No existe
-        // difficultyLevel: selectedRecipe.difficulty_level, // No existe
-        // cuisineType: selectedRecipe.cuisine_type, // No existe
-        // estimatedTime: selectedRecipe.estimated_time, // No existe
-        // nutritionalInfo: selectedRecipe.nutritional_info, // No existe
-        // seasonalFlags: selectedRecipe.seasonal_flags, // No existe
-        // equipmentNeeded: selectedRecipe.equipment_needed, // No existe
-    };
-
-    if (styleModifier === 'creativo' || baseStrategy === 'creacion-equilibrada') {
-        console.log("[generateRecipeForSlot HYBRID] Usando LLM para adaptar...");
-        // Pasar 'preferences' que ahora sabemos que no es null
-        const creativePrompt = buildCreativePrompt(selectedRecipe, pantryIngredients, preferences, context, mealType, styleModifier, previousRecipesContext);
-        const adaptationResult = await callGeminiAndFetchImage(apiKey, creativePrompt);
-        if (!('error' in adaptationResult)) {
-            generatedData = adaptationResult;
-            console.log(`[generateRecipeForSlot HYBRID] Receta adaptada: ${generatedData.title}`);
-        } else {
-            console.warn("[generateRecipeForSlot HYBRID] Falló adaptación LLM.");
-        }
-    }
-
+  // Usar la variable mealType directamente
+  const generationPrompt = buildCreativePrompt(null, pantryIngredients, preferences, context, mealType, styleModifier, previousRecipesContext);
+  const generationResult = await callGeminiAndFetchImage(apiKey, generationPrompt);
+  if (!('error' in generationResult)) {
+    return generationResult;
   } else {
-    console.log("[generateRecipeForSlot HYBRID] No hay recetas válidas. Generando con LLM...");
-    // Pasar 'preferences' que ahora sabemos que no es null
-    const generationPrompt = buildCreativePrompt(null, pantryIngredients, preferences, context, mealType, styleModifier, previousRecipesContext);
-    const generationResult = await callGeminiAndFetchImage(apiKey, generationPrompt);
-    if (!('error' in generationResult)) {
-      generatedData = generationResult;
-      console.log(`[generateRecipeForSlot HYBRID] Receta generada: ${generatedData.title}`);
-    } else {
-      console.error("[generateRecipeForSlot HYBRID] Falló generación LLM.");
-      return { error: "No se encontraron recetas adecuadas y falló la generación con IA." };
-    }
+    console.error("[generateRecipeForSlot] Falló generación LLM.");
+    return { error: "No se encontraron recetas adecuadas y falló la generación con IA." };
   }
-
-  if (!generatedData) {
-     return { error: "No se pudo seleccionar ni generar una receta." };
-  }
-
-  return generatedData;
 };
 
 /**
@@ -591,8 +580,13 @@ export const generateSingleRecipe = async (
   baseStrategy: BaseStrategy = 'creacion-equilibrada',
   styleModifier: StyleModifier = null
 ): Promise<GeneratedRecipeData | { error: string }> => {
-   console.warn("[generateSingleRecipe] Función obsoleta. Usar generateRecipeForSlot.");
-   return generateRecipeForSlot(userId, 'Almuerzo', context, baseStrategy, styleModifier);
+  return generateRecipeForSlot(
+    userId,
+    'Almuerzo' as MealType, // <- Usar aserción de tipo directa
+    context || 'Generar una receta',
+    baseStrategy,
+    styleModifier
+  );
 };
 
 /**

@@ -115,21 +115,35 @@ const extractAndParseRecipe = (responseText: string): GeneratedRecipeData | null
 
 // --- Componente para el Switch de Vista ---
 const ViewModeSwitch: React.FC<{ currentMode: 'card' | 'list'; onChange: (mode: 'card' | 'list') => void }> = ({ currentMode, onChange }) => (
-  <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5">
+  <div className="flex items-center gap-0 rounded-full bg-zinc-100/80 dark:bg-zinc-800/80 p-1 flex-shrink-0 w-[84px] backdrop-blur-sm border border-zinc-300/20 dark:border-zinc-700/30 shadow-sm relative overflow-hidden">
+    <div 
+      className="absolute w-9 h-9 bg-white dark:bg-zinc-700 rounded-full shadow-sm transition-transform duration-300 ease-out"
+      style={{ 
+        transform: `translateX(${currentMode === 'card' ? '0px' : '36px'})`,
+      }}
+    />
     <Button
-      variant={currentMode === 'card' ? 'outline' : 'ghost'}
+      variant="ghost"
       size="sm"
       onClick={() => onChange('card')}
-      className={`px-2 py-1 h-auto ${currentMode === 'card' ? 'bg-white shadow-sm' : ''}`}
+      className={`rounded-full h-9 w-9 z-10 flex items-center justify-center ${
+        currentMode === 'card' 
+          ? 'text-zinc-800 dark:text-zinc-100' 
+          : 'text-zinc-400 dark:text-zinc-500'
+      } transition-colors duration-200`}
       aria-label="Vista de tarjetas"
     >
       <LayoutGrid className="h-4 w-4" />
     </Button>
     <Button
-      variant={currentMode === 'list' ? 'outline' : 'ghost'}
+      variant="ghost"
       size="sm"
       onClick={() => onChange('list')}
-      className={`px-2 py-1 h-auto ${currentMode === 'list' ? 'bg-white shadow-sm' : ''}`}
+      className={`rounded-full h-9 w-9 z-10 flex items-center justify-center ${
+        currentMode === 'list' 
+          ? 'text-zinc-800 dark:text-zinc-100' 
+          : 'text-zinc-400 dark:text-zinc-500'
+      } transition-colors duration-200`}
       aria-label="Vista de lista"
     >
       <List className="h-4 w-4" />
@@ -515,24 +529,24 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8">
+    <div className="pt-6 pb-8 px-2 md:px-8 max-w-5xl mx-auto w-full max-w-full overflow-x-hidden">
       {/* --- Cabecera --- */}
-      <header className="mb-8">
+      <header className="mb-8 overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-200 pb-4">
           <h1 className="text-3xl md:text-4xl font-bold">Mis Recetas</h1>
           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
             {/* --- Botón para Importar Recetas --- */}
             <Link to="/app/recipes/import">
-              <Button variant="outline" className="w-full">
-                <Download className="mr-2 h-4 w-4" /> Importar Recetas
+              <Button variant="outline" className="w-full whitespace-normal md:whitespace-nowrap min-w-[200px]">
+                <Download className="mr-2 h-4 w-4 flex-shrink-0" /> Importar Recetas
               </Button>
             </Link>
             
             {/* --- Botón Generar desde Descripción (abre Dialog) --- */}
             <Dialog open={isGenerationDialogOpen} onOpenChange={setIsGenerationDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="default">
-                  <Sparkles className="mr-2 h-4 w-4" /> Generar desde Descripción
+                <Button variant="default" className="w-full whitespace-normal md:whitespace-nowrap min-w-[200px]">
+                  <Sparkles className="mr-2 h-4 w-4 flex-shrink-0" /> Generar desde Descripción
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
@@ -593,22 +607,23 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
               onClick={handleSuggestFromPantry}
               disabled={isSuggesting}
               variant="secondary"
+              className="w-full whitespace-normal md:whitespace-nowrap min-w-[200px]"
             >
-              {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardList className="mr-2 h-4 w-4" />}
+              {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin flex-shrink-0" /> : <ClipboardList className="mr-2 h-4 w-4 flex-shrink-0" />}
               Sugerir desde Despensa
             </Button>
             <a
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+              className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 w-full whitespace-normal md:whitespace-nowrap min-w-[200px]"
               href="/app/recipes/new"
             >
-              <PlusCircle className="mr-2 h-4 w-4" /> Añadir Manualmente
+              <PlusCircle className="mr-2 h-4 w-4 flex-shrink-0" /> Añadir Manualmente
             </a>
           </div>
         </div>
       </header>
 
       {/* --- Controles Principales (Búsqueda, Favoritos, Orden, Filtros, Vista) --- */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 max-w-full overflow-hidden">
         {/* Input de Búsqueda */}
         <div className="w-full sm:w-auto sm:flex-grow sm:max-w-xs">
           <Input
@@ -623,7 +638,7 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto">
           {/* Toggle Favoritos */}
           <div className="flex items-center space-x-2 flex-shrink-0">
             <Switch
@@ -635,7 +650,7 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
           </div>
 
           {/* Select Ordenamiento */}
-          <div className="w-full sm:w-auto">
+          <div className="w-full sm:w-auto flex-shrink-0">
             <Select
               value={filters.sortOption || 'created_at_desc'}
               onValueChange={(value) => {
@@ -660,7 +675,7 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
           {/* Botón Filtros (Sheet) */}
           <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" className="flex-shrink-0">
                 <Filter className="mr-2 h-4 w-4" /> Filtros ({selectedIngredients.length + selectedTags.length})
               </Button>
             </SheetTrigger>
@@ -772,9 +787,9 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
       </div>
 
       {/* Tabs de Categorías */}
-      <div className="mb-6 flex justify-center relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-400/15 via-pink-400/10 to-blue-400/15 backdrop-blur-md rounded-xl shadow-lg ring-1 ring-white/10 -z-10" />
-        <div className="w-full max-w-4xl px-4">
+      <div className="mb-6 mx-auto w-full max-w-5xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-400/10 via-pink-400/5 to-blue-400/10 dark:from-purple-600/20 dark:via-pink-600/15 dark:to-blue-600/20 backdrop-blur-md rounded-xl shadow-md ring-1 ring-zinc-200/30 dark:ring-zinc-700/30 -z-10" />
+        <div className="w-full flex justify-center py-3 overflow-hidden min-w-0">
           {isLoading ? (
             <div className="flex justify-center items-center h-10">
               <Spinner size="sm" className="text-purple-500" />
@@ -801,76 +816,77 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
                   });
                 }
               }}
-              className="max-w-xl px-6 py-3.5 rounded-xl bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all duration-300 shadow-md"
+              className="mx-auto px-3 py-2.5 rounded-xl bg-white/50 dark:bg-zinc-800/40 backdrop-blur-md hover:bg-white/60 dark:hover:bg-zinc-800/50 transition-all duration-300 shadow-sm border border-zinc-200/50 dark:border-zinc-700/50 flex flex-wrap justify-center w-full overflow-x-hidden"
             />
           )}
         </div>
       </div>
 
-      {/* Contenido Principal */}
-      {isLoading && (
-         <div className="flex justify-center mt-10">
-           <Spinner size="lg" />
-         </div>
-       )}
-      {!isLoading && error && (
-        <p className="text-red-500 text-center mt-10">
-          Error: {error instanceof Error ? error.message : String(error)}
-        </p>
-      )}
-      {!isLoading && !error && recipes.length === 0 && (
-        <EmptyState
-          title="No hay recetas"
-          description="Parece que no tienes recetas guardadas o ninguna coincide con tus filtros. ¡Intenta generar una o añade la tuya!"
-          icon={<PlusCircle className="h-16 w-16 text-slate-400" />}
-          action={
-            <div className="flex gap-2">
-              <Link to="/app/recipes/new">
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Receta Manualmente
+      {/* Lista o Cuadrícula de Recetas */}
+      <div className="mt-6 w-full max-w-full overflow-x-hidden">
+        {error ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error al cargar recetas</AlertTitle>
+            <AlertDescription>{typeof error === 'string' ? error : 'Error al cargar las recetas'}</AlertDescription>
+          </Alert>
+        ) : recipes.length === 0 && !isLoading ? (
+          <EmptyState
+            title="No hay recetas"
+            description="Parece que no tienes recetas guardadas o ninguna coincide con tus filtros. ¡Intenta generar una o añade la tuya!"
+            icon={<PlusCircle className="h-16 w-16 text-slate-400" />}
+            action={
+              <div className="flex gap-2">
+                <Link to="/app/recipes/new">
+                  <Button>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Añadir Receta Manualmente
+                  </Button>
+                </Link>
+              </div>
+            }
+          />
+        ) : (
+          <>
+            {/* Si se está en vista de tarjetas, usa RecipeCard, si no, usa RecipeList */}
+            <div className="w-full max-w-full overflow-x-hidden">
+              {(filters.viewMode || 'card') === 'card' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 w-full max-w-full overflow-x-hidden">
+                  {recipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      onToggleFavorite={() => toggleFavorite(recipe.id, !recipe.is_favorite)}
+                      onDelete={() => deleteRecipe(recipe.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="w-full max-w-full overflow-x-hidden">
+                  <RecipeList 
+                    recipes={recipes} 
+                    onToggleFavorite={(id, isFavorite) => toggleFavorite(id, isFavorite)}
+                    onDelete={(id) => deleteRecipe(id)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Botón Cargar Más */}
+            {hasMore && (
+              <div className="flex justify-center mt-8">
+                <Button
+                  onClick={() => user?.id && loadRecipes(user.id, false)} // false para no resetear
+                  disabled={isLoading}
+                  variant="outline"
+                >
+                  {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
+                  Cargar más recetas
                 </Button>
-              </Link>
-            </div>
-          }
-        />
-      )}
-
-      {!isLoading && !error && recipes.length > 0 && (
-        <>
-          {(filters.viewMode || 'card') === 'card' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {recipes.map((recipe) => (
-                <RecipeCard
-                  key={recipe.id}
-                  recipe={recipe}
-                  onToggleFavorite={() => toggleFavorite(recipe.id, !recipe.is_favorite)}
-                  onDelete={() => deleteRecipe(recipe.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <RecipeList
-              recipes={recipes}
-              onToggleFavorite={(id, isFavorite) => toggleFavorite(id, isFavorite)}
-              onDelete={(id) => deleteRecipe(id)}
-            />
-          )}
-
-          {/* Botón Cargar Más */}
-          {hasMore && (
-            <div className="flex justify-center mt-8">
-              <Button
-                onClick={() => user?.id && loadRecipes(user.id, false)} // false para no resetear
-                disabled={isLoading}
-                variant="outline"
-              >
-                {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
-                Cargar más recetas
-              </Button>
-            </div>
-          )}
-        </>
-      )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

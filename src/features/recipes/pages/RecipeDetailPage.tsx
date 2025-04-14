@@ -307,7 +307,7 @@ const RecipeDetailPage: React.FC = () => {
   const totalTime = (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
 
   return (
-    <div className="bg-slate-50 min-h-screen">
+    <div className="bg-background min-h-screen dark:bg-slate-900">
       <div className="container mx-auto max-w-4xl p-4 md:p-6 lg:p-8">
         {/* --- Imagen --- */}
         <div className="mb-8">
@@ -319,20 +319,20 @@ const RecipeDetailPage: React.FC = () => {
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-64 bg-slate-200 rounded-lg flex items-center justify-center shadow-md">
-              <ImageIcon className="h-16 w-16 text-slate-400" aria-hidden="true" /> {/* Ocultar icono decorativo */}
+            <div className="w-full h-64 bg-slate-200 dark:bg-slate-800 rounded-lg flex items-center justify-center shadow-md">
+              <ImageIcon className="h-16 w-16 text-slate-400 dark:text-slate-600" aria-hidden="true" />
             </div>
           )}
         </div>
 
         {/* --- Título y Descripción --- */}
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">{recipe.title}</h1>
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-3">{recipe.title}</h1>
         {recipe.description && (
-          <p className="text-lg text-slate-600 mb-6">{recipe.description}</p>
+          <p className="text-lg text-slate-600 dark:text-slate-300 mb-6">{recipe.description}</p>
         )}
 
         {/* --- Metadata --- */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-600 mb-6">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-600 dark:text-slate-300 mb-6">
           {totalTime > 0 && (
             <div className="flex items-center gap-1.5">
               <Clock className="h-5 w-5" />
@@ -355,17 +355,17 @@ const RecipeDetailPage: React.FC = () => {
              <div className="flex items-center gap-1.5">
               <Users className="h-5 w-5" />
               <span>Porciones: 
-                <div className="inline-flex items-center ml-2 border rounded-md">
+                <div className="inline-flex items-center ml-2 border rounded-md dark:border-slate-700">
                   <button 
                     onClick={() => updateServings(false)}
-                    className="px-2 py-1 border-r focus:outline-none" 
+                    className="px-2 py-1 border-r dark:border-slate-700 focus:outline-none" 
                     disabled={servingsMultiplier <= 0.5}
                     aria-label="Reducir porciones"
                   >–</button>
                   <span className="px-2">{Math.round(originalServings! * servingsMultiplier)}</span>
                   <button 
                     onClick={() => updateServings(true)} 
-                    className="px-2 py-1 border-l focus:outline-none"
+                    className="px-2 py-1 border-l dark:border-slate-700 focus:outline-none"
                     aria-label="Aumentar porciones"
                   >+</button>
                 </div>
@@ -389,16 +389,16 @@ const RecipeDetailPage: React.FC = () => {
                   <span>Pedir Variación</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[425px] dark:bg-slate-800 dark:border-slate-700">
                 <DialogHeader>
-                  <DialogTitle>Pedir Variación de Receta</DialogTitle>
-                  <DialogDescription>
+                  <DialogTitle className="dark:text-white">Pedir Variación de Receta</DialogTitle>
+                  <DialogDescription className="dark:text-slate-300">
                     Describe qué tipo de variación quieres para "{recipe?.title}". Por ejemplo: "vegetariana", "para 6 personas", "sin gluten y más picante".
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="variation-request" className="text-right">
+                    <Label htmlFor="variation-request" className="text-right dark:text-slate-300">
                       Petición
                     </Label>
                     <Textarea
@@ -406,7 +406,7 @@ const RecipeDetailPage: React.FC = () => {
                       value={variationRequestText}
                       onChange={(e) => setVariationRequestText(e.target.value)}
                       placeholder="Ej: Hazla vegetariana y para 2 personas..."
-                      className="col-span-3"
+                      className="col-span-3 dark:bg-slate-700 dark:border-slate-600 dark:text-white"
                       rows={3}
                     />
                   </div>
@@ -483,15 +483,15 @@ const RecipeDetailPage: React.FC = () => {
 
         {/* --- Ingredientes (en Card) --- */}
         {recipe.recipe_ingredients && recipe.recipe_ingredients.length > 0 && (
-          <UICard className="mt-8">
+          <UICard className="mt-8 dark:bg-slate-800 dark:border-slate-700">
             <UICardHeader>
-              <UICardTitle className="text-xl flex items-center gap-2">
+              <UICardTitle className="text-xl flex items-center gap-2 dark:text-white">
                 <ChefHat className="h-5 w-5" /> Ingredientes
               </UICardTitle>
             </UICardHeader>
             <UICardContent>
               {/* Revertir a lista simple, más flexible */}
-              <ul className="list-disc list-outside space-y-1.5 text-slate-700 pl-5">
+              <ul className="list-disc list-outside space-y-1.5 text-slate-700 dark:text-slate-300 pl-5">
                 {recipe.recipe_ingredients.map((ing: RecipeIngredient, index: number) => (
                   <li key={index}>
                     {/* Mostrar cantidad y unidad si existen, luego el nombre */}
@@ -511,12 +511,12 @@ const RecipeDetailPage: React.FC = () => {
 
         {/* --- Instrucciones (en Card) --- */}
         {formattedInstructions.length > 0 && (
-          <UICard className="mt-8">
+          <UICard className="mt-8 dark:bg-slate-800 dark:border-slate-700">
              <UICardHeader>
-               <UICardTitle className="text-xl">Instrucciones</UICardTitle>
+               <UICardTitle className="text-xl dark:text-white">Instrucciones</UICardTitle>
              </UICardHeader>
              <UICardContent>
-               <ol className="list-decimal list-outside space-y-3 text-slate-700 pl-5">
+               <ol className="list-decimal list-outside space-y-3 text-slate-700 dark:text-slate-300 pl-5">
                  {formattedInstructions}
                </ol>
              </UICardContent>
@@ -525,9 +525,9 @@ const RecipeDetailPage: React.FC = () => {
 
         {/* --- Tags (en Card) --- */}
         {recipe.tags && recipe.tags.length > 0 && (
-           <UICard className="mt-8">
+           <UICard className="mt-8 dark:bg-slate-800 dark:border-slate-700">
              <UICardHeader>
-                <UICardTitle className="text-xl flex items-center gap-2">
+                <UICardTitle className="text-xl flex items-center gap-2 dark:text-white">
                   <Tag className="h-5 w-5" /> Tags
                 </UICardTitle>
              </UICardHeader>
@@ -545,12 +545,12 @@ const RecipeDetailPage: React.FC = () => {
 
         {/* --- Información Nutricional (en Card) --- */}
         {recipe.nutritional_info && (
-          <UICard className="mt-8">
+          <UICard className="mt-8 dark:bg-slate-800 dark:border-slate-700">
             <UICardHeader>
-              <UICardTitle className="text-xl flex items-center gap-2">
+              <UICardTitle className="text-xl flex items-center gap-2 dark:text-white">
                 <AlertCircle className="h-5 w-5" /> Información Nutricional
               </UICardTitle>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 {servingsMultiplier !== 1 ? 
                   'Valores ajustados por porción según cantidad seleccionada' : 
                   'Valores por porción'}
@@ -558,39 +558,39 @@ const RecipeDetailPage: React.FC = () => {
             </UICardHeader>
             <UICardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Calorías</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Calorías</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.calories, 'kcal', servingsMultiplier, originalServings)}
                   </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Proteínas</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Proteínas</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.protein, 'g', servingsMultiplier, originalServings)}
                   </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Carbohidratos</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Carbohidratos</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.carbs, 'g', servingsMultiplier, originalServings)}
                   </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Grasas</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Grasas</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.fat, 'g', servingsMultiplier, originalServings)}
                   </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Fibra</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Fibra</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.fiber, 'g', servingsMultiplier, originalServings)}
                   </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-md">
-                  <p className="text-sm text-slate-500">Azúcar</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-slate-50 dark:bg-slate-700 p-3 rounded-md">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Azúcar</p>
+                  <p className="text-lg font-medium dark:text-white">
                     {formatNutrient(recipe.nutritional_info.sugar, 'g', servingsMultiplier, originalServings)}
                   </p>
                 </div>

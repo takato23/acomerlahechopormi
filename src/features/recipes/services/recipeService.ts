@@ -17,9 +17,6 @@ export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredi
   mainIngredients?: string[];
   image_url?: string | null;
   nutritional_info?: string | null;
-  source_api?: string | null;
-  source_id?: string | null;
-  is_shared?: boolean;
   is_public?: boolean;
 };
 
@@ -156,9 +153,6 @@ function mapDBDataToRecipe(dbData: any): Recipe {
     recipe_ingredients: dbData.recipe_ingredients || [],
     instructions: parsedInstructions, // Ahora debería ser siempre un array de strings válido
     nutritional_info: dbData.nutritional_info || null,
-    source_api: dbData.source_api || null,
-    source_id: dbData.source_id || null,
-    is_shared: dbData.is_shared || false
   };
 }
 
@@ -279,7 +273,7 @@ export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe
   }
 
   // Preparar datos para insertar en la tabla 'recipes'
-  const recipeToInsert = {
+  const recipeDataForDB = {
     user_id: recipeInput.user_id,
     title: recipeInput.title,
     description: recipeInput.description,
@@ -289,20 +283,19 @@ export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe
     servings: recipeInput.servings,
     is_generated_base: recipeInput.isBaseRecipe || false,
     is_favorite: false,
-    is_public: recipeInput.is_public || false,
-    tags: recipeInput.tags || null,
-    main_ingredients: recipeInput.mainIngredients || null,
+    is_public: recipeInput.is_public ?? false,
+    tags: recipeInput.tags || [],
+    main_ingredients: recipeInput.mainIngredients || [],
     image_url: recipeInput.image_url,
     nutritional_info: recipeInput.nutritional_info || null,
-    source_api: recipeInput.source_api || null,
-    source_id: recipeInput.source_id || null,
-    is_shared: recipeInput.is_shared || false
   };
+
+  console.log('[recipeService] Entrando a createRecipe', recipeDataForDB);
 
   // Insertar la receta principal
   const { data: newRecipe, error: recipeError } = await supabase
     .from('recipes')
-    .insert([recipeToInsert])
+    .insert([recipeDataForDB])
     .select('*, recipe_ingredients(*)')
     .single();
 

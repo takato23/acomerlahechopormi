@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { LogOut, LogIn } from 'lucide-react';
 import type { PantryItem } from '@/features/pantry/types';
+import { ThemeToggle } from '../common/ThemeToggle';
 
 export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -106,6 +107,7 @@ export function AppLayout() {
         <header className="flex items-center justify-between h-14 px-4 border-b bg-card md:px-6">
           <div className="flex-1" />
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             {user ? (
               <div className="flex items-center gap-4">
                 <span className="text-sm font-medium hidden md:inline">{user.email}</span>

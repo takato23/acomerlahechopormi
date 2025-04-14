@@ -5,6 +5,7 @@ import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import AuthProvider from './features/auth/AuthContext'; // Ruta relativa
 import { SettingsProvider } from './context/SettingsContext'; // Importar SettingsProvider
+import { ThemeProvider } from './context/ThemeContext';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Importar React Query
 
@@ -35,7 +36,9 @@ function Root() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <Root />
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <Root />
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 )

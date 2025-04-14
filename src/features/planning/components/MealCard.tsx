@@ -250,9 +250,9 @@ export const MealCard = React.memo(function MealCard({
                          <TooltipProvider delayDuration={300}>
                            <Tooltip>
                              <TooltipTrigger asChild>
-                               <p className="text-xs text-foreground line-clamp-1 leading-snug py-0.5 flex-grow min-w-0 cursor-help"> {/* Título limpio */}
-                                 {meal.recipes?.title || meal.custom_meal_name || 'Comida'}
-                               </p>
+                               <span className="text-sm font-medium truncate flex-1 min-w-0"> {/* <--- Cambiado text-xs a text-sm */}
+                                 {meal.recipes?.title || meal.custom_meal_name || 'Comida sin nombre'}
+                               </span>
                              </TooltipTrigger>
                              <TooltipContent side="top" align="start">
                                <p>{meal.recipes?.title || meal.custom_meal_name || 'Comida'}</p> {/* Título completo */}

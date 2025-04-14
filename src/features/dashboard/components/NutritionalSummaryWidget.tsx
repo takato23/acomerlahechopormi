@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Target, Flame, Beef, Wheat, Droplet } from 'lucide-react';
 import { getPlannedMeals } from '@/features/planning/services/planningService';
 import { useUserStore } from '../../../stores/userStore';
-import { shallow } from 'zustand/shallow';
 import type { PlannedMeal } from '@/features/planning/types';
 
 // Tipo para el resumen nutricional
@@ -108,26 +105,25 @@ const NutritionalSummaryWidget: React.FC = () => {
     return Math.min(percentage, 100); // Limitar a 100%
   };
   
-  // Determinar color según el porcentaje
-  const getColorForPercentage = (percentage: number) => {
-    if (percentage < 50) return { backgroundColor: 'rgb(239, 68, 68)' }; // red-500 en RGB
-    if (percentage < 80) return { backgroundColor: 'rgb(234, 179, 8)' };  // yellow-500 en RGB
-    return { backgroundColor: 'rgb(34, 197, 94)' };                        // green-500 en RGB
-  };
-  
   return (
-    <Card className="col-span-12 sm:col-span-8 h-[420px]">
-      <CardHeader className="pb-2">
-        <CardTitle>Resumen Nutricional</CardTitle>
+    <Card>
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg font-semibold flex items-center">
+          <Target className="h-5 w-5 mr-2 text-primary" />
+          Resumen Nutricional
+        </CardTitle>
       </CardHeader>
       
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-2 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <Alert variant="destructive">
@@ -135,72 +131,67 @@ const NutritionalSummaryWidget: React.FC = () => {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : (
-          <Tabs defaultValue="summary">
-            <TabsList className="mb-4">
-              <TabsTrigger value="summary">Resumen</TabsTrigger>
-              <TabsTrigger value="chart">Tendencias</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="summary" className="pt-2">
-              <ScrollArea className="h-[300px] pr-4">
-                <div className="space-y-6">
-                  {/* Calorías */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium">Calorías</span>
-                      <span className="text-sm font-medium">{Math.round(averageConsumption.calories)} / {nutrientGoals.calories} kcal</span>
-                    </div>
-                    <Progress 
-                      value={getPercentage(averageConsumption.calories, nutrientGoals.calories)} 
-                      style={getColorForPercentage(getPercentage(averageConsumption.calories, nutrientGoals.calories))}
-                    />
-                  </div>
-                  
-                  {/* Proteínas */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium">Proteínas</span>
-                      <span className="text-sm font-medium">{Math.round(averageConsumption.protein)} / {nutrientGoals.protein} g</span>
-                    </div>
-                    <Progress 
-                      value={getPercentage(averageConsumption.protein, nutrientGoals.protein)} 
-                      style={getColorForPercentage(getPercentage(averageConsumption.protein, nutrientGoals.protein))}
-                    />
-                  </div>
-                  
-                  {/* Carbohidratos */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium">Carbohidratos</span>
-                      <span className="text-sm font-medium">{Math.round(averageConsumption.carbs)} / {nutrientGoals.carbs} g</span>
-                    </div>
-                    <Progress 
-                      value={getPercentage(averageConsumption.carbs, nutrientGoals.carbs)} 
-                      style={getColorForPercentage(getPercentage(averageConsumption.carbs, nutrientGoals.carbs))}
-                    />
-                  </div>
-                  
-                  {/* Grasas */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium">Grasas</span>
-                      <span className="text-sm font-medium">{Math.round(averageConsumption.fat)} / {nutrientGoals.fat} g</span>
-                    </div>
-                    <Progress 
-                      value={getPercentage(averageConsumption.fat, nutrientGoals.fat)} 
-                      style={getColorForPercentage(getPercentage(averageConsumption.fat, nutrientGoals.fat))}
-                    />
-                  </div>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-            
-            <TabsContent value="chart">
-              <div className="h-[300px] flex items-center justify-center">
-                <p className="text-muted-foreground">Datos de tendencias no disponibles</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
+            <div className="space-y-1.5">
+              <div className="flex items-center text-sm font-medium">
+                <Flame className="h-4 w-4 mr-1.5 text-orange-500" />
+                Calorías
               </div>
-            </TabsContent>
-          </Tabs>
+              <Progress 
+                value={getPercentage(averageConsumption.calories, nutrientGoals.calories)} 
+                className="h-2 bg-primary"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{Math.round(averageConsumption.calories)} kcal</span>
+                <span>Objetivo: {nutrientGoals.calories} kcal</span>
+              </div>
+            </div>
+            
+            <div className="space-y-1.5">
+              <div className="flex items-center text-sm font-medium">
+                <Beef className="h-4 w-4 mr-1.5 text-red-500" />
+                Proteínas
+              </div>
+              <Progress 
+                value={getPercentage(averageConsumption.protein, nutrientGoals.protein)} 
+                className="h-2 bg-primary"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{Math.round(averageConsumption.protein)} g</span>
+                <span>Objetivo: {nutrientGoals.protein} g</span>
+              </div>
+            </div>
+            
+            <div className="space-y-1.5">
+              <div className="flex items-center text-sm font-medium">
+                <Wheat className="h-4 w-4 mr-1.5 text-yellow-600" />
+                Carbohidratos
+              </div>
+              <Progress 
+                value={getPercentage(averageConsumption.carbs, nutrientGoals.carbs)} 
+                className="h-2 bg-primary"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{Math.round(averageConsumption.carbs)} g</span>
+                <span>Objetivo: {nutrientGoals.carbs} g</span>
+              </div>
+            </div>
+            
+            <div className="space-y-1.5">
+              <div className="flex items-center text-sm font-medium">
+                <Droplet className="h-4 w-4 mr-1.5 text-blue-500" />
+                Grasas
+              </div>
+              <Progress 
+                value={getPercentage(averageConsumption.fat, nutrientGoals.fat)} 
+                className="h-2 bg-primary"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{Math.round(averageConsumption.fat)} g</span>
+                <span>Objetivo: {nutrientGoals.fat} g</span>
+              </div>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

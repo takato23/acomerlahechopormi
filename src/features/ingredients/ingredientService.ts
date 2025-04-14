@@ -152,15 +152,36 @@ export const findOrCreateIngredient = async (name: string, quantity: number = 1)
   console.log(`Buscando o creando ingrediente normalizado: "${normalizedName}" (original: "${name}")`);
   
   // Buscar usando el nombre normalizado
-  const existingIngredient = await findIngredientByExactName(normalizedName);
+  let existingIngredient = await findIngredientByExactName(normalizedName);
   if (existingIngredient) {
     console.log(`Ingrediente encontrado: ${existingIngredient.id}`);
     return existingIngredient;
   }
 
-  console.log(`Creando nuevo ingrediente: "${normalizedName}"`);
-  // Crear usando el nombre normalizado
-  const newIngredient = await createIngredient(normalizedName);
-  console.log(`Ingrediente creado: ${newIngredient.id}`);
-  return newIngredient;
+  // Intentar crear el ingrediente
+  try {
+    console.log(`Creando nuevo ingrediente: "${normalizedName}"`);
+    const newIngredient = await createIngredient(normalizedName);
+    console.log(`Ingrediente creado: ${newIngredient.id}`);
+    return newIngredient;
+  } catch (error: any) {
+    // Si el error es por clave duplicada (otro proceso lo creó mientras tanto)
+    if (error && error.code === '23505') {
+      console.warn(`Conflicto al crear "${normalizedName}", reintentando búsqueda.`);
+      // Volver a buscar, ahora debería existir
+      existingIngredient = await findIngredientByExactName(normalizedName);
+      if (existingIngredient) {
+        console.log(`Ingrediente encontrado tras conflicto: ${existingIngredient.id}`);
+        return existingIngredient;
+      } else {
+        // Esto no debería pasar si el error fue 23505, pero por si acaso
+        console.error(`Error crítico: No se encontró "${normalizedName}" después de un error 23505.`);
+        throw new Error(`No se pudo encontrar ni crear el ingrediente "${normalizedName}" después de un conflicto.`);
+      }
+    } else {
+      // Si fue otro error, lanzarlo
+      console.error(`Error inesperado al crear ingrediente "${normalizedName}":`, error);
+      throw error;
+    }
+  }
 };

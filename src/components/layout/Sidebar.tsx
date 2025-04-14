@@ -60,14 +60,8 @@ export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavoriteItems, onOpe
                 isCollapsed ? "px-1 justify-center" : "px-3",
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
-              whileHover={{
-                scale: 1.03,
-                backgroundColor: "hsl(var(--muted))",
-                color: "hsl(var(--foreground))",
-                transition: { duration: 0.15 }
-              }}
               whileTap={{ scale: 0.98 }}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
@@ -82,9 +76,8 @@ export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavoriteItems, onOpe
           className={cn(
             'flex items-center gap-3 rounded-md py-2 text-sm font-medium w-full text-left',
             isCollapsed ? "px-1 justify-center" : "px-3",
-            'text-muted-foreground'
+            'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
-          whileHover={{ scale: 1.03, backgroundColor: "hsl(var(--muted))", color: "hsl(var(--foreground))", transition: { duration: 0.15 } }}
           whileTap={{ scale: 0.98 }}
           aria-label="Abrir items favoritos"
         >
@@ -98,9 +91,8 @@ export function Sidebar({ isCollapsed, toggleSidebar, onOpenFavoriteItems, onOpe
           className={cn(
             'flex items-center gap-3 rounded-md py-2 text-sm font-medium w-full text-left',
             isCollapsed ? "px-1 justify-center" : "px-3",
-            'text-muted-foreground'
+            'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
-          whileHover={{ scale: 1.03, backgroundColor: "hsl(var(--muted))", color: "hsl(var(--foreground))", transition: { duration: 0.15 } }}
           whileTap={{ scale: 0.98 }}
           aria-label="Abrir recetas favoritas"
         >

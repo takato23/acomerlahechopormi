@@ -5,72 +5,102 @@
 /* Scroll Suave */
 html {
   scroll-behavior: smooth;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+body, #root {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+* {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  max-width: 100vw !important;
+}
+*, *::before, *::after {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  max-width: 100vw !important;
 }
 
 :root {
-  /* Nueva Paleta Pastel - Modo Claro */
-  --background: 210 50% 99%;    /* Casi blanco, toque azulado */
-  --foreground: 210 15% 35%;    /* Gris oscuro suave */
+  /* Paleta Refinada - Modo Claro */
+  --background: 210 60% 99%;    /* Blanco muy suave, ligero azul */
+  --foreground: 215 25% 25%;    /* Gris muy oscuro, casi negro azulado */
 
-  --muted: 210 30% 97%;       /* Gris muy claro */
-  --muted-foreground: 210 10% 50%; /* Gris medio (más oscuro para contraste AA) */
+  --muted: 210 40% 97%;       /* Gris muy claro, neutro */
+  --muted-foreground: 215 15% 55%; /* Gris medio, buen contraste */
 
-  --popover: 180 50% 97%;    /* Cian muy pálido */
-  --popover-foreground: 180 15% 35%; /* Gris oscuro con tinte cyan */
+  --popover: 210 60% 99%;    /* Igual que background */
+  --popover-foreground: 215 25% 25%; /* Igual que foreground */
 
-  --card: 180 50% 97%;       /* Cian muy pálido */
-  --card-foreground: 180 15% 35%; /* Gris oscuro con tinte cyan */
+  --card: 0 0% 100%;         /* Blanco puro para contraste */
+  --card-foreground: 215 25% 25%; /* Igual que foreground */
 
-  --border: 210 30% 94%;     /* Gris muy claro */
-  --input: 210 30% 94%;      /* Gris muy claro */
+  --border: 210 20% 90%;     /* Gris claro para bordes sutiles */
+  --input: 210 20% 90%;      /* Igual que borde */
 
-  --primary: 150 50% 75%;    /* Verde menta suave */
-  --primary-foreground: 150 20% 20%; /* Verde oscuro desaturado */
+  /* Verde azulado (Teal) como primario */
+  --primary: 170 60% 45%;    /* Teal vibrante pero no neón */
+  --primary-foreground: 170 80% 98%; /* Blanco muy claro para alto contraste */
 
-  --secondary: 210 30% 96%;  /* Gris claro */
-  --secondary-foreground: 210 15% 35%; /* Gris oscuro suave */
+  /* Gris neutro como secundario */
+  --secondary: 210 30% 96%;  
+  --secondary-foreground: 215 20% 40%; /* Gris oscuro */
 
-  --accent: 50 100% 85%;     /* Amarillo pastel suave */
-  --accent-foreground: 50 20% 30%; /* Gris oscuro amarillento */
+  /* Naranja suave como acento */
+  --accent: 30 90% 65%;     /* Naranja claro y cálido */
+  --accent-foreground: 30 30% 25%;  /* Marrón oscuro */
 
-  --destructive: 0 70% 60%;  /* Rojo (más oscuro para contraste AA) */
-  --destructive-foreground: 0 30% 30%; /* Rojo oscuro desaturado */
+  /* Rojo claro pero definido para destructivo */
+  --destructive: 0 75% 60%;  
+  --destructive-foreground: 0 80% 98%; /* Blanco muy claro */
 
-  --ring: 150 50% 65%;       /* Verde menta medio para focus */
+  /* Teal más oscuro para focus ring */
+  --ring: 170 50% 40%;       
 
-  --radius: 0.5rem;          /* Mantener rounded-lg */
+  --radius: 0.5rem;          
 }
 
 .dark {
-  /* Nueva Paleta Pastel - Modo Oscuro */
-  --background: 210 20% 12%;    /* Azul-gris muy oscuro */
-  --foreground: 210 20% 85%;    /* Gris claro */
+  /* Paleta Refinada - Modo Oscuro */
+  --background: 220 15% 10%;    /* Azul muy oscuro, casi negro */
+  --foreground: 210 25% 95%;    /* Blanco muy suave */
 
-  --muted: 210 15% 22%;       /* Gris más oscuro */
-  --muted-foreground: 210 10% 55%; /* Gris medio */
+  --muted: 220 15% 18%;       /* Gris oscuro azulado */
+  --muted-foreground: 210 15% 65%; /* Gris claro */
 
-  --popover: 210 20% 18%;     /* Ligeramente más claro que fondo */
-  --popover-foreground: 210 20% 85%; /* Gris claro */
+  --popover: 220 15% 9%;      /* Casi negro */
+  --popover-foreground: 210 25% 95%; /* Blanco muy suave */
 
-  --card: 210 20% 18%;        /* Ligeramente más claro que fondo */
-  --card-foreground: 210 20% 85%; /* Gris claro */
+  --card: 220 15% 13%;        /* Un poco más claro que el fondo */
+  --card-foreground: 210 25% 95%; /* Blanco muy suave */
 
-  --border: 210 15% 25%;      /* Gris oscuro */
-  --input: 210 15% 25%;       /* Gris oscuro */
+  --border: 220 15% 25%;      /* Gris oscuro para bordes */
+  --input: 220 15% 25%;       /* Igual que borde */
 
-  --primary: 150 40% 55%;     /* Verde menta apagado */
-  --primary-foreground: 150 20% 90%; /* Gris muy claro verdoso */
+  /* Teal primario (ligeramente más claro en oscuro) */
+  --primary: 170 65% 50%;    
+  --primary-foreground: 170 80% 98%; /* Blanco muy claro */
 
-  --secondary: 210 15% 25%;   /* Gris oscuro */
-  --secondary-foreground: 210 20% 85%; /* Gris claro */
+  /* Gris oscuro secundario */
+  --secondary: 220 15% 25%;   
+  --secondary-foreground: 210 25% 95%; /* Blanco muy suave */
 
-  --accent: 50 70% 60%;       /* Amarillo apagado */
-  --accent-foreground: 50 15% 15%; /* Casi negro amarillento */
+  /* Naranja acento (más saturado en oscuro) */
+  --accent: 35 95% 60%;       
+  --accent-foreground: 35 30% 15%;  /* Casi negro anaranjado */
 
-  --destructive: 0 60% 50%;   /* Rojo apagado */
-  --destructive-foreground: 0 20% 90%; /* Gris muy claro rojizo */
+  /* Rojo destructivo (más brillante en oscuro) */
+  --destructive: 0 70% 55%;   
+  --destructive-foreground: 0 80% 98%; /* Blanco muy claro */
 
-  --ring: 150 40% 45%;        /* Verde menta más oscuro para focus */
+  /* Teal más claro para focus ring en oscuro */
+  --ring: 170 60% 55%;        
 }
 
 @layer base {

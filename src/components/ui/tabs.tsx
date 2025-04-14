@@ -26,7 +26,7 @@ TabsList.displayName = TabsPrimitive.List.displayName
 
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & { onAnimationStart?: React.AnimationEventHandler<HTMLButtonElement> }
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
 >(({ className, children, onDrag, onDragStart, onDragEnd, onAnimationStart, ...props }, ref) => {
   const [isActive, setIsActive] = React.useState(false);
 
