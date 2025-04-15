@@ -11,6 +11,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface LoadTemplateDialogProps {
   isOpen: boolean;
@@ -49,7 +50,12 @@ export function LoadTemplateDialog({ isOpen, onClose, weekStartDate }: LoadTempl
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent 
+        className={cn(
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          "p-6"
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Cargar Plantilla</DialogTitle>
         </DialogHeader>

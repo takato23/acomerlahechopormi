@@ -607,3 +607,5 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     </div>
   );
 }
+
+export default ShoppingListPage;

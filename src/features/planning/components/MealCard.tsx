@@ -288,16 +288,17 @@ export const MealCard = React.memo(function MealCard({
                                    size="icon"
                                    className="h-5 w-5 flex-shrink-0 text-muted-foreground hover:text-primary"
                                    onClick={(e) => {
+                                     e.preventDefault();
                                      e.stopPropagation();
                                      setSelectedRecipe({
                                        id: meal.recipe_id!,
                                        recipe: meal.recipes ? {
                                          id: meal.recipes.id,
                                          title: meal.recipes.title,
-                                         description: meal.recipes.description,
+                                         description: meal.recipes.description || '',
                                          image_url: meal.recipes.image_url
                                        } : undefined
-                                     } as any);
+                                     });
                                    }}
                                    aria-label="Ver receta"
                                  >

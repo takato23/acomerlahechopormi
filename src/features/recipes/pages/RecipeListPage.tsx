@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // Icons
 import {
@@ -300,7 +301,9 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
           console.warn("No se pudo obtener el perfil del usuario o la clave API del perfil:", profileError);
       }
       if (!apiKey) {
-          apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+          // Usar utilitario para obtener la API key
+          const { getGeminiApiKey } = await import('@/utils/getGeminiApiKey');
+          apiKey = getGeminiApiKey();
       }
       if (!apiKey) {
         throw new Error('Clave API no disponible. Configúrala en tu perfil o en VITE_GEMINI_API_KEY.');
@@ -549,54 +552,53 @@ export const RecipeListPage: React.FC<RecipeListPageProps> = () => {
                   <Sparkles className="mr-2 h-4 w-4 flex-shrink-0" /> Generar desde Descripción
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent 
+                className={cn(
+                  // Aplicar mismo tamaño que otros modales
+                  "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+                  // Mantener estilos de padding, etc.
+                  "p-6"
+                )}
+              >
                 <DialogHeader>
-                  <DialogTitle>Generar Receta con IA</DialogTitle>
+                  <DialogTitle>Generar Nueva Receta</DialogTitle>
                   <DialogDescription>
-                    Describe qué tipo de receta quieres o usa tus ingredientes de la despensa.
+                    Escribe una idea para tu receta (ej: "Pollo al curry con arroz") y si quieres, usa ingredientes de tu despensa.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="recipe-prompt">Descripción de la Receta</Label>
-                    <Textarea
-                      id="recipe-prompt"
-                      placeholder="Ej: 'Un postre rápido con chocolate y frutas' o 'Algo vegetariano para la cena'"
-                      value={promptText}
-                      onChange={(e) => setPromptText(e.target.value)}
-                      rows={3}
-                      disabled={isGenerating}
-                    />
-                  </div>
+                <div className="space-y-4 py-4">
+                  <Textarea
+                    placeholder="Describe tu receta..."
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    rows={3}
+                    disabled={isGenerating}
+                  />
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="use-pantry"
                       checked={usePantryIngredients}
-                      onCheckedChange={(checked) => setUsePantryIngredients(!!checked)} // Asegurar que sea boolean
+                      onCheckedChange={(checked: boolean) => setUsePantryIngredients(checked)}
                       disabled={isGenerating}
                     />
-                    <Label htmlFor="use-pantry" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      Usar ingredientes de mi despensa
-                    </Label>
+                    <Label htmlFor="use-pantry">Usar ingredientes de la despensa</Label>
                   </div>
-                   {generationError && (
-                     <Alert variant="destructive">
-                       <AlertCircle className="h-4 w-4" />
-                       <AlertTitle>Error de Generación</AlertTitle>
-                       <AlertDescription>{generationError}</AlertDescription>
-                     </Alert>
-                   )}
+                  {generationError && <p className="text-destructive text-sm">{generationError}</p>}
                 </div>
                 <DialogFooter>
-                  <DialogClose asChild>
-                     <Button variant="outline" disabled={isGenerating}>Cancelar</Button>
-                  </DialogClose>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsGenerationDialogOpen(false)}
+                    disabled={isGenerating}
+                  >
+                    Cancelar
+                  </Button>
                   <Button
                     onClick={handleGenerateRecipe}
-                    disabled={isGenerating || (!promptText.trim() && !usePantryIngredients)}
+                    disabled={isGenerating || !promptText.trim()}
                   >
-                    {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Generar Receta
+                    {isGenerating ? <Spinner size="sm" className="mr-2" /> : null}
+                    {isGenerating ? 'Generando...' : 'Generar'}
                   </Button>
                 </DialogFooter>
               </DialogContent>

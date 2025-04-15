@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
 // Leer desde process.env (Vite lo reemplazará gracias a 'define')
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { getSupabaseUrl, getSupabaseAnonKey } from '@/utils/getSupabaseEnv';
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseAnonKey();
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // Ajustar mensaje de error si es necesario, aunque Vite fallará antes si no están definidas
