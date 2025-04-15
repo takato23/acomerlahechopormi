@@ -1,16 +1,9 @@
-import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Utensils } from 'lucide-react';
+import { Utensils, X } from 'lucide-react';
 import type { Recipe } from '@/types/recipeTypes';
+import { cn } from '@/lib/utils';
 
 interface RecipePreviewDialogProps {
   isOpen: boolean;
@@ -25,54 +18,77 @@ export function RecipePreviewDialog({
   recipeId,
   recipe,
 }: RecipePreviewDialogProps) {
+  // Evita el scroll del body cuando el modal está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader className="space-y-3">
-          <DialogTitle>{recipe?.title || 'Cargando receta...'}</DialogTitle>
-          {recipe?.description && (
-            <DialogDescription className="text-sm leading-relaxed">
-              {recipe.description}
-            </DialogDescription>
-          )}
-        </DialogHeader>
-
-        {recipe ? (
-          <div className="space-y-4 my-4">
-            <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-muted/50">
-              {recipe.image_url ? (
-                <img
-                  src={recipe.image_url}
-                  alt={recipe.title}
-                  className="object-cover w-full h-full"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
-                    <Utensils className="w-10 h-10" aria-hidden="true" /> {/* Ocultar icono decorativo */}
-                    <span className="text-xs">Sin imagen disponible</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="h-32 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">Cargando detalles...</p>
-          </div>
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className={cn(
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          "border-none shadow-2xl bg-background rounded-2xl",
+          "flex flex-col items-center relative p-0"
         )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-muted/50 hover:bg-muted/80 transition"
+        >
+          <X className="w-4 h-4 text-muted-foreground" />
+        </button>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>
+        <div className="w-full text-center px-6 pt-7 pb-2">
+          <div className="flex flex-col items-center justify-center w-full mb-4">
+            {recipe?.image_url ? (
+              <img
+                src={recipe.image_url}
+                alt={recipe.title || ''}
+                className="w-24 h-24 object-cover rounded-full border-4 border-background/80 shadow-md bg-muted"
+              />
+            ) : (
+              <div className="w-24 h-24 flex items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-secondary/10 border-4 border-background/80 shadow-md">
+                <Utensils className="w-10 h-10 text-primary/60" aria-hidden="true" />
+              </div>
+            )}
+          </div>
+
+          <h2 className="text-lg font-semibold leading-tight mb-1 truncate">
+            {recipe?.title || 'Cargando receta...'}
+          </h2>
+
+          {recipe?.description && (
+            <p className="text-sm text-muted-foreground mb-2 line-clamp-3">
+              {recipe.description}
+            </p>
+          )}
+        </div>
+
+        <div className="w-full flex flex-col gap-2 px-6 pb-5 pt-2 border-t border-border/20 mt-auto">
+          <Button asChild className="w-full text-base font-medium rounded-lg shadow-sm">
+            <Link to={`/app/recipes/${recipeId}`} onClick={onClose}>Ver receta completa</Link>
+          </Button>
+          <Button variant="ghost" onClick={onClose} className="w-full text-muted-foreground hover:text-primary text-sm rounded-lg">
             Cerrar
           </Button>
-          <Button asChild>
-            <Link to={`/app/recipes/${recipeId}`}>
-              Ver Receta Completa
-            </Link>
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   );
 }

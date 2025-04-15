@@ -616,3 +616,5 @@ export function UserProfilePage() {
     </div>
   );
 }
+
+export default UserProfilePage;

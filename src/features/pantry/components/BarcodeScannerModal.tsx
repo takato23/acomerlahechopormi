@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import BarcodeScannerComponent from 'react-qr-barcode-scanner'; // Importar el componente
+import { cn } from '@/lib/utils';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -43,7 +44,14 @@ export function BarcodeScannerModal({ isOpen, onClose, onDetected }: BarcodeScan
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent 
+        className={cn(
+          // Aplicar mismo tamaño que otros modales
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          // Mantener estilos de padding, etc.
+          "p-6"
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Escanear Código de Barras</DialogTitle>
           <DialogDescription>

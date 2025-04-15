@@ -319,9 +319,25 @@ export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe
       })
     );
 
+    // Log del usuario autenticado antes del insert de ingredientes
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    console.log('[recipeService] Usuario actual antes de insertar ingredientes:', userData, userError);
+
+    // Log extra: muestra el JWT para verificar el rol en jwt.io
+    const session = await supabase.auth.getSession();
+    console.log('[recipeService] COPIA ESTE JWT y pégalo en https://jwt.io para ver el claim "role":', session.data?.session?.access_token);
+
+    // Log de los datos que se intentan insertar
+    console.log('[recipeService] Datos que se intentan insertar en recipe_ingredients:', ingredientsToInsert);
+
     const { error: ingredientsError } = await supabase
       .from('recipe_ingredients')
       .insert(ingredientsToInsert);
+
+    // Log del error completo de Supabase
+    if (ingredientsError) {
+      console.error('[recipeService] ERROR al insertar ingredientes en recipe_ingredients:', ingredientsError);
+    }
 
     if (ingredientsError) throw ingredientsError;
   }

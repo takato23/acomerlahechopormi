@@ -1,4 +1,5 @@
 import { getUserProfile } from '@/features/user/userService';
+import { getGeminiApiKey } from '@/utils/getGeminiApiKey';
 import type { UserProfile } from '@/features/user/userTypes';
 import { getPantryItems } from '@/features/pantry/pantryService';
 import type { PantryItem } from '@/features/pantry/types';
@@ -11,9 +12,6 @@ import { recipeDataService } from './services/RecipeDataService';
 import { RecipeSearchCriteria } from '@/types/recipeRecommendationTypes';
 import { UserPreferences, DEFAULT_USER_PREFERENCES, CuisineType, MealType } from '@/types/userPreferences';
 import { supabase } from '@/lib/supabaseClient';
-import { Button } from '@/components/ui/button';
-import { HomeIcon, UtensilsIcon, Download, Wand2, ShoppingBasket, ChefHat } from 'lucide-react';
-import { Tooltip } from '@/components/ui/tooltip';
 
 // --- Tipos para Estrategias y Contexto ---
 export type BaseStrategy = 'foco-despensa' | 'creacion-equilibrada' | 'variedad-maxima';
@@ -137,15 +135,40 @@ const getFallbackImage = (category?: string): string => {
 /**
  * Parsea la respuesta JSON de Gemini
  */
+// Reemplaza fracciones simples tipo 1/2, 1/4, 3/4, etc. por decimales en un string
+function replaceSimpleFractions(jsonString: string): string {
+  // Solo fracciones comunes: 1/2, 1/3, 2/3, 1/4, 3/4, 1/5, 2/5, 3/5, 4/5, 1/8, 3/8, 5/8, 7/8
+  const fractionMap: Record<string, number> = {
+    '1/2': 0.5,
+    '1/3': 0.333,
+    '2/3': 0.667,
+    '1/4': 0.25,
+    '3/4': 0.75,
+    '1/5': 0.2,
+    '2/5': 0.4,
+    '3/5': 0.6,
+    '4/5': 0.8,
+    '1/8': 0.125,
+    '3/8': 0.375,
+    '5/8': 0.625,
+    '7/8': 0.875
+  };
+  // Reemplaza solo si está fuera de comillas (valor numérico)
+  return jsonString.replace(/(?<=\:|\s)([0-9]+\/[0-9]+)(?=,|\s|\n|\r|\}|\])|([0-9]+\/[0-9]+)/g, match => {
+    return fractionMap[match] !== undefined ? String(fractionMap[match]) : match;
+  });
+}
+
 const parseGeminiResponse = (responseText: string): GeneratedRecipeData | null => {
   try {
     const cleanText = responseText
-      .replace(/```json\s*|\s*```/g, '')
-      .replace(/[\u201C\u201D]/g, '"')
-      .trim();
-    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    const data = JSON.parse(jsonMatch[0]);
+    .replace(/```json\s*|\s*```/g, '')
+    .replace(/[\u201C\u201D]/g, '"')
+    .trim();
+const fractionFixedText = replaceSimpleFractions(cleanText);
+const jsonMatch = fractionFixedText.match(/\{[\s\S]*\}/);
+if (!jsonMatch) return null;
+const data = JSON.parse(jsonMatch[0]);
     if (!isValidRecipeData(data)) return null;
     return {
       title: String(data.title),
@@ -555,7 +578,7 @@ export const generateRecipeForSlot = async (
   // Fallback o estrategia directa: Generar con LLM
   console.log("[generateRecipeForSlot] Generando receta con LLM...");
 
-  const apiKey = apiKeyProfile?.gemini_api_key || import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = apiKeyProfile?.gemini_api_key || getGeminiApiKey();
   if (!apiKey) {
       console.error("[generateRecipeForSlot] No API Key found.");
       return { error: "No se encontró API Key para Gemini." };
@@ -603,6 +626,19 @@ export const generateRecipeVariation = async (
 
   // 1. Obtener perfil y clave API
   let apiKey: string | null = null;
+  try {
+    const userProfile = await getUserProfile(baseRecipe.user_id ?? '');
+    if (userProfile && userProfile.gemini_api_key) {
+      apiKey = userProfile.gemini_api_key;
+    } else {
+      apiKey = getGeminiApiKey();
+    }
+  } catch (err) {
+    apiKey = getGeminiApiKey();
+  }
+  if (!apiKey) {
+    return { error: 'No se encontró una clave API para Gemini.' };
+  }
   let userId: string = baseRecipe.user_id; // Obtener userId de la receta base
   try {
     // Pasar el userId a getUserProfile

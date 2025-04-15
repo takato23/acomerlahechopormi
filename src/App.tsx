@@ -7,7 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { AppLayout } from './components/layout/AppLayout'
 import { Spinner } from './components/ui/Spinner'
 import { useSettings } from './context/SettingsContext'
-import { LazyLandingComponents, LazyAuth, LazyFeatures } from './routes/lazyComponents'
+import { LazyLandingComponents, LazyAuth, LazyFeatures } from '@/components/lazyComponents'
 
 // Componentes no lazy (usados en múltiples rutas o pequeños)
 import Navbar from './components/sections/Navbar'
@@ -216,11 +216,17 @@ function App() {
           } />
         </Route>
 
+        {/* Ruta demo EventBus (solo para pruebas) */}
+        <Route path="/demo-eventbus" element={<DemoEventBusPage />} />
         {/* Ruta 404 */}
         <Route path="*" element={<div>Página no encontrada</div>} />
+
       </Routes>
     </>
   )
 }
 
+import DemoEventBusPage from './features/dashboard/DemoEventBusPage';
+
 export default App;
+

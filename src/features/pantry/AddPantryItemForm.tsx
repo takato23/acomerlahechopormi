@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category, COMMON_PANTRY_UNITS } from './types';
 import { suggestCategory } from './lib/categorySuggestor';
 import { useDebounce } from '@/hooks/useDebounce';
+import { cn } from '@/lib/utils';
 
 interface AddPantryItemFormProps {
   isOpen: boolean;
@@ -155,7 +156,12 @@ const AddPantryItemForm: React.FC<AddPantryItemFormProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent 
+        className={cn(
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          "p-6"
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{itemToEdit ? 'Editar Item' : 'Añadir Item a la Despensa'}</DialogTitle>
         </DialogHeader>

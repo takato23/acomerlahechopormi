@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { usePlanningStore } from '@/stores/planningStore';
 import { Spinner } from '@/components/ui/Spinner';
+import { cn } from '@/lib/utils';
 
 interface SaveTemplateDialogProps {
   isOpen: boolean;
@@ -25,7 +26,12 @@ export function SaveTemplateDialog({ isOpen, onClose }: SaveTemplateDialogProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent 
+        className={cn(
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          "p-6"
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Guardar como Plantilla</DialogTitle>
         </DialogHeader>

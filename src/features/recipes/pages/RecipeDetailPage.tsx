@@ -20,6 +20,8 @@ import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/features/auth/AuthContext';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 // Helper para validar y formatear info nutricional
 const formatNutrient = (value: number | undefined | null, unit: string, multiplier: number = 1, originalServings: number | null = 1): string => {
@@ -469,15 +471,33 @@ const RecipeDetailPage: React.FC = () => {
               )}
               <span>Compartir</span>
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? <Spinner size="sm" className="mr-2" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              {isDeleting ? 'Eliminando...' : 'Eliminar'}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar Receta
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent
+                className={cn(
+                  "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+                  "p-6 dark:bg-slate-800 dark:border-slate-700"
+                )}
+              >
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Esto eliminará permanentemente la receta.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+                    {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
          </div>
 
 

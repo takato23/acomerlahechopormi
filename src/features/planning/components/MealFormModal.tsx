@@ -11,6 +11,7 @@ import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeReque
 import type { Recipe } from '../../../types/recipeTypes'; // Corregir ruta de importación
 import { format } from 'date-fns'; // Importar format
 import { es } from 'date-fns/locale'; // Importar locale español
+import { cn } from '@/lib/utils'; // Importar cn
 
 interface MealFormModalProps {
   isOpen: boolean;
@@ -144,10 +145,16 @@ export function MealFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open: boolean) => !open && onClose()}>
-      {/* Referenciar la nueva descripción visible */}
-      <DialogContent aria-describedby="meal-form-description-visible">
+      <DialogContent
+        className={cn(
+          // Aplicar mismo tamaño que RecipePreviewDialog
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          // Mantener estilos de padding, etc.
+          "p-6"
+        )}
+        aria-describedby="meal-form-description-visible"
+      >
         <DialogHeader>
-        {/* Eliminar descripción sr-only anterior */}
           <DialogTitle>
             {isEditing ? 'Editar Comida' : 'Añadir Comida'}
             {date && mealType && (
@@ -155,7 +162,6 @@ export function MealFormModal({
                 {mealTypeLabels[mealType] ?? mealType} - {format(date, 'eeee d MMM', { locale: es })}
               </span>
             )}
-            {/* Añadir descripción para accesibilidad */}
             <DialogDescription id="meal-form-description-visible">
               {isEditing ? 'Modifica los detalles de tu comida.' : 'Añade una receta o escribe un nombre para tu comida.'}
             </DialogDescription>

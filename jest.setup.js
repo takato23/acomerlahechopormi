@@ -29,3 +29,31 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
 
 // Puedes añadir aquí otras configuraciones globales para Jest si es necesario
 // Por ejemplo, configurar mocks globales, polyfills, etc.
+
+// Mock para import.meta.env (Vite)
+if (!global.import) {
+  global.import = {};
+}
+Object.defineProperty(global, 'import', {
+  value: {
+    meta: {
+      env: {
+        VITE_GEMINI_API_KEY: 'mock-api-key',
+      }
+    }
+  },
+  configurable: true
+});
+
+// Polyfill para TextEncoder/TextDecoder en Node
+if (typeof global.TextEncoder === "undefined") {
+  const { TextEncoder, TextDecoder } = require("util");
+  global.TextEncoder = TextEncoder;
+  global.TextDecoder = TextDecoder;
+}
+
+// Mock para getSupabaseEnv en tests
+jest.mock('@/utils/getSupabaseEnv', () => ({
+  getSupabaseUrl: () => 'http://localhost:54321',
+  getSupabaseAnonKey: () => 'test-anon-key',
+}));

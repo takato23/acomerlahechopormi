@@ -21,6 +21,8 @@ interface SimpleShoppingState {
   clearChecked: () => Promise<boolean>;
 }
 
+import { useAppStore } from '@/stores/appStore';
+
 export const useSimpleShoppingStore = create<SimpleShoppingState>((set, get) => ({
   items: [],
   isLoading: false,
@@ -50,6 +52,33 @@ export const useSimpleShoppingStore = create<SimpleShoppingState>((set, get) => 
         set((state) => ({
           items: [newItem, ...state.items]
         }));
+
+// --- INTEGRACIÓN EVENT BUS: Escuchar recetas generadas y agregar ingredientes a la lista de compras ---
+(function subscribeToRecipeGenerated() {
+  try {
+    // Suscribirse solo una vez al evento global
+    useAppStore.getState().subscribeToEvent('recipeGenerated', async (recipe) => {
+      if (!recipe || !Array.isArray(recipe.ingredients)) return;
+      const addItem = useSimpleShoppingStore.getState().addItem;
+      for (const ingredient of recipe.ingredients) {
+        if (typeof ingredient === 'string' && ingredient.trim().length > 0) {
+          // Agrega cada ingrediente a la lista de compras real
+          await addItem(ingredient.trim());
+        }
+      }
+    });
+    // Log para depuración
+    if (typeof window !== 'undefined') {
+      console.log('[EventBus] Listener de recipeGenerated activo en simpleShoppingStore');
+    }
+  } catch (e) {
+    // Si falla, loguear y continuar
+    if (typeof window !== 'undefined') {
+      console.error('[EventBus] Error al suscribirse a recipeGenerated:', e);
+    }
+  }
+})();
+
       }
       
       return newItem;

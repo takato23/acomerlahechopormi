@@ -17,6 +17,7 @@ import { MealType } from '@/features/planning/types';
 import { type StyleModifier } from '@/features/recipes/generationService'; // Importar StyleModifier
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Importar Select
 import { Input } from '@/components/ui/input'; // Importar Input
+import { cn } from '@/lib/utils';
 
 // Definir DayOfWeek localmente o usar string directamente. Usaremos string.
 type DayOfWeek = string; // O simplemente usar string[] abajo
@@ -136,7 +137,14 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent 
+        className={cn(
+          // Aplicar mismo tamaño que otros modales
+          "w-[340px] min-w-[300px] max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto",
+          // Mantener estilos de padding, etc.
+          "p-6"
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Configurar Autocompletado</DialogTitle>
         </DialogHeader>
@@ -237,61 +245,58 @@ export const AutocompleteConfigDialog: React.FC<AutocompleteConfigDialogProps> =
                })}
             </div>
           </div>
-        </div>
 
-        {/* Style Modifier Selection */}
-        <div>
-          <Label className="text-base font-semibold mb-2 block">Estilo de Receta (Opcional)</Label>
-          <Select
-             value={selectedStyleModifier ?? '_none'} // Usar '_none' para valor nulo/default
-             onValueChange={(value) => {
-                 const newModifier = value === '_none' ? null : value as StyleModifier;
-                 setSelectedStyleModifier(newModifier);
-                 // Limpiar valor de cocina si se cambia a otro estilo
-                 if (newModifier !== 'cocina-especifica') {
-                     setSelectedCocinaValue('');
-                 }
-             }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Estilo por defecto..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">Estilo por defecto</SelectItem>
-              <SelectItem value="rapido">Rápido y Fácil</SelectItem>
-              <SelectItem value="saludable">Saludable y Ligero</SelectItem>
-              <SelectItem value="creativo">Creativo / Aventurero</SelectItem>
-              <SelectItem value="cocina-especifica">Cocina Específica...</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Style Modifier Selection */}
+          <div>
+            <Label className="text-base font-semibold mb-2 block">Estilo de Receta (Opcional)</Label>
+            <Select
+               value={selectedStyleModifier ?? '_none'} // Usar '_none' para valor nulo/default
+               onValueChange={(value) => {
+                   const newModifier = value === '_none' ? null : value as StyleModifier;
+                   setSelectedStyleModifier(newModifier);
+                   // Limpiar valor de cocina si se cambia a otro estilo
+                   if (newModifier !== 'cocina-especifica') {
+                       setSelectedCocinaValue('');
+                   }
+               }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Estilo (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Ninguno</SelectItem>
+                <SelectItem value="alta-en-proteinas">Alta en Proteínas</SelectItem>
+                <SelectItem value="baja-en-carbohidratos">Baja en Carbohidratos</SelectItem>
+                <SelectItem value="vegetariana">Vegetariana</SelectItem>
+                <SelectItem value="vegana">Vegana</SelectItem>
+                <SelectItem value="sin-gluten">Sin Gluten</SelectItem>
+                <SelectItem value="rapida">Rápida (Menos de 30 min)</SelectItem>
+                <SelectItem value="economica">Económica</SelectItem>
+                <SelectItem value="cocina-especifica">Cocina Específica</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          {/* Input para Cocina Específica (condicional) */}
+          {/* Conditional Input for Specific Cuisine */}
           {selectedStyleModifier === 'cocina-especifica' && (
-             <div className="mt-2">
-                 <Label htmlFor="cocina-especifica-value">Tipo de cocina</Label>
-                 <Input
-                     id="cocina-especifica-value"
-                     value={selectedCocinaValue}
-                     onChange={(e) => setSelectedCocinaValue(e.target.value)}
-                     placeholder="Ej: Italiana, Mexicana, Asiática..."
-                     className="mt-1"
-                 />
-             </div>
+            <div>
+              <Label htmlFor="cocina-especifica-input" className="text-sm font-medium mb-1 block">Tipo de Cocina</Label>
+              <Input
+                id="cocina-especifica-input"
+                value={selectedCocinaValue}
+                onChange={(e) => setSelectedCocinaValue(e.target.value)}
+                placeholder="Ej: Italiana, Mexicana, Asiática..."
+              />
+            </div>
           )}
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={isProcessing}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="outline" disabled={isProcessing}>Cancelar</Button>
           </DialogClose>
-          <Button
-             type="button"
-             onClick={handleConfirm}
-             disabled={isProcessing || selectedDays.length === 0 || selectedMeals.length === 0} // Disable if no days or meals selected
-           >
+          <Button type="button" onClick={handleConfirm} disabled={isProcessing}>
             {isProcessing ? <Spinner size="sm" className="mr-2" /> : null}
-            Confirmar
+            {isProcessing ? 'Aplicando...' : 'Confirmar'}
           </Button>
         </DialogFooter>
       </DialogContent>
