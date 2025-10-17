@@ -140,16 +140,32 @@ function App() {
       <Routes>
         {/* Rutas Públicas */}
         <Route path="/" element={<LandingPage />} />
-        <Route 
-          path="/login" 
+        <Route
+          path="/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Login />
             </Suspense>
-          } 
+          }
         />
-        <Route 
-          path="/signup" 
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ForgotPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ResetPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/signup"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Signup />
