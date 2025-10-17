@@ -1,54 +1,51 @@
 import React, { useState } from 'react';
+import { notifyError } from '@/lib/notifications';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
-import { Spinner } from '@/components/ui/Spinner';
-import { parseShoppingInput, ParsedShoppingInput } from '../lib/inputParser'; // Importar parser y tipo
+import { parseShoppingInput, ParsedShoppingInput } from '../lib/inputParser';
 
 interface AddItemFormProps {
-  onAddItem: (parsedItem: ParsedShoppingInput) => Promise<void>; // Actualizar tipo de prop
+  onAddItem: (parsedItem: ParsedShoppingInput) => Promise<void> | void;
 }
 
 export function AddItemForm({ onAddItem }: AddItemFormProps) {
-  const [itemName, setItemName] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
+  const [value, setValue] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmedName = itemName.trim();
-    if (!trimmedName) return; // No añadir si está vacío
 
-    setIsAdding(true);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      notifyError('Escribí un ítem para agregar.');
+      return;
+    }
+
+    const parsed = parseShoppingInput(trimmed);
+
+    setIsSubmitting(true);
     try {
-      const parsedInput = parseShoppingInput(trimmedName); // Parsear input
-      await onAddItem(parsedInput); // Pasar objeto parseado
-      setItemName(''); // Limpiar input si tiene éxito
+      await onAddItem(parsed);
+      setValue('');
     } catch (error) {
-      // El error se maneja en la página padre (con toast)
-      console.error("Error passed to AddItemForm handler:", error);
+      console.error('[AddItemForm] Error al añadir ítem:', error);
+      notifyError('No pudimos agregar el ítem. Inténtalo nuevamente.');
     } finally {
-      setIsAdding(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
+    <form onSubmit={handleSubmit} className="flex w-full items-center gap-2">
       <Input
-        type="text"
-        value={itemName}
-        onChange={(e) => setItemName(e.target.value)}
-        placeholder="Añadir ítem manualmente..."
-        className="flex-grow border-slate-300 focus:ring-emerald-500 focus:border-emerald-500"
-        disabled={isAdding}
-        required
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Ej: 2 tomates maduros"
+        aria-label="Nuevo ítem"
+        disabled={isSubmitting}
       />
-      <Button
-        type="submit"
-        disabled={isAdding || !itemName.trim()}
-        size="icon"
-        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-      >
-        {isAdding ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
+      <Button type="submit" size="sm" disabled={isSubmitting}>
+        {isSubmitting ? 'Añadiendo…' : 'Agregar'}
       </Button>
     </form>
   );

@@ -2,10 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Star, ArrowRight, ImageOff, HeartCrack } from 'lucide-react'; // Añadir HeartCrack
-import { Spinner } from '@/components/ui/Spinner'; 
-import { motion, AnimatePresence } from 'framer-motion'; 
-import { EmptyState } from '@/components/common/EmptyState'; // Importar EmptyState
+import { Star, ArrowRight, ImageOff, HeartCrack } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { EmptyState } from '@/components/common/EmptyState';
+import { FavoriteRecipesWidgetSkeleton } from './FavoriteRecipesWidgetSkeleton';
 type Recipe = any;
 
 interface FavoriteRecipesWidgetProps { 
@@ -25,77 +25,75 @@ const listItemVariants = {
   exit: { opacity: 0, x: -10 } 
 };
 
-export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: FavoriteRecipesWidgetProps) { 
+export function FavoriteRecipesWidget({ favoriteRecipes, isLoading, error }: FavoriteRecipesWidgetProps) {
   return (
-    <Card className="h-full flex flex-col bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden hover:shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-lg font-medium flex items-center gap-2">
-          <Star className="h-4 w-4 text-muted-foreground" /> 
-          Recetas Favoritas
+    <Card className="relative flex h-full flex-col overflow-hidden rounded-3xl card-pastel dark:card-pastel-dark border border-white/50 dark:border-white/10 shadow-card-pastel">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-white/40 to-primary/10 dark:from-primary/15 dark:via-background/40 dark:to-background/20" aria-hidden="true" />
+      <CardHeader className="relative z-10 flex flex-row items-center justify-between gap-3 px-6 pt-6 pb-4">
+        <CardTitle className="flex items-center gap-3 text-lg font-semibold">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl tint-primary shadow-pill">
+            <Star className="h-5 w-5" />
+          </span>
+          Recetas favoritas
         </CardTitle>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button variant="ghost" size="sm" className="h-7 -my-1 -mr-2 text-sm" asChild>
-            <Link to="/app/recipes?view=favorites"> 
-              Ver Todas <ArrowRight className="ml-1 h-3 w-3" />
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }}>
+          <Button variant="ghost" size="sm" className="h-8 text-sm" asChild>
+            <Link to="/app/recipes?view=favorites">
+              Ver todas <ArrowRight className="ml-1 h-3 w-3" />
             </Link>
           </Button>
         </motion.div>
       </CardHeader>
-      <CardContent className="pt-0 flex-grow min-h-0"> 
+      <CardContent className="relative z-10 flex-grow px-6 pb-6 pt-0">
         {isLoading ? (
-           <div className="flex items-center justify-center h-full"> 
-             <Spinner size="sm" /> 
-          </div>
+          <FavoriteRecipesWidgetSkeleton />
         ) : (
-          <motion.div 
+          <motion.div
             initial="hidden"
             animate="visible"
             variants={contentVariants}
-            className="h-full" 
+            className="h-full"
           >
             {error ? (
-               <p className="text-sm text-destructive text-center py-4">{error}</p>
+              <p className="rounded-2xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-center text-sm text-destructive shadow-custom-sm">{error}</p>
             ) : favoriteRecipes.length > 0 ? (
-              <ul className="space-y-1.5 overflow-y-auto h-full pr-1"> 
+              <ul className="h-full space-y-1.5 overflow-y-auto pr-1">
                 <AnimatePresence initial={false}>
-                  {favoriteRecipes.slice(0, 5).map((recipe) => ( 
-                    <motion.li 
-                      key={recipe.id} 
+                  {favoriteRecipes.slice(0, 5).map((recipe) => (
+                    <motion.li
+                      key={recipe.id}
                       variants={listItemVariants}
                       initial="hidden"
                       animate="visible"
                       exit="exit"
                       layout
-                      className="hover:bg-slate-100 rounded"
+                      className="rounded-xl border border-white/50 dark:border-white/10 bg-white/75 dark:bg-background/60 transition hover:border-primary/30 hover:bg-primary/10"
                     >
-                      <Link 
-                        to={`/app/recipes/${recipe.id}`} 
-                        className="flex items-center gap-2 p-1.5 text-sm text-slate-900 hover:text-emerald-600"
+                      <Link
+                        to={`/app/recipes/${recipe.id}`}
+                        className="flex items-center gap-3 p-2 text-sm text-foreground transition-colors hover:text-primary"
                       >
-                         <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                            <ImageOff className="h-4 w-4 text-slate-400" />
-                         </div>
-                         <span className="truncate flex-grow"> 
-                           {recipe.name || 'Receta sin nombre'}
-                         </span>
+                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <ImageOff className="h-4 w-4" />
+                        </div>
+                        <span className="flex-grow truncate">{recipe.name || 'Receta sin nombre'}</span>
                       </Link>
                     </motion.li>
                   ))}
                 </AnimatePresence>
                 {favoriteRecipes.length > 5 && (
-                  <li className="text-xs text-slate-500 text-center pt-1">
-                    ...y {favoriteRecipes.length - 5} más
+                  <li className="text-xs text-muted-foreground/70 text-center pt-1">
+                    …y {favoriteRecipes.length - 5} más
                   </li>
                 )}
               </ul>
             ) : (
-               // Usar EmptyState
-               <EmptyState
-                 icon={<HeartCrack />}
-                 title="Sin favoritas"
-                 description="Marca tus recetas preferidas con una estrella para verlas aquí."
-                 className="h-full justify-center py-6" 
-               />
+              <EmptyState
+                icon={<HeartCrack className="text-muted-foreground/60" />}
+                title="Sin favoritas aún"
+                description="Marca tus recetas preferidas con una estrella para verlas aquí."
+                className="h-full justify-center py-6"
+              />
             )}
           </motion.div>
         )}

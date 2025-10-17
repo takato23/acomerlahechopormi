@@ -17,7 +17,6 @@ export function BarcodeScannerModal({ isOpen, onClose, onDetected }: BarcodeScan
     if (result && result.text !== lastResult) {
       setLastResult(result.text); // Evitar detecciones múltiples rápidas
       setError(null);
-      console.log('Barcode detected:', result.text);
       onDetected(result.text);
       onClose(); // Cerrar modal al detectar
     } else if (err) {

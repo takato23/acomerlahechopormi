@@ -7,7 +7,7 @@ export interface Category {
   is_default?: boolean;
   is_common?: boolean;
   order?: number;
-  user_id?: string;
+  user_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -15,15 +15,21 @@ export interface Category {
 export interface PantryItem {
   id: string;
   user_id: string;
-  ingredient_id: string;
-  quantity?: number;
-  unit?: string;
-  category_id?: string;
-  expiry_date?: string;
-  notes?: string;
+  ingredient_id: string | null;
+  ingredient_name?: string;
+  quantity?: number | null;
+  unit?: string | null;
+  category_id?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
   is_favorite?: boolean;
   created_at?: string;
   updated_at?: string;
+  location?: string | null;
+  price?: number | null;
+  min_stock?: number | null;
+  target_stock?: number | null;
+  tags?: string[];
   ingredient?: {
     id?: string;
     name: string;
@@ -37,26 +43,44 @@ export interface PantryItem {
 
 export interface CreatePantryItemData {
   ingredient_name: string;
-  quantity?: number;
-  unit?: string;
-  category_id?: string;
-  expiry_date?: string;
-  notes?: string;
-  price?: number;
-  min_stock?: number;
-  target_stock?: number;
+  quantity?: number | null;
+  unit?: string | null;
+  category_id?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
+  price?: number | null;
+  location?: string | null;
+  min_stock?: number | null;
+  target_stock?: number | null;
   tags?: string[];
 }
 
 export interface UpdatePantryItemData {
-  quantity?: number;
-  unit?: string;
-  category_id?: string;
-  expiry_date?: string;
-  notes?: string;
-  price?: number;
-  location?: string;
-  min_stock?: number;
-  target_stock?: number;
+  quantity?: number | null;
+  unit?: string | null;
+  category_id?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
+  price?: number | null;
+  location?: string | null;
+  min_stock?: number | null;
+  target_stock?: number | null;
   tags?: string[];
 }
+
+export const COMMON_PANTRY_UNITS = [
+  'unidad',
+  'kg',
+  'g',
+  'l',
+  'ml',
+  'cucharada',
+  'cucharadita',
+  'taza',
+  'vaso',
+  'paquete',
+  'lata',
+  'botella',
+  'pieza',
+  'ramo'
+];

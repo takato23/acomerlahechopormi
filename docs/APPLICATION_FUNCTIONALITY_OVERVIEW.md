@@ -68,20 +68,40 @@ Este documento describe las funcionalidades clave implementadas en la aplicació
 
 ## 5. Planificación (`planning`)
 
-*   **Descripción:** Permite a los usuarios planificar sus comidas (desayuno, almuerzo, merienda, cena) para cada día en una vista semanal (escritorio) o diaria (móvil). Se pueden añadir comidas personalizadas o (futuro) vincular recetas. Incluye una función de "Autocompletar Semana" basada en IA para sugerir cenas.
+*   **Descripción:** Sistema completo de planificación de comidas con interfaz moderna, drag & drop, integración con despensa, análisis nutricional, y gestión de plantillas. Incluye generación inteligente de planes semanales basada en IA con contexto nutricional, verificación automática de ingredientes disponibles, y estadísticas detalladas de cumplimiento y nutrición.
+*   **Características Principales:**
+    *   **Vista Dual:** Vista semanal tipo calendario y vista diaria detallada
+    *   **Drag & Drop:** Reordenar comidas entre días y tipos de comida
+    *   **Integración con Despensa:** Verificación automática de disponibilidad de ingredientes
+    *   **Análisis Nutricional:** Cálculo de calorías, macronutrientes y recomendaciones
+    *   **Sistema de Plantillas:** Crear, guardar y reutilizar planes semanales
+    *   **Generación IA Mejorada:** Planes nutricionalmente balanceados con contexto personalizado
+    *   **Estados de Cumplimiento:** Marcar comidas como realizadas, confirmadas o saltadas
+    *   **Estadísticas Avanzadas:** Tasa de cumplimiento, análisis nutricional semanal, sugerencias automáticas
 *   **Archivos Clave:**
-    *   `src/features/planning/PlanningPage.tsx`: Componente principal, maneja la lógica de navegación semanal/diaria, carga de datos, estado del modal y la función de autocompletar.
-    *   `src/features/planning/planningService.ts`: Contiene funciones para interactuar con Supabase (`getPlannedMeals`, `upsertPlannedMeal`, `deletePlannedMeal`).
-    *   `src/features/planning/types.ts`: Define las interfaces (`PlannedMeal`, `MealType`, etc.).
-    *   **Componentes UI (en `src/features/planning/components/`):**
-        *   `MealFormModal.tsx`: Modal para añadir/editar comidas planificadas.
-        *   `WeekDaySelector.tsx`: Selector de días para la vista móvil.
-        *   `PlanningDayView.tsx`: Vista detallada de las comidas de un día (móvil).
-        *   `MealCard.tsx`: Tarjeta que representa un slot de comida (ej: Cena del Lunes) en la vista semanal de escritorio.
-    *   **Servicios Relacionados:**
-        *   `src/features/recipes/generationService.ts`: (`generateRecipesFromPantry` para autocompletar).
-        *   `src/features/suggestions/suggestionService.ts`: (`getMealAlternatives`, placeholder).
-    *   **Contexto:** `src/features/auth/AuthContext.tsx` (para `user`).
+    *   `src/features/planning/PlanningPage.tsx`: Componente principal orquestador de la interfaz
+    *   `src/features/planning/planningEngine.ts`: Motor de lógica de negocio separada del UI
+    *   `src/features/planning/planningService.ts`: Servicios de interacción con Supabase
+    *   `src/features/planning/types.ts`: Definiciones de tipos completas con nuevos campos
+    *   `src/stores/planningStore.ts`: Store de Zustand con estado avanzado
+*   **Componentes UI (en `src/features/planning/components/`):**
+    *   `PlanningToolbar.tsx`: Barra de herramientas con acciones principales y progreso
+    *   `WeekView.tsx`: Vista semanal con drag & drop y resumen estadístico
+    *   `DayView.tsx`: Vista diaria detallada optimizada para móvil
+    *   `MealCard.tsx`: Tarjeta de comida con información nutricional y estado de ingredientes
+    *   `DraggableMealCard.tsx`: Versión con drag & drop de MealCard
+    *   `DroppableMealSlot.tsx`: Slots que aceptan comidas arrastradas
+    *   `TemplatePanel.tsx`: Panel de gestión de plantillas con búsqueda y filtros
+*   **Servicios Relacionados:**
+    *   `src/features/planning/services/templateService.ts`: Gestión de plantillas de planificación
+    *   `src/features/recipes/generationService.ts`: Generación IA mejorada con contexto nutricional
+    *   `src/hooks/usePlanningPantrySync.ts`: Hook de sincronización automática con despensa
+*   **Integraciones:**
+    *   **Despensa:** Sincronización automática, verificación de ingredientes, lista de compras automática
+    *   **Recetas:** Integración con sistema de recetas existentes
+    *   **Lista de Compras:** Generación automática basada en ingredientes faltantes
+*   **Estado Global:** `src/stores/planningStore.ts` (Zustand con PlanningEngine integrado)
+*   **Tests:** Cobertura completa en `src/features/planning/__tests__/`
     *   **Utilidades:** `date-fns` (para manejo de fechas).
 
 ## 6. Recetas (`recipes`)
@@ -152,6 +172,19 @@ Este documento describe las funcionalidades clave implementadas en la aplicació
         *   `EquipmentCheckboxes.tsx`: Checkboxes para seleccionar el equipamiento disponible.
     *   **Contexto:** `src/features/auth/AuthContext.tsx` (para obtener `user`).
     *   **Tabla BD:** `profiles`
+
+## 10. Flujo Onboarding → Planificador → Lista de Compras → Analytics
+
+*   **Descripción:** El recorrido fundamental del usuario combina cuatro etapas: (1) completar el onboarding para capturar objetivos, restricciones y equipamiento; (2) generar o ajustar el plan semanal con el motor de planificación enriquecido; (3) sincronizar automáticamente los ingredientes faltantes con la lista de compras; y (4) visualizar métricas y sugerencias derivadas de la ejecución semanal. Este flujo reúne los principales módulos y asegura que la información fluya sin fricciones.
+*   **Onboarding (`src/features/onboarding/`):** `OnboardingPage.tsx` y `useOnboardingStore.ts` recogen objetivos (`primaryGoal`, ahorros/calorías), restricciones y datos de despensa inicial. Al confirmar, se persiste en `profiles` vía `onboardingService.ts` y se invoca `planningStore.generateWeek` para producir el primer plan con contexto real.
+*   **Planificador (`src/features/planning/`):** `planningStore.ts` y `planningEngine.ts` consumen las preferencias del perfil (via `updateUserProfile`) y el estado de despensa para enriquecer cada comida con disponibilidad, notas y nutrivalores. El toolbar (`PlanningToolbar.tsx`) expone acciones para regenerar la semana, sincronizar con la despensa y gatillar la generación automática.
+*   **Lista de Compras (`src/features/shopping-list/`):** `shoppingListService.ts` obtiene el rango actual del planificador (`getPlannedMeals`) y calcula cantidades faltantes a partir de `planningEngine.generateShoppingListFromMeals`, restando el stock de despensa. `ShoppingListContent.tsx` refleja filtros persistidos en `shoppingListPreferencesStore.ts` y permite marcar, ordenar o agrupar ítems.
+*   **Analytics (`planningEngine.generateWeeklyReport` y Dashboard):** Cada actualización de plan o sincronización dispara `generateWeeklyStats`, `analyzeWeeklyNutrition` y `generateWeeklyReport`. El resultado alimenta los widgets del dashboard (`TodayPlanWidget`, `ShoppingListWidget`) y habilita sugerencias contextualizadas (`suggestionService.getMealAlternatives`) con puntajes de confianza y motivos.
+*   **Archivos Clave adicionales:**
+    *   `src/features/onboarding/onboardingService.ts` (persistencia y trigger del plan inicial).
+    *   `src/features/planning/planningOrchestrator.ts` (estrategias IA y fallback automáticos).
+    *   `src/features/planning/utils/nutritionalCalculations.ts` (métricas dietarias y recomendaciones).
+    *   `src/features/dashboard/DashboardPage.tsx` (agrega métricas del plan y compras para exponerlas en la portada).
 
 ---
 *Documento finalizado.*

@@ -14715,7 +14715,7 @@ var require_main5 = __commonJS({
 });
 
 // api/get-gemini-key.ts
-var import_supabase_js = __toESM(require_main5());
+var import_supabase_js = __toESM(require_main5(), 1);
 var supabaseUrl = Deno.env.get("VITE_SUPABASE_URL");
 var supabaseAnonKey = Deno.env.get("VITE_SUPABASE_ANON_KEY");
 if (!supabaseUrl || !supabaseAnonKey) {

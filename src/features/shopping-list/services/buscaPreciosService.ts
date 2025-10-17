@@ -1,4 +1,5 @@
 import { localSuggestionManager, SearchTermRecord } from '@/lib/suggestions/LocalSuggestionManager'; // Asumiendo alias @
+import { recordMultipleObservations } from '../lib/priceHistory';
 // import { toast } from 'sonner'; // Asumimos que toast está disponible globalmente o inyectado
 
 // Define the product interface
@@ -25,14 +26,77 @@ const DEFAULT_SUGGESTIONS: SearchTermRecord[] = [
     { term: "Fideos", frequency: 0, lastUsed: 0 },
 ];
 
-// Function to search for products with retries and fallback
-export const searchProducts = async (query: string, isRetryAttempt = false): Promise<SearchProductsResult> => {
-  console.log(`🔍 Iniciando búsqueda con consulta: "${query}" ${isRetryAttempt ? '(Reintento)' : ''}`);
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutos
+const CACHE_STORAGE_KEY = 'shopping-list-search-cache-v1';
 
-  // Registrar término de búsqueda si no es un reintento manual explícito
-  if (!isRetryAttempt) {
-      localSuggestionManager.addSearchTerm(query);
+interface CachedSearchEntry {
+  data: BuscaPreciosProduct[];
+  timestamp: number;
+}
+
+const searchCache = new Map<string, CachedSearchEntry>();
+const pendingRequests = new Map<string, Promise<SearchProductsResult>>();
+let cacheHydrated = false;
+
+const normalizeQuery = (value: string) => value.trim().toLowerCase();
+
+const getCacheStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+};
+
+const hydrateCache = (): void => {
+  if (cacheHydrated) return;
+  cacheHydrated = true;
+  const storage = getCacheStorage();
+  if (!storage) return;
+
+  try {
+    const raw = storage.getItem(CACHE_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, CachedSearchEntry>;
+    Object.entries(parsed).forEach(([key, entry]) => {
+      if (entry && typeof entry.timestamp === 'number' && Array.isArray(entry.data)) {
+        searchCache.set(key, entry);
+      }
+    });
+  } catch (error) {
+    console.warn('No se pudo hidratar la caché de búsquedas locales.', error);
   }
+};
+
+const persistCache = (): void => {
+  const storage = getCacheStorage();
+  if (!storage) return;
+  try {
+    const serialized = JSON.stringify(Object.fromEntries(searchCache));
+    storage.setItem(CACHE_STORAGE_KEY, serialized);
+  } catch (error) {
+    console.warn('No se pudo persistir la caché de búsquedas locales.', error);
+  }
+};
+
+const getCachedEntry = (key: string): CachedSearchEntry | null => {
+  const entry = searchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    searchCache.delete(key);
+    persistCache();
+    return null;
+  }
+  return entry;
+};
+
+const setCachedEntry = (key: string, products: BuscaPreciosProduct[]): void => {
+  searchCache.set(key, {
+    data: products,
+    timestamp: Date.now(),
+  });
+  persistCache();
+};
+
+const performNetworkSearch = async (query: string, isRetryAttempt: boolean): Promise<SearchProductsResult> => {
+  console.log(`🔍 Iniciando búsqueda en red para "${query}" ${isRetryAttempt ? '(reintento)' : ''}`);
 
   const maxAttempts = 3;
   let attempts = 0;
@@ -41,35 +105,32 @@ export const searchProducts = async (query: string, isRetryAttempt = false): Pro
 
   while (attempts < maxAttempts) {
     try {
-      // Backoff exponencial simple
       if (attempts > 0) {
-        const delay = Math.pow(2, attempts - 1) * 1000; // 1s, 2s
-        console.log(`⏳ Reintento ${attempts}/${maxAttempts-1} esperando ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const delay = Math.pow(2, attempts - 1) * 1000;
+        console.log(`⏳ Reintento ${attempts}/${maxAttempts - 1} esperando ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
 
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
-        signal: AbortSignal.timeout(15000) // Timeout de 15 segundos por intento
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!response.ok) {
-        // Errores 5xx son candidatos a reintento, 4xx usualmente no
         if (response.status >= 500 && attempts < maxAttempts - 1) {
-            console.warn(`⚠️ Error HTTP ${response.status} (Intento ${attempts + 1}). Reintentando...`);
-            attempts++;
-            continue; // Saltar al siguiente intento del while
-        } else {
-            console.error(`🚫 Error HTTP ${response.status} definitivo:`, response.statusText);
-            throw new Error(`Error en la API: ${response.status}`);
+          console.warn(`⚠️ Error HTTP ${response.status} (Intento ${attempts + 1}). Reintentando...`);
+          attempts++;
+          continue;
         }
+        console.error(`🚫 Error HTTP ${response.status} definitivo:`, response.statusText);
+        throw new Error(`Error en la API: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ Respuesta de la API recibida (Intento ${attempts + 1})');
+      console.log(`✅ Respuesta de la API recibida (Intento ${attempts + 1})`);
 
       if (!data.products || !Array.isArray(data.products)) {
         console.error('❌ Formato de respuesta inválido:', data);
@@ -79,47 +140,89 @@ export const searchProducts = async (query: string, isRetryAttempt = false): Pro
       const formattedProducts = formatProducts(data);
       console.log('✨ Productos formateados:', formattedProducts.length);
 
-      // Éxito!
       return { error: false, products: formattedProducts };
-
     } catch (error) {
       attempts++;
       console.error(`❌ Error en intento ${attempts}/${maxAttempts} para "${query}":`, error);
 
-      // Si se alcanzan los reintentos o es un error no recuperable (ej. timeout, red)
-      if (attempts >= maxAttempts || (error instanceof Error && (error.name === 'AbortError' || error.message.includes('NetworkError')))) {
-        console.error(`❌ Fallo definitivo al buscar "${query}" después de ${attempts} intentos.`);
-        // toast.error(`Error al buscar "${query}". Mostrando sugerencias locales.`); // Notificar al usuario
+      const isTerminalError =
+        attempts >= maxAttempts ||
+        (error instanceof Error && (error.name === 'AbortError' || error.message.includes('NetworkError')));
 
-        // --- Lógica de Fallback ---
+      if (isTerminalError) {
+        console.error(`❌ Fallo definitivo al buscar "${query}" después de ${attempts} intentos.`);
         const recentSearches = localSuggestionManager.getSuggestions(3);
         const combinedSuggestions = [...recentSearches];
-        const recentTerms = new Set(recentSearches.map(s => s.term.toLowerCase()));
+        const recentTerms = new Set(recentSearches.map((s) => s.term.toLowerCase()));
 
-        DEFAULT_SUGGESTIONS.forEach(def => {
-            if (combinedSuggestions.length < 5 && !recentTerms.has(def.term.toLowerCase())) {
-                combinedSuggestions.push(def);
-            }
+        DEFAULT_SUGGESTIONS.forEach((def) => {
+          if (combinedSuggestions.length < 5 && !recentTerms.has(def.term.toLowerCase())) {
+            combinedSuggestions.push(def);
+          }
         });
 
         console.log('💡 Sugerencias de fallback:', combinedSuggestions);
         return {
-            error: true,
-            fallbackSuggestions: combinedSuggestions,
-            originalError: error instanceof Error ? error : new Error(String(error))
+          error: true,
+          fallbackSuggestions: combinedSuggestions,
+          originalError: error instanceof Error ? error : new Error(String(error)),
         };
       }
-      // Si no, el loop while continuará para el siguiente reintento
     }
   }
 
-  // Este punto no debería alcanzarse si la lógica es correcta, pero por si acaso:
   console.error(`❌ Fallo inesperado al buscar "${query}" fuera del loop.`);
   return {
-      error: true,
-      fallbackSuggestions: DEFAULT_SUGGESTIONS.slice(0, 5), // Fallback mínimo
-      originalError: new Error("Fallo inesperado en la lógica de búsqueda")
+    error: true,
+    fallbackSuggestions: DEFAULT_SUGGESTIONS.slice(0, 5),
+    originalError: new Error('Fallo inesperado en la lógica de búsqueda'),
   };
+};
+
+// Function to search for products leveraging cache and retries
+export const searchProducts = async (query: string, isRetryAttempt = false): Promise<SearchProductsResult> => {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return { error: false, products: [] };
+  }
+
+  hydrateCache();
+  const cacheKey = normalizeQuery(trimmedQuery);
+
+  if (!isRetryAttempt) {
+    const cachedEntry = getCachedEntry(cacheKey);
+    if (cachedEntry) {
+      console.log(`📦 Resultado cacheado reutilizado para "${trimmedQuery}"`);
+      return { error: false, products: cachedEntry.data };
+    }
+
+    const pending = pendingRequests.get(cacheKey);
+    if (pending) {
+      console.log(`⏳ Reutilizando request en curso para "${trimmedQuery}"`);
+      return pending;
+    }
+
+    localSuggestionManager.addSearchTerm(trimmedQuery);
+  }
+
+  const networkPromise = performNetworkSearch(trimmedQuery, isRetryAttempt);
+
+  if (!isRetryAttempt) {
+    pendingRequests.set(cacheKey, networkPromise);
+  }
+
+  try {
+    const result = await networkPromise;
+    if (!result.error && !isRetryAttempt) {
+      setCachedEntry(cacheKey, result.products);
+      recordMultipleObservations(result.products);
+    }
+    return result;
+  } finally {
+    if (!isRetryAttempt) {
+      pendingRequests.delete(cacheKey);
+    }
+  }
 };
 
 // Helper function to format products

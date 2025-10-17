@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Leer desde process.env (Vite lo reemplazará gracias a 'define')
+// Get Supabase credentials from environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

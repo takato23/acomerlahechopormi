@@ -1,16 +1,28 @@
--- Migración para crear tablas relacionadas con la categorización inteligente
+-- Migración para añadir restricciones e índices a category_keywords (creada en migración 000)
 
--- 1. Tabla category_keywords
-CREATE TABLE public.category_keywords (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    category_id text NOT NULL REFERENCES public.categories(id) ON DELETE CASCADE, -- Cambiado a TEXT
-    keyword text NOT NULL CHECK (char_length(keyword) > 0),
-    priority integer DEFAULT 0 NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL,
-    
-    -- Restricción única para evitar duplicados por categoría y keyword
-    CONSTRAINT category_keywords_category_keyword_uniq UNIQUE (category_id, keyword)
-);
+-- Añadir restricciones si no existen
+DO $$
+BEGIN
+    -- Añadir restricción única si no existe
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'category_keywords_category_keyword_uniq'
+        AND conrelid = 'public.category_keywords'::regclass
+    ) THEN
+        ALTER TABLE public.category_keywords
+        ADD CONSTRAINT category_keywords_category_keyword_uniq UNIQUE (category_id, keyword);
+    END IF;
+
+    -- Añadir check constraint si no existe
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'category_keywords_keyword_check'
+        AND conrelid = 'public.category_keywords'::regclass
+    ) THEN
+        ALTER TABLE public.category_keywords
+        ADD CONSTRAINT category_keywords_keyword_check CHECK (char_length(keyword) > 0);
+    END IF;
+END $$;
 
 -- Comentarios
 COMMENT ON TABLE public.category_keywords IS 'Almacena palabras clave asociadas a categorías para la inferencia automática.';

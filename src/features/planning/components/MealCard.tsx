@@ -1,331 +1,392 @@
-import React, { useState, useEffect } from 'react';
-import type { PlannedMeal, MealType, UpsertPlannedMealData } from '../types';
-import type { Recipe, RecipeIngredient } from '@/types/recipeTypes';
+import { Fragment, useMemo } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertTriangle,
+  ChefHat,
+  ListPlus,
+  MoreHorizontal,
+  Play,
+  Scale,
+  SkipForward,
+  ThermometerSnowflake,
+  Trash2,
+} from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, Pencil, Eye, BookOpen, Copy, AlertTriangle, MoreHorizontal } from 'lucide-react';
-import { usePlanningStore } from '@/stores/planningStore';
-import { usePantryStore } from '@/stores/pantryStore';
-import { calculateMissingRecipeIngredients } from '@/features/shopping-list/services/shoppingListService';
-import { Suggestion } from '@/features/suggestions/types';
-import { SuggestionsPopover } from './SuggestionsPopover';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { RecipePreviewDialog } from './RecipePreviewDialog';
-
-const mealVisuals: { [key in MealType]: { emoji: string; label: string } } = {
-  'Desayuno': { emoji: '🍳', label: 'Desayuno' },
-  'Almuerzo': { emoji: '🥗', label: 'Almuerzo' },
-  'Merienda': { emoji: '🫖', label: 'Merienda' },
-  'Cena': { emoji: '🌙', label: 'Cena' },
-};
-
-// Extender PlannedMeal con los campos requeridos de Recipe
-export interface PlannedMealWithRecipe extends PlannedMeal {
-  recipes?: {
-    id: string;
-    title: string;
-    description: string | null;
-    image_url: string | null;
-    ingredients?: RecipeIngredient[];
-  } | null;
-}
-
-interface MealIngredientStatus {
-  hasMissingIngredients: boolean;
-  loading: boolean;
-}
+import type { MealStatus, PlannedMeal } from '../types';
 
 interface MealCardProps {
-  date: Date;
-  mealType: MealType;
-  plannedMeals: PlannedMealWithRecipe[];
-  onAddClick: (date: Date, mealType: MealType) => void;
-  onEditClick: (meal: PlannedMealWithRecipe) => void;
-  onDeleteClick: (mealId: string) => void;
-  onCopyClick?: (meal: PlannedMealWithRecipe) => void;
-  className?: string;
+  meal: PlannedMeal;
+  compact?: boolean;
+  showActions?: boolean;
+  onExecute?: () => void;
+  onSkip?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onAddMissingIngredients?: () => void;
+  onGenerateAlternative?: () => void;
 }
 
+const difficultyLabels = {
+  simple: 'Fácil',
+  medium: 'Media',
+  complex: 'Avanzada',
+};
+
 export function MealCard({
-  date,
-  mealType,
-  plannedMeals,
-  onAddClick,
-  onEditClick,
-  onDeleteClick,
-  onCopyClick,
-  className
+  meal,
+  compact = false,
+  showActions = true,
+  onExecute,
+  onSkip,
+  onEdit,
+  onDelete,
+  onAddMissingIngredients,
+  onGenerateAlternative,
 }: MealCardProps) {
-  const { copiedMeal, pasteCopiedMeal, addPlannedMeal } = usePlanningStore();
-  const visuals = mealVisuals[mealType];
-  const hasMeals = plannedMeals && plannedMeals.length > 0;
-  const { items: pantryItems, fetchItems: fetchPantryItems } = usePantryStore();
-  const [ingredientStatus, setIngredientStatus] = useState<{[key: string]: MealIngredientStatus}>({});
-  const [selectedRecipe, setSelectedRecipe] = useState<{
-    id: string;
-    recipe?: {
-      id: string;
-      title: string;
-      description: string | null;
-      image_url: string | null;
-    };
-  } | null>(null);
+  const missingIngredients = meal.ingredient_status?.filter((status) => !status.available) ?? [];
+  const availableIngredients = meal.ingredient_status?.filter((status) => status.available) ?? [];
+  const totalTime = (meal.prep_time_minutes ?? 0) + (meal.cook_time_minutes ?? 0);
+  const feasibilityScore = meal.feasibility_score ?? null;
+  const costEstimate = meal.cost_estimate;
+  const nutritionalInfo = meal.nutritional_info;
+  const equipmentWarnings = meal.equipment_warnings ?? [];
+  const imageUrl = meal.recipes?.image_url ?? null;
+  const missingCount = missingIngredients.length;
 
-  useEffect(() => {
-    if (!pantryItems.length) {
-      fetchPantryItems();
-    }
-  }, [fetchPantryItems]);
+  const summaryItems = [
+    {
+      label: 'Calorías',
+      value: nutritionalInfo?.calories ? `${Math.round(nutritionalInfo.calories)} kcal` : '—',
+    },
+    {
+      label: 'Prep + cocción',
+      value: totalTime > 0 ? `${totalTime} min` : '—',
+    },
+    {
+      label: 'Faltantes',
+      value: missingCount > 0 ? `${missingCount}` : '0',
+    },
+  ];
 
-  // Memorizar el cálculo de ingredientes faltantes para evitar recálculos innecesarios
-  useEffect(() => {
-    async function checkIngredients(meal: PlannedMealWithRecipe) {
-      if (!meal.recipe_id || !meal.recipes?.ingredients) return;
+  const shouldShowBadges = feasibilityScore !== null || meal.difficulty || costEstimate !== undefined;
 
-      // Solo actualizar el estado de carga si no tenemos un estado previo
-      if (!ingredientStatus[meal.id]) {
-        setIngredientStatus(prev => ({
-          ...prev,
-          [meal.id]: { ...prev[meal.id], loading: true }
-        }));
-      }
-
-      try {
-        // Calcular ingredientes faltantes usando la función del servicio
-        const missingIngredients = await calculateMissingRecipeIngredients(
-          meal.recipes.ingredients
+  const statusBadge = useMemo(() => {
+    switch (meal.status as MealStatus | undefined) {
+      case 'executed':
+        return (
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
+            Ejecutada
+          </Badge>
         );
-
-        setIngredientStatus(prev => ({
-          ...prev,
-          [meal.id]: {
-            hasMissingIngredients: missingIngredients.length > 0,
-            loading: false
-          }
-        }));
-      } catch (error) {
-        console.error('Error checking missing ingredients:', error);
-        setIngredientStatus(prev => ({
-          ...prev,
-          [meal.id]: {
-            hasMissingIngredients: false,
-            loading: false
-          }
-        }));
-      }
+      case 'skipped':
+        return (
+          <Badge variant="secondary" className="bg-red-100 text-red-700">
+            Omitida
+          </Badge>
+        );
+      case 'confirmed':
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            Confirmada
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">Pendiente</Badge>;
     }
+  }, [meal.status]);
 
-    // Solo realizar el cálculo si tenemos los datos necesarios
-    if (pantryItems.length > 0) {
-      // Limpiar estados antiguos que ya no corresponden a comidas planificadas
-      const currentMealIds = new Set(plannedMeals.map(meal => meal.id));
-      setIngredientStatus(prev => {
-        const newStatus = { ...prev };
-        Object.keys(newStatus).forEach(mealId => {
-          if (!currentMealIds.has(mealId)) {
-            delete newStatus[mealId];
-          }
-        });
-        return newStatus;
-      });
-
-      // Verificar ingredientes para cada comida planificada
-      plannedMeals.forEach(meal => {
-        if (meal.recipe_id) {
-          checkIngredients(meal);
-        }
-      });
+  const compactStatus = useMemo(() => {
+    switch (meal.status as MealStatus | undefined) {
+      case 'executed':
+        return {
+          label: 'Realizada',
+          className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        };
+      case 'skipped':
+        return {
+          label: 'Omitida',
+          className: 'border-red-200 bg-red-50 text-red-600',
+        };
+      case 'confirmed':
+        return {
+          label: 'Confirmada',
+          className: 'border-blue-200 bg-blue-50 text-blue-600',
+        };
+      default:
+        return {
+          label: 'Pendiente',
+          className: 'border-muted text-muted-foreground',
+        };
     }
-  }, [plannedMeals, pantryItems]); // Remover ingredientStatus de las dependencias para evitar loops
+  }, [meal.status]);
 
-  return (
-    <>
-      <div className={cn("flex flex-col h-full p-1.5", className)}>
-        {/* Header */}
-        <div className="flex items-center gap-1 mb-1.5 flex-shrink-0">
-          <span className="text-sm select-none">{visuals.emoji}</span>
-          <span className="text-xs font-medium text-muted-foreground">{visuals.label}</span>
-        </div>
+  const title = useMemo(() => {
+    if (meal.recipes?.title) return meal.recipes.title;
+    if (meal.custom_title) return meal.custom_title;
+    return 'Comida sin nombre';
+  }, [meal.custom_title, meal.recipes?.title]);
 
-        {/* Contenido (Lista de comidas) */}
-        <div className="flex-grow overflow-y-auto min-h-0 pr-1 space-y-1 mb-1">
-          {hasMeals ? (
-              plannedMeals.map((meal) => {
-                console.log(`[MealCard] Rendering meal ${meal.id}: recipe_id=${meal.recipe_id}, title=${meal.recipes?.title}, custom_name=${meal.custom_meal_name}`);
+  const hasSecondaryActions = Boolean(onExecute || onSkip || onAddMissingIngredients || onGenerateAlternative);
 
-                return (
-                  <div key={meal.id} className="relative group bg-background/60 rounded border border-transparent hover:bg-background/80 hover:border-border/20 transition-colors">
-                    {/* Contenido principal de la comida */}
-                    <div className="px-1.5 py-1 text-left">
-                      <div className="flex items-center gap-1.5"> {/* Contenedor principal: Icono, Título, Ver, Más */}
-                         {meal.recipe_id && <BookOpen className="h-3 w-3 text-muted-foreground flex-shrink-0" aria-hidden="true" />}
-                         <TooltipProvider delayDuration={300}>
-                           <Tooltip>
-                             <TooltipTrigger asChild>
-                               <p className="text-xs text-foreground line-clamp-1 leading-snug py-0.5 flex-grow min-w-0 cursor-help"> {/* Título limpio */}
-                                 {meal.recipes?.title || meal.custom_meal_name || 'Comida'}
-                               </p>
-                             </TooltipTrigger>
-                             <TooltipContent side="top" align="start">
-                               <p>{meal.recipes?.title || meal.custom_meal_name || 'Comida'}</p> {/* Título completo */}
-                             </TooltipContent>
-                           </Tooltip>
-                         </TooltipProvider>
-                         {/* Indicador de ingredientes faltantes (si aplica) */}
-                         {meal.recipe_id && ingredientStatus[meal.id]?.hasMissingIngredients && (
-                           <TooltipProvider>
-                             <Tooltip delayDuration={300}>
-                               <TooltipTrigger asChild>
-                                 <div className="inline-flex flex-shrink-0"> {/* Evita que se encoja */}
-                                   <AlertTriangle
-                                     className="h-3 w-3 text-warning cursor-help"
-                                     aria-label="Faltan ingredientes"
-                                   />
-                                 </div>
-                               </TooltipTrigger>
-                               <TooltipContent side="top" align="center">
-                                 <p className="text-xs">Faltan ingredientes</p>
-                               </TooltipContent>
-                             </Tooltip>
-                           </TooltipProvider>
-                         )}
+  if (compact) {
+    return (
+      <Card className="group relative overflow-hidden border border-border/40 bg-card/80 px-0 py-0 shadow-sm transition hover:border-primary/50">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit?.();
+            }}
+            className="flex flex-1 items-center justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-foreground line-clamp-2">{title}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {meal.recipes?.title ? 'Receta guardada' : 'Entrada manual'}
+              </span>
+              {compactStatus && (
+                <span
+                  className={cn(
+                    'w-fit rounded-full border px-2 py-0.5 text-[10px] font-medium leading-tight',
+                    compactStatus.className,
+                  )}
+                >
+                  {compactStatus.label}
+                </span>
+              )}
+            </div>
+          </button>
 
-                         {/* Botón Ver (siempre visible) */}
-                         {meal.recipe_id && (
-                           <TooltipProvider delayDuration={300}>
-                             <Tooltip>
-                               <TooltipTrigger asChild>
-                                 <Button
-                                   variant="ghost"
-                                   size="icon"
-                                   className="h-5 w-5 flex-shrink-0 text-muted-foreground hover:text-primary"
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setSelectedRecipe({
-                                       id: meal.recipe_id!,
-                                       recipe: meal.recipes as any // Simplificado para el ejemplo
-                                     });
-                                   }}
-                                   aria-label="Ver receta"
-                                 >
-                                   <Eye className="w-3.5 h-3.5" />
-                                 </Button>
-                               </TooltipTrigger>
-                               <TooltipContent side="top" align="center">
-                                 <p>Ver Receta</p>
-                               </TooltipContent>
-                             </Tooltip>
-                           </TooltipProvider>
-                         )}
+          {showActions && (
+            <div className="flex items-center gap-1 pr-2 opacity-0 transition group-hover:opacity-100">
+              {hasSecondaryActions && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">Abrir opciones</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={4} className="w-48 text-sm">
+                    {onExecute && (
+                      <DropdownMenuItem
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExecute();
+                        }}
+                      >
+                        <Play className="mr-2 h-4 w-4" /> Marcar como realizada
+                      </DropdownMenuItem>
+                    )}
+                    {onSkip && (
+                      <DropdownMenuItem
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSkip();
+                        }}
+                      >
+                        <SkipForward className="mr-2 h-4 w-4" /> Marcar como omitida
+                      </DropdownMenuItem>
+                    )}
+                    {onAddMissingIngredients && (
+                      <DropdownMenuItem
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onAddMissingIngredients();
+                        }}
+                      >
+                        <ListPlus className="mr-2 h-4 w-4" /> Añadir faltantes
+                      </DropdownMenuItem>
+                    )}
+                    {onGenerateAlternative && (
+                      <DropdownMenuItem
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onGenerateAlternative();
+                        }}
+                      >
+                        <ChefHat className="mr-2 h-4 w-4" /> Ver alternativa IA
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
-                         {/* Botón Más Opciones (...) */}
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button
-                               variant="ghost"
-                               size="icon"
-                               className="h-5 w-5 flex-shrink-0 text-muted-foreground hover:text-primary"
-                               aria-label="Más opciones"
-                               onClick={(e) => e.stopPropagation()} // Evitar que el clic en el trigger active otros eventos
-                             >
-                               <MoreHorizontal className="w-3.5 h-3.5" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}> {/* Evitar cierre al hacer clic dentro y añadir tipo */}
-                             {onCopyClick && (
-                               <DropdownMenuItem onSelect={() => onCopyClick(meal)}>
-                                 <Copy className="mr-2 h-3.5 w-3.5" /> Copiar
-                               </DropdownMenuItem>
-                             )}
-                             <DropdownMenuItem onSelect={() => onEditClick(meal)}>
-                               <Pencil className="mr-2 h-3.5 w-3.5" /> Editar
-                             </DropdownMenuItem>
-                             <DropdownMenuItem
-                               className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                               onSelect={() => {
-                                 if (window.confirm('¿Eliminar esta comida planificada?')) {
-                                   onDeleteClick(meal.id);
-                                 }
-                               }}
-                             >
-                               <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
-                             </DropdownMenuItem>
-                           </DropdownMenuContent>
-                         </DropdownMenu>
-                      </div>
-                    </div>
-                    {/* Contenedor de botones antiguo eliminado */}
-                  </div>
-                );
-              })
-          ) : (
-            <div className="text-xs text-muted-foreground/70 text-center h-full flex items-center justify-center gap-2">
-              <span className="italic">Vacío</span>
-              <SuggestionsPopover
-                date={format(date, 'yyyy-MM-dd')}
-                mealType={mealType}
-                onSuggestionSelect={async (suggestion: Suggestion) => {
-                  const mealData: UpsertPlannedMealData = {
-                    plan_date: format(date, 'yyyy-MM-dd'),
-                    meal_type: mealType,
-                    recipe_id: suggestion.type === 'recipe' ? suggestion.id : null,
-                    custom_meal_name: suggestion.type === 'custom' ? suggestion.title : null,
-                  };
-                  const newMeal = await addPlannedMeal(mealData);
-                  if (newMeal) {
-                    toast.success(`"${suggestion.title}" añadido al plan.`);
-                  } else {
-                    toast.error(`Error al añadir "${suggestion.title}" al plan.`);
-                  }
-                  // El popover se cierra automáticamente al hacer clic en un botón dentro de su contenido.
-                }}
-              />
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete();
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Eliminar comida</span>
+                </Button>
+              )}
             </div>
           )}
         </div>
+      </Card>
+    );
+  }
 
-        {/* Botón Añadir o Pegar */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full h-6 text-xs rounded-md border-t border-border/10 hover:bg-muted/30 mt-auto flex-shrink-0 -mx-1.5 -mb-1.5"
-          onClick={async () => {
-            if (copiedMeal) {
-              const targetDate = format(date, 'yyyy-MM-dd');
-              await pasteCopiedMeal(targetDate, mealType);
-              toast.success('Comida pegada con éxito');
-            } else {
-              onAddClick(date, mealType);
-            }
-          }}
-          aria-label={copiedMeal ? `Pegar comida en ${mealType}` : `Añadir ${mealType}`}
+  const renderSecondaryBadges = () => (
+    <div className="flex flex-wrap gap-2 text-xs">
+      {feasibilityScore !== null && (
+        <Badge
+          variant={feasibilityScore > 79 ? 'secondary' : feasibilityScore > 49 ? 'outline' : 'destructive'}
         >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
-      {/* Modal de vista previa de receta */}
-      {selectedRecipe && (
-        <RecipePreviewDialog
-          isOpen={!!selectedRecipe}
-          onClose={() => setSelectedRecipe(null)}
-          recipeId={selectedRecipe.id}
-          recipe={selectedRecipe.recipe}
-        />
+          Factibilidad {feasibilityScore}
+        </Badge>
       )}
-    </>
+      {meal.difficulty && (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <ChefHat className="h-3 w-3" />
+          {difficultyLabels[meal.difficulty]}
+        </Badge>
+      )}
+      {costEstimate !== undefined && (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Scale className="h-3 w-3" /> ${costEstimate.toFixed(2)}
+        </Badge>
+      )}
+    </div>
+  );
+
+  return (
+    <Card className={cn('shadow-sm', compact && 'border-dashed border-muted')}>
+      <CardContent className={cn('space-y-4 p-4', compact && 'space-y-3 p-3')}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className={cn('text-base font-semibold', compact && 'text-sm')}>{title}</h3>
+              {statusBadge}
+            </div>
+          </div>
+
+          {showActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onExecute}>
+                  <Play className="mr-2 h-4 w-4" /> Marcar como realizada
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSkip}>
+                  <SkipForward className="mr-2 h-4 w-4" /> Marcar como omitida
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onAddMissingIngredients}>
+                  <ListPlus className="mr-2 h-4 w-4" /> Añadir faltantes a compras
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onGenerateAlternative}>
+                  <ChefHat className="mr-2 h-4 w-4" /> Comparar alternativa
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onEdit}>Editar</DropdownMenuItem>
+                <DropdownMenuItem onClick={onDelete}>Eliminar</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        {imageUrl && (
+          <div className={cn('overflow-hidden rounded-md', compact ? 'h-20' : 'h-40')}>
+            <img
+              src={imageUrl}
+              alt={title}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        )}
+
+        <div className={cn('grid gap-3 text-xs text-muted-foreground', compact ? 'grid-cols-2' : 'grid-cols-3')}>
+          {summaryItems.map((item) => (
+            <div
+              key={item.label}
+              className="flex flex-col rounded-md border border-dashed border-muted bg-muted/20 p-2"
+            >
+              <span className="text-[11px] uppercase tracking-wide">{item.label}</span>
+              <span className="text-sm font-semibold text-gray-900">{item.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {shouldShowBadges && renderSecondaryBadges()}
+
+        {!compact && nutritionalInfo && (
+          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            {nutritionalInfo.protein !== undefined && <span>Proteínas: {nutritionalInfo.protein} g</span>}
+            {nutritionalInfo.carbs !== undefined && <span>Carbohidratos: {nutritionalInfo.carbs} g</span>}
+            {nutritionalInfo.fat !== undefined && <span>Grasas: {nutritionalInfo.fat} g</span>}
+            {nutritionalInfo.fiber !== undefined && <span>Fibra: {nutritionalInfo.fiber} g</span>}
+          </div>
+        )}
+
+        {!compact && !!equipmentWarnings.length && (
+          <div className="flex flex-wrap gap-2 text-xs text-amber-600">
+            {equipmentWarnings.map((warning) => (
+              <Badge key={warning} variant="outline" className="border-amber-400 text-amber-600">
+                <AlertTriangle className="mr-1 h-3 w-3" /> {warning}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {!!missingIngredients.length && (
+          <div className="rounded-md bg-rose-50 p-3 text-xs text-rose-700">
+            <p className="flex items-center gap-2 font-medium">
+              <ThermometerSnowflake className="h-4 w-4" /> Ingredientes faltantes
+            </p>
+            <ul className="mt-2 space-y-1">
+              {missingIngredients.map((item) => (
+                <li key={item.ingredient_name}>
+                  {item.ingredient_name}{' '}
+                  <span className="text-[10px] text-rose-500">
+                    necesita {item.quantity_needed - item.quantity_available} {item.unit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {onAddMissingIngredients && (
+              <Button size="sm" variant="ghost" className="mt-2" onClick={onAddMissingIngredients}>
+                Añadir faltantes a la lista
+              </Button>
+            )}
+          </div>
+        )}
+
+        {!compact && availableIngredients.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            <span>Disponibles: </span>
+            {availableIngredients.slice(0, 5).map((ingredient, index) => (
+              <Fragment key={`${ingredient.ingredient_name}-${index}`}>
+                {ingredient.ingredient_name}
+                {index < Math.min(availableIngredients.length, 5) - 1 && ', '}
+              </Fragment>
+            ))}
+            {availableIngredients.length > 5 && '…'}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
+
+export default MealCard;

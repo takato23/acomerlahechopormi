@@ -1,6 +1,6 @@
 // import { ShoppingItem } from '@/context/contexts/ShoppingContext'; // Eliminado - Contexto no existe aquí
 import { cleanIngredientText } from '@/lib/ingredientUtils'; // Ruta correcta
-import { toast } from 'sonner';
+import { notifyError, notifySuccess } from '@/lib/notifications';
 
 // Interfaces
 export interface RatoneandoStore {
@@ -111,9 +111,9 @@ class RatoneandoService {
         };
         
         if (isAvailable) {
-          toast.success('API key de Ratoneando configurada y servicio disponible');
+          notifySuccess('API key de Ratoneando configurada y servicio disponible');
         } else {
-          toast.error('API key guardada, pero el servicio no responde correctamente');
+          notifyError('API key guardada, pero el servicio no responde correctamente');
         }
       })
       .catch(error => {
@@ -121,7 +121,7 @@ class RatoneandoService {
           status: 'unavailable',
           error: `Error de conexión: ${error instanceof Error ? error.message : String(error)}`
         };
-        toast.error('Error al verificar la conexión con Ratoneando');
+        notifyError('Error al verificar la conexión con Ratoneando');
       });
   }
 
@@ -686,7 +686,7 @@ class RatoneandoService {
         error: error instanceof Error ? error.message : 'Error desconocido optimizando lista'
       };
       
-      toast.error('Error en el servicio de optimización', {
+      notifyError('Error en el servicio de optimización', {
         description: 'Se utilizarán precios estimados'
       });
       

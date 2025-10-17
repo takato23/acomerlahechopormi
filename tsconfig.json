@@ -21,7 +21,7 @@
     },
     "types": ["vite/client", "jest", "@testing-library/jest-dom"] // Añadir tipos para Jest y jest-dom
   },
-  "include": ["src", "jest.setup.js"], // Incluir jest.setup.js
+  "include": ["src", "jest.setup.ts"], // Incluir jest.setup.ts
   "references": [
     { "path": "./tsconfig.node.json" }
   ]

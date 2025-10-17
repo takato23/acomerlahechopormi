@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useCallback, lazy, Suspense } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { parsePantryInput, ParseResult } from '../lib/pantryParser';
-import { toast } from 'sonner';
+import { notifyError, notifySuccess } from '@/lib/notifications';
 import { Spinner } from '@/components/ui/Spinner';
 import { InteractivePreview } from './InteractivePreview';
-import { useDebounce } from '@/hooks/useDebounce';
 import { CreatePantryItemData } from '../types';
 import { addPantryItem } from '../pantryService';
 import { suggestCategory } from '../lib/categorySuggestor';
@@ -21,42 +20,39 @@ interface UnifiedPantryInputProps {
   onItemAdded: () => void;
   availableCategories: Array<{ id: string; name: string }>;
   onEditRequest?: (data: CreatePantryItemData) => void;
+  onCreateItem?: (data: CreatePantryItemData) => Promise<void>;
 }
 
 const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
   onItemAdded,
   availableCategories,
   onEditRequest,
+  onCreateItem,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [parseResultForPreview, setParseResultForPreview] = useState<ParseResult | null>(null);
-  const debouncedTranscript = useDebounce('', 2000);
 
   const handleParseAttempt = () => {
     const trimmedInput = inputValue.trim();
     if (!trimmedInput) return;
 
     setIsLoading(true);
-       console.log(`[UnifiedPantryInput] Attempting to parse: "${trimmedInput}"`);
     setTimeout(() => {
       const result = parsePantryInput(trimmedInput);
-       console.log('[UnifiedPantryInput] parsePantryInput result (manual):', result);
       setIsLoading(false);
 
       if (result.success) {
-        console.log("Parsed Data:", result.data, "Fallback:", result.usedFallback);
         setParseResultForPreview(result);
-        toast.info(`Parseado: ${result.data.quantity ?? '?'} ${result.data.unit ?? ''} ${result.data.ingredientName}`);
       } else {
         console.error("Parse Error:", result.error);
         setParseResultForPreview(null);
-        let errorMessage = 'No se pudo entender la entrada.';
+        let errorMessage = 'No pudimos entender la entrada.';
         if (result.error === 'empty_input') {
-          errorMessage = 'Por favor, introduce un ítem.';
+          errorMessage = 'Escribí un ítem para continuar.';
         }
-        toast.error(errorMessage);
+        notifyError(errorMessage);
       }
     }, 150);
   };
@@ -79,14 +75,19 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
   const handleConfirmAdd = async (itemData: CreatePantryItemData, addAnother: boolean) => {
     setIsLoading(true);
     try {
-      await addPantryItem(itemData);
-      toast.success(`"${itemData.ingredient_name}" añadido!`);
+      if (onCreateItem) {
+        await onCreateItem(itemData);
+      } else {
+        await addPantryItem(itemData);
+      }
+      notifySuccess(`Agregamos "${itemData.ingredient_name}" a tu despensa.`);
       setParseResultForPreview(null);
       setInputValue('');
       onItemAdded();
     } catch (error) {
       console.error("Error adding item from unified input:", error);
-      toast.error(error instanceof Error ? error.message : "Error al añadir el ítem.");
+      const fallbackMessage = 'No pudimos agregar el ítem. Inténtalo nuevamente.';
+      notifyError(error instanceof Error && error.message ? error.message : fallbackMessage);
     } finally {
       setIsLoading(false);
     }
@@ -97,8 +98,6 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
       setParseResultForPreview(null);
       setInputValue('');
       onEditRequest(itemData);
-    } else {
-      toast.info("La edición detallada no está habilitada aquí.");
     }
   };
 
@@ -114,13 +113,10 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     try {
       setIsProcessingVoice(true);
       setInputValue(text);
-      console.log(`[UnifiedPantryInput] Processing voice input: "${text}"`);
 
       const result = parsePantryInput(text);
-      console.log('[UnifiedPantryInput] Parse result:', result);
 
       if (result.success) {
-        console.log('[UnifiedPantryInput] Voice parse successful:', result.data);
         const parsedData = result.data;
 
         // 1. Intentar inferir la categoría
@@ -129,10 +125,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
           // Usar ingredientName (camelCase) de parsedData
           const suggestedCategoryId = await suggestCategory(parsedData.ingredientName);
           if (suggestedCategoryId) {
-            console.log(`[UnifiedPantryInput] Suggested category: ${suggestedCategoryId}`);
             finalCategoryId = suggestedCategoryId; // Asignar la categoría sugerida
-          } else {
-             console.log('[UnifiedPantryInput] No category suggestion found.');
           }
         } catch (suggestionError) {
           console.error('[UnifiedPantryInput] Error suggesting category:', suggestionError);
@@ -156,11 +149,11 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
 
       } else {
         console.error("Voice Parse Error:", result.error);
-        toast.error(`No se entendió: "${text}". Intenta de nuevo o edita manualmente.`);
+        notifyError(`No pudimos entender "${text}". Inténtalo nuevamente o editá manualmente.`);
       }
     } catch (error) {
       console.error("Error processing voice input:", error);
-      toast.error("Error al procesar la entrada de voz");
+      notifyError('No pudimos procesar la entrada de voz.');
     } finally {
       setIsProcessingVoice(false);
     }

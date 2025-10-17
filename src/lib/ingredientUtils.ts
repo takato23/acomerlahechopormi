@@ -1,10 +1,20 @@
 // import { ShoppingItem } from "@/context/AppContext"; // Eliminado - AppContext no existe aquí
 
 export const BASIC_PANTRY_INGREDIENTS = [
-    "Huevo", "Tomate", "Carne", "Pollo", "Arroz", "Pasta", "Cebolla",
-    "Ajo", "Zanahoria", "Papa", "Queso", "Leche", "Yogur", "Atún",
-    "Harina", "Azúcar", "Manzana", "Plátano", "Frijoles", "Lentejas",
-    "Aceite", "Sal", "Pimienta"
+    "Arroz", "Pasta", "Harina", "Azúcar", "Frijoles", "Lentejas",
+    "Aceite", "Sal", "Pimienta", "Atún"
+];
+
+export const BASIC_PANTRY_KEYWORDS = [
+    'sal',
+    'pimienta',
+    'aceite',
+    'vinagre',
+    'azúcar',
+    'harina',
+    'levadura',
+    'caldo',
+    'agua'
 ];
 
 // Define IngredientCategory as an enum
@@ -60,9 +70,7 @@ export const cleanIngredientText = (ingredient: string): string => {
  */
 export const isBasicPantryIngredient = (ingredient: string): boolean => {
   const cleanedName = cleanIngredientText(ingredient).toLowerCase();
-  // Check against a more comprehensive list or keywords
-  const basicKeywords = ['sal', 'pimienta', 'aceite', 'vinagre', 'azúcar', 'harina', 'levadura', 'caldo', 'agua'];
-  return basicKeywords.some(keyword => cleanedName.includes(keyword)) ||
+  return BASIC_PANTRY_KEYWORDS.some(keyword => cleanedName.includes(keyword)) ||
          BASIC_PANTRY_INGREDIENTS.some(basic => cleanedName.includes(basic.toLowerCase()));
 };
 
@@ -168,10 +176,22 @@ export const normalizeUnit = (unit: string | null): string | null => {
     botellas: 'botella',
     pizca: 'pizca',
     pizcas: 'pizca',
+    chorrito: 'chorrito',
+    chorritos: 'chorrito',
+    'al gusto': 'al gusto',
     // Añadir más según sea necesario
   };
 
   return unitMap[lowerUnit] || lowerUnit; // Devolver normalizado o el original en minúsculas si no hay mapeo
+};
+
+const IMPRECISE_UNITS_NORMALIZED = new Set(['unidad', 'pizca', 'al gusto', 'chorrito']);
+
+export const isImpreciseUnit = (unit: string | null): boolean => {
+  if (!unit) return true;
+  const normalized = normalizeUnit(unit);
+  if (!normalized) return true;
+  return IMPRECISE_UNITS_NORMALIZED.has(normalized);
 };
 
 /**

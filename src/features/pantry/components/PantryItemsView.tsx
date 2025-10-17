@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import { EmptyState } from '@/components/common/EmptyState';
-import { Spinner } from '@/components/ui/Spinner';
 import type { Category, PantryItem } from '../types';
 import { PantryGrid } from './PantryGrid';
 import PantryList from '../PantryList'; // Importación por defecto
@@ -11,6 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from '@/lib/utils';
+import { PantrySkeleton } from './PantrySkeleton';
 
 interface GroupedPantryData {
   category: Category | null;
@@ -48,16 +48,6 @@ const PantryItemsView: React.FC<PantryItemsViewProps> = ({
   onToggleFavorite,
 }) => {
   const handleToggleFavorite = useCallback((itemId: string) => {
-    console.log('[PantryItemsView] handleToggleFavorite called:', {
-      itemId,
-      onToggleFavoriteType: typeof onToggleFavorite
-    });
-
-    if (typeof onToggleFavorite !== 'function') {
-      console.error('[PantryItemsView] onToggleFavorite is not a function!');
-      return;
-    }
-
     try {
       onToggleFavorite(itemId);
     } catch (error) {
@@ -66,11 +56,7 @@ const PantryItemsView: React.FC<PantryItemsViewProps> = ({
   }, [onToggleFavorite]);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-8">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <PantrySkeleton />;
   }
 
   if (error) {

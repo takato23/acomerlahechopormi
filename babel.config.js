@@ -1,4 +1,4 @@
-module.exports = {
+const config = {
   presets: [
     ['@babel/preset-env', { targets: { node: 'current' } }],
     '@babel/preset-typescript',
@@ -9,5 +9,7 @@ module.exports = {
     // Añadir plugins para sintaxis específicas si son necesarias
     '@babel/plugin-syntax-import-meta', // Para import.meta
     '@babel/plugin-transform-object-rest-spread' // Usar el plugin recomendado
-  ],
+  ]
 };
+
+export default config;

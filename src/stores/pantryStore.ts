@@ -52,11 +52,37 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     }
   },
 
-  // Placeholder para evitar errores si se llama accidentalmente
-  fetchLowStockItems: async (_threshold = 1) => {
-      console.warn("fetchLowStockItems llamado pero no implementado en pantryService.");
-      set({ lowStockItems: [], isLoadingLowStock: false, errorLowStock: 'Funcionalidad no implementada' });
-      return Promise.resolve();
+  fetchLowStockItems: async (threshold = 1) => {
+    if (get().isLoadingLowStock) return;
+    set({ isLoadingLowStock: true, errorLowStock: null });
+
+    try {
+      const items = get().items;
+
+      // Filtrar items con stock bajo según el threshold
+      const lowStockItems = items.filter(item => {
+        if (!item.quantity || !item.unit) return false;
+
+        // Para cantidades pequeñas (menos de 1 unidad), considerar como bajo
+        if (item.quantity < threshold) return true;
+
+        // Si hay fecha de caducidad próxima (menos de 3 días), considerar como bajo
+        if (item.expiry_date) {
+          const expiryDate = new Date(item.expiry_date);
+          const now = new Date();
+          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysUntilExpiry <= 3) return true;
+        }
+
+        return false;
+      });
+
+      set({ lowStockItems, isLoadingLowStock: false });
+    } catch (error) {
+      console.error("Error fetching low stock items:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al cargar items con stock bajo.';
+      set({ errorLowStock: errorMessage, isLoadingLowStock: false });
+    }
   },
 
   addItem: async (itemData) => {

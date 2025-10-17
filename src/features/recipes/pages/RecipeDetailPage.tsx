@@ -11,10 +11,10 @@ import { Wand2 } from 'lucide-react'; // Icono para variación
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner'; // Asumiendo que sonner está instalado para toasts
+import { notifyAsync, notifyError, notifyInfo } from '@/lib/notifications'; // Wrapper de notificaciones
 import { generateRecipeVariation } from '@/features/recipes/generationService'; // Ajustar path si es necesario
 import { getRecipeById, deleteRecipe } from '@/features/recipes/services/recipeService';
-import { addItemsToShoppingList, calculateMissingRecipeIngredients } from '@/features/shopping-list/services/shoppingListService';
+import { addShoppingListItem } from '@/features/shopping-list/shoppingListService';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Recipe, RecipeIngredient } from '@/types/recipeTypes';
 import { cn } from '@/lib/utils';
@@ -99,11 +99,11 @@ const RecipeDetailPage: React.FC = () => {
         setIsVariationModalOpen(false); // Cerrar modal al éxito
         setVariationRequestText(''); // Limpiar texto
       } else {
-        toast.error('No se pudo generar la variación. La IA no devolvió una receta válida.');
+        notifyError('No pudimos generar la variación. La IA no devolvió una receta válida.');
       }
     } catch (err) {
       console.error('Error generating recipe variation:', err);
-      toast.error('Ocurrió un error al generar la variación. Inténtalo de nuevo.');
+      notifyError('Tuvimos un problema al generar la variación. Inténtalo nuevamente.');
       // Podríamos usar setError aquí también si preferimos mostrarlo en la página en lugar de un toast
       // setError('Ocurrió un error al generar la variación. Inténtalo de nuevo.');
     } finally {
@@ -114,23 +114,38 @@ const RecipeDetailPage: React.FC = () => {
 
   const handleAddRecipeToShoppingList = async () => {
     if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-      toast.info('No hay ingredientes en esta receta para añadir.');
+      notifyInfo('No encontramos ingredientes en esta receta para agregar.');
       return;
     }
 
     setIsAddingToShoppingList(true);
-    try {
-      const missingIngredients = await calculateMissingRecipeIngredients(recipe.ingredients);
+    const addPromise = Promise.all(
+      recipe.ingredients.map(async (ingredient) => {
+        if (!ingredient.ingredient_name) return;
+        const quantity =
+          typeof ingredient.quantity === 'number' && Number.isFinite(ingredient.quantity)
+            ? ingredient.quantity
+            : null;
+        const unit = ingredient.unit && ingredient.unit.trim().length > 0 ? ingredient.unit : null;
 
-      if (missingIngredients.length > 0) {
-        await addItemsToShoppingList(missingIngredients);
-        toast.success(`${missingIngredients.length} ingrediente(s) faltante(s) añadido(s) a la lista de compras.`);
-      } else {
-        toast.info('Todos los ingredientes necesarios ya están en tu despensa o son básicos. ¡No se añadió nada!');
-      }
+        await addShoppingListItem({
+          name: ingredient.ingredient_name,
+          quantity,
+          unit,
+        });
+      })
+    );
+
+    notifyAsync(addPromise, {
+      loading: 'Añadimos los ingredientes de la receta a tu lista...',
+      success: 'Añadimos los ingredientes de la receta a tu lista de compras.',
+      error: 'No pudimos agregar los ingredientes. Inténtalo nuevamente.',
+    });
+
+    try {
+      await addPromise;
     } catch (err) {
       console.error('Error adding recipe ingredients to shopping list:', err);
-      toast.error('Error al añadir ingredientes a la lista. Inténtalo de nuevo.');
     } finally {
       setIsAddingToShoppingList(false);
     }

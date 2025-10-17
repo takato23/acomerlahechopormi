@@ -6,13 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ParsedPantryInput } from '../lib/pantryParser';
-import { suggestCategory } from '../lib/categorySuggestor'; // Usar el nombre exportado correcto
-import { addPantryItem } from '../pantryService';
-import { CreatePantryItemData, Category } from '../types';
-import { toast } from 'sonner';
+import { suggestCategory } from '../lib/categorySuggestor';
+import { CreatePantryItemData } from '../types';
+import { notifyError } from '@/lib/notifications';
 import { Spinner } from '@/components/ui/Spinner';
 import { X, Edit3, Check, ChevronsUpDown } from 'lucide-react';
-import { addDays, format } from 'date-fns'; // Importar funciones de date-fns
+import { Textarea } from '@/components/ui/textarea';
 
 interface InteractivePreviewProps {
   initialData: ParsedPantryInput;
@@ -36,42 +35,55 @@ export function InteractivePreview({
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [userManuallySetExpiry, setUserManuallySetExpiry] = useState(false);
-  const [location, setLocation] = useState<string>(''); // Estado para ubicación
-  const [price, setPrice] = useState<number | ''>(''); // Estado para precio
-  // Efecto para sugerir categoría inicial y manejar cambios
+  const [location, setLocation] = useState<string>('');
+  const [price, setPrice] = useState<number | ''>('');
+  const [notes, setNotes] = useState('');
+  const [minStock, setMinStock] = useState<number | ''>('');
+  const [targetStock, setTargetStock] = useState<number | ''>('');
+  const [tags, setTags] = useState('');
+
   useEffect(() => {
-    const suggestCategoryForItem = async () => {
-      console.log('[InteractivePreview] Sugiriendo categoría para:', itemData.ingredientName);
+    setItemData(initialData);
+    setSelectedCategoryId(initialData.suggestedCategoryId ?? null);
+    setExpiryDate('');
+    setLocation('');
+    setPrice('');
+    setNotes('');
+    setMinStock('');
+    setTargetStock('');
+    setTags('');
+  }, [initialData]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSuggestedCategory = async () => {
       try {
         const suggestedId = await suggestCategory(itemData.ingredientName);
-        console.log('[InteractivePreview] Categoría sugerida:', suggestedId);
-        
-        if (suggestedId) {
-          setSelectedCategoryId(suggestedId);
+        if (isMounted && suggestedId) {
+          setSelectedCategoryId(prev => prev ?? suggestedId);
           setItemData(prev => ({ ...prev, suggestedCategoryId: suggestedId }));
-          console.log('[InteractivePreview] Categoría actualizada:', suggestedId);
-        } else {
-          console.log('[InteractivePreview] No se encontró categoría sugerida');
         }
       } catch (error) {
-        console.error('[InteractivePreview] Error al sugerir categoría:', error);
+        console.error('Error al sugerir categoría:', error);
       }
     };
 
-    suggestCategoryForItem();
-    setExpiryDate('');
-  }, [initialData, itemData.ingredientName]);
+    fetchSuggestedCategory();
+    return () => {
+      isMounted = false;
+    };
+  }, [itemData.ingredientName]);
+
+  const parseTagsInput = (input: string) => {
+    const parsed = input
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0);
+    return parsed.length > 0 ? parsed : undefined;
+  };
 
   const handleConfirm = async (addAnother: boolean) => {
     setIsSubmitting(true);
-    console.log('[InteractivePreview] Confirmando ítem con datos:', {
-      name: itemData.ingredientName,
-      quantity: itemData.quantity,
-      unit: itemData.unit,
-      category: selectedCategoryId,
-      suggestedCategory: itemData.suggestedCategoryId
-    });
 
     const finalData: CreatePantryItemData = {
       ingredient_name: itemData.ingredientName.toLowerCase(), // Normalizar a minúsculas
@@ -81,6 +93,10 @@ export function InteractivePreview({
       expiry_date: expiryDate || null,
       location: location || null,
       price: price === '' ? null : Number(price),
+      notes: notes || null,
+      min_stock: minStock === '' ? null : Number(minStock),
+      target_stock: targetStock === '' ? null : Number(targetStock),
+      tags: parseTagsInput(tags),
     };
 
     try {
@@ -89,7 +105,7 @@ export function InteractivePreview({
     } catch (error) {
       // El error ya debería manejarse en onConfirm, pero podemos añadir un fallback
       console.error("Error confirming item from preview:", error);
-      toast.error("Error al confirmar el ítem.");
+      notifyError('No pudimos confirmar el ítem.');
     } finally {
       setIsSubmitting(false);
     }
@@ -103,8 +119,12 @@ export function InteractivePreview({
         unit: itemData.unit,
         category_id: selectedCategoryId,
         expiry_date: expiryDate || null,
-        location: location || null, // Incluir en datos para edición
-        price: price === '' ? null : Number(price), // Incluir en datos para edición
+        location: location || null,
+        price: price === '' ? null : Number(price),
+        notes: notes || null,
+        min_stock: minStock === '' ? null : Number(minStock),
+        target_stock: targetStock === '' ? null : Number(targetStock),
+        tags: parseTagsInput(tags),
       };
       onEditDetails(dataForEdit);
     }
@@ -184,10 +204,7 @@ export function InteractivePreview({
                   id="preview-expiry"
                   type="date"
                   value={expiryDate}
-                  onChange={(e) => {
-                      setExpiryDate(e.target.value);
-                      setUserManuallySetExpiry(true); // Marcar que el usuario cambió la fecha
-                  }}
+                  onChange={(e) => setExpiryDate(e.target.value)}
                   disabled={isSubmitting}
                   className="h-9"
                 />
@@ -218,6 +235,59 @@ export function InteractivePreview({
                   disabled={isSubmitting}
                   className="h-9"
                 />
+              </div>
+              <div>
+                <Label htmlFor="preview-notes" className="text-xs text-muted-foreground">Notas</Label>
+                <Textarea
+                  id="preview-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Agrega observaciones..."
+                  disabled={isSubmitting}
+                  className="min-h-[72px]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="preview-min-stock" className="text-xs text-muted-foreground">Stock mín.</Label>
+                  <Input
+                    id="preview-min-stock"
+                    type="number"
+                    value={minStock}
+                    onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Opcional"
+                    step="any"
+                    disabled={isSubmitting}
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="preview-target-stock" className="text-xs text-muted-foreground">Stock obj.</Label>
+                  <Input
+                    id="preview-target-stock"
+                    type="number"
+                    value={targetStock}
+                    onChange={(e) => setTargetStock(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Opcional"
+                    step="any"
+                    disabled={isSubmitting}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="preview-tags" className="text-xs text-muted-foreground">Etiquetas</Label>
+                <Input
+                  id="preview-tags"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="Ej: sin gluten, oferta"
+                  disabled={isSubmitting}
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Separa por comas para añadir múltiples etiquetas.
+                </p>
               </div>
             </div>
           </AccordionContent>

@@ -4,24 +4,54 @@
 
 "A comerla" es una aplicación web diseñada para ayudarte a planificar tus comidas semanales de forma fácil e intuitiva, gestionar tus recetas favoritas, controlar tu despensa y generar listas de compras inteligentes.
 
-## ✨ Características Principales (Actuales y Futuras)
+**Estado actual:** MVP avanzado - 8/9 módulos core implementados  
+**Próximo hito:** Beta privada (3 meses)
 
-*   **Planificador Semanal Visual:** Organiza desayunos, almuerzos y cenas para toda la semana.
-*   **Gestión de Recetas:** Guarda y organiza tus propias recetas. (Próximamente: Importación desde URL).
-*   **Gestión de Despensa:** Lleva un registro de los ingredientes que tienes en casa. (Funcionalidad básica actual).
-*   **Lista de Compras Inteligente:** Genera automáticamente lo que necesitas comprar. (Próximamente).
-*   **Perfil de Usuario:** Configura tus preferencias.
-*   **(Futuro) Sugerencias IA:** Recibe recomendaciones personalizadas.
+## ✨ Características Principales
 
-## 🚀 Visión y Roadmap
+### ✅ Implementadas
 
-Nuestra visión a largo plazo y los objetivos estratégicos del producto están detallados en nuestro documento de visión:
+*   **Planificador Semanal Visual:** Organiza desayunos, almuerzos y cenas con drag & drop
+*   **Gestión de Recetas:** Crea, edita y organiza tus recetas. Generación con IA (Google Gemini)
+*   **Gestión de Despensa:** Control completo de inventario con categorías, favoritos y búsqueda
+*   **Lista de Compras Inteligente:** Generación automática con integración de precios (BuscaPrecios, Precios Claros)
+*   **Perfil de Usuario:** Preferencias dietéticas, alergias, equipamiento
+*   **Sugerencias IA:** Recetas personalizadas basadas en tu despensa y preferencias
+*   **Análisis Nutricional:** Tracking de calorías y macronutrientes
+*   **Sistema de Plantillas:** Guarda y reutiliza planes semanales
 
-*   **[📄 Visión del Producto](./PRODUCT_VISION.md)**
+### 🚧 En Desarrollo
 
-El plan de desarrollo y las próximas funcionalidades se encuentran en nuestro roadmap:
+*   Importación de recetas desde URL
+*   Notificaciones in-app
+*   PWA (instalable)
+*   Optimizaciones de performance
 
-*   **[🗺️ Roadmap](./ROADMAP.md)**
+## 📚 Documentación
+
+### 🚀 Empezar Aquí
+
+*   **[⚡ Next Actions](./NEXT_ACTIONS.md)** - **START HERE** - Qué hacer ahora mismo
+*   **[✅ Quick Wins Checklist](./QUICK_WINS_CHECKLIST.md)** - Tareas de 2 semanas con alto impacto
+*   **[💻 Comandos Útiles](./COMANDOS.md)** - Referencia rápida de comandos
+
+### 📊 Estado y Planificación
+
+*   **[📊 Estado General](./estado-general-aplicaci-n.plan.md)** - Análisis completo del estado actual
+*   **[🎯 Plan de Optimización](./PLAN_OPTIMIZACION_COMPLETO.md)** - Roadmap detallado hacia producción (7 fases)
+*   **[📋 Resumen Ejecutivo](./RESUMEN_EJECUTIVO_PLAN.md)** - Plan de 3 meses para beta
+*   **[📚 Índice de Documentación](./INDICE_DOCUMENTACION.md)** - Navegación completa de docs
+
+### 👨‍💻 Para Desarrolladores
+
+*   **[📏 Guías de Código](./GUIDELINES.md)** - Convenciones y mejores prácticas
+*   **[🤝 Contribución](./CONTRIBUTING.md)** - Cómo contribuir al proyecto
+*   **[📝 Changelog](./CHANGELOG.md)** - Historial de cambios
+
+### 🎨 Visión y Estrategia
+
+*   **[📄 Visión del Producto](./PRODUCT_VISION.md)** - Objetivos estratégicos y público objetivo
+*   **[🗺️ Roadmap](./ROADMAP.md)** - Plan de desarrollo a largo plazo
 
 ## 🛠️ Pila Tecnológica
 
@@ -48,7 +78,11 @@ El plan de desarrollo y las próximas funcionalidades se encuentran en nuestro r
         ```env
         VITE_SUPABASE_URL=TU_SUPABASE_URL
         VITE_SUPABASE_ANON_KEY=TU_SUPABASE_ANON_KEY
+        VITE_POSTHOG_KEY=TU_CLAVE_POSTHOG # opcional para métricas
+        VITE_LAUNCHDARKLY_CLIENT_KEY=TU_CLIENT_SIDE_ID # opcional para flags
+        VITE_USE_MOCK_AUTH=true # habilita datos mock en dev/e2e
         ```
+    *   Si instrumentas el edge function, define en Supabase `POSTHOG_API_KEY`, `POSTHOG_HOST`, `VISION_STORAGE_BUCKET` y `VISION_STORAGE_TTL_DAYS`.
 4.  **Iniciar el servidor de desarrollo:**
     ```bash
     npm run dev

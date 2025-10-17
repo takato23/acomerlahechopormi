@@ -1,319 +1,507 @@
-import { getPlannedMeals } from '@/features/planning/planningService';
-import type { PlannedMeal } from '@/features/planning/types';
-import type { ShoppingListItem, RawIngredientInfo, AggregatedIngredient } from './types'; // Añadido AggregatedIngredient
 import { supabase } from '@/lib/supabaseClient';
-import { normalizeUnit, parseQuantity, convertUnits } from '@/lib/ingredientUtils'; // Añadido convertUnits (asumiendo que existe)
-import type { Database } from '@/lib/database.types'; // Importar tipos generados
+import { getPlannedMeals } from '@/features/planning/planningService';
+import { getRecipeById } from '@/features/recipes/services/recipeService';
+import type { PlannedMeal } from '@/features/planning/types';
+import type { ShoppingListItem, RawIngredientInfo, AggregatedIngredient } from './types';
+import {
+  normalizeUnit,
+  parseQuantity,
+  convertUnits,
+  isBasicPantryIngredient,
+  getDefaultUnitForIngredient,
+  isImpreciseUnit,
+} from '@/lib/ingredientUtils';
+import type { Database } from '@/lib/database.types';
+import { inferCategory } from './lib/categoryInference';
+import { handleError } from '@/lib/errorHandler';
+import { debugLogger } from '@/lib/utils';
 
-// --- Tipos Reales ---
-type RecipeIngredient = Database['public']['Tables']['recipe_ingredients']['Row'];
-type Recipe = Database['public']['Tables']['recipes']['Row'] & {
-    recipe_ingredients: RecipeIngredient[];
+const log = debugLogger('[shoppingListService]');
+
+const SHOPPING_LIST_TABLE = 'shopping_list_items';
+const PANTRY_TABLE = 'pantry_items';
+
+type DBShoppingListRow = Database['public']['Tables']['shopping_list_items']['Row'];
+type DBShoppingListInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
+type DBShoppingListUpdate = Database['public']['Tables']['shopping_list_items']['Update'];
+
+type PantryRow = Pick<Database['public']['Tables']['pantry_items']['Row'], 'quantity' | 'unit'> & {
+  ingredients:
+    | Database['public']['Tables']['ingredients']['Row']
+    | Database['public']['Tables']['ingredients']['Row'][]
+    | null;
 };
-type PantryItem = Database['public']['Tables']['pantry_items']['Row'];
-// --- Fin Tipos Reales ---
 
-// --- Constantes ---
-const BASIC_INGREDIENTS = [
-    'sal', 'pimienta negra molida', 'aceite de girasol', 'aceite de oliva', 'agua', 'azúcar', 'vinagre'
-].map(name => name.toLowerCase()); // Normalizar a minúsculas para comparación
+const resolveUnitForIngredient = (name: string, unit: string | null): string | null => {
+  const normalized = normalizeUnit(unit);
+  if (normalized && !isImpreciseUnit(normalized)) {
+    return normalized;
+  }
 
-const IMPRECISE_UNITS = [
-    'pizca', 'cucharadita', 'cdita', 'cucharada', 'cda', 'al gusto', 'un chorrito', 'unidad', 'unidades'
-].map(unit => normalizeUnit(unit)); // Normalizar unidades para comparación
+  const fallback = getDefaultUnitForIngredient(name);
+  if (!fallback) return null;
 
-/**
- * Obtiene los detalles de una receta por su ID.
- * Placeholder - Reemplazar con la importación real de recipeService.
- */
-// Nota: getRecipeById se asume que ahora devuelve la estructura correcta con ingredient_id, etc.
-// Si no, la consulta dentro de generateShoppingList debe ajustarse.
-// Por simplicidad, mantendremos la llamada a getRecipeById como está,
-// pero la consulta DENTRO de generateShoppingList se asegurará de traer los campos necesarios.
-async function getRecipeById(recipeId: string): Promise<Recipe | null> {
+  const normalizedFallback = normalizeUnit(fallback);
+  if (!normalizedFallback || isImpreciseUnit(normalizedFallback)) {
+    return null;
+  }
+
+  return normalizedFallback;
+};
+
+
+async function requireAuthUser() {
+  const {
+    data: { user },
+    error
+  } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!user) throw new Error('Usuario no autenticado');
+  return user;
+}
+
+function mapDbItemToUi(item: DBShoppingListRow): DBShoppingListRow {
+  return {
+    ...item,
+    is_purchased: item.is_purchased ?? false,
+    quantity: item.quantity ?? null,
+    unit: item.unit ?? null,
+    category_id: item.category_id ?? null,
+    category_label: item.category_label ?? null,
+    ingredient_id: item.ingredient_id ?? null,
+    ingredient_name: item.ingredient_name ?? null,
+    notes: item.notes ?? null
+  };
+}
+
+export async function getShoppingListItems(): Promise<DBShoppingListRow[]> {
+  const user = await requireAuthUser();
+  const { data, error } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .select('*')
+    .eq('user_id', user.id)
+    .order('is_purchased', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map(mapDbItemToUi);
+}
+
+export interface AddShoppingListItemInput {
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  is_purchased?: boolean;
+}
+
+export async function addShoppingListItem(input: AddShoppingListItemInput): Promise<DBShoppingListRow | null> {
+  const user = await requireAuthUser();
+
+  const payload: DBShoppingListInsert = {
+    user_id: user.id,
+    name: input.name.trim(),
+    quantity: input.quantity ?? null,
+    unit: input.unit ?? null,
+    is_purchased: input.is_purchased ?? false
+  };
+
+  const { data, error } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data ? mapDbItemToUi(data) : null;
+}
+
+export async function updateShoppingListItem(
+  itemId: string,
+  updates: DBShoppingListUpdate
+): Promise<DBShoppingListRow | null> {
+  const user = await requireAuthUser();
+  const payload: DBShoppingListUpdate = {
+    ...updates,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .update(payload)
+    .eq('id', itemId)
+    .eq('user_id', user.id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data ? mapDbItemToUi(data) : null;
+}
+
+export async function deleteShoppingListItem(itemId: string): Promise<void> {
+  const user = await requireAuthUser();
+  const { error } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .delete()
+    .eq('id', itemId)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+}
+
+export async function clearPurchasedItems(): Promise<void> {
+  const user = await requireAuthUser();
+  const { error } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .delete()
+    .eq('user_id', user.id)
+    .eq('is_purchased', true);
+
+  if (error) throw error;
+}
+
+export async function clearAllItems(): Promise<void> {
+  const user = await requireAuthUser();
+  const { error } = await supabase.from(SHOPPING_LIST_TABLE).delete().eq('user_id', user.id);
+  if (error) throw error;
+}
+
+async function fetchRecipesForMeals(meals: PlannedMeal[]) {
+  const recipeIds = [...new Set(meals.map((meal) => meal.recipe_id).filter((id): id is string => Boolean(id)))];
+  const recipes = await Promise.all(recipeIds.map((id) => getRecipeById(id)));
+  return recipeIds.reduce<Map<string, NonNullable<typeof recipes[number]>>>((acc, id, index) => {
+    const recipe = recipes[index];
+    if (recipe) {
+      acc.set(id, recipe);
+    }
+    return acc;
+  }, new Map());
+}
+
+function aggregateIngredients(rawIngredients: RawIngredientInfo[]): Map<string, AggregatedIngredient> {
+  const aggregated = new Map<string, AggregatedIngredient>();
+
+  rawIngredients.forEach((raw) => {
+    const originalName = raw.name?.trim();
+    if (!originalName) return;
+    if (isBasicPantryIngredient(originalName)) return;
+
+    const normalizedName = originalName.toLowerCase();
+    const quantityValue = parseQuantity(raw.quantity);
+    const resolvedUnit = resolveUnitForIngredient(originalName, raw.unit);
+    const existing = aggregated.get(normalizedName);
+
+    if (existing) {
+      if (quantityValue !== null) {
+        if (existing.totalQuantity !== null) {
+          if (existing.unit && resolvedUnit && existing.unit !== resolvedUnit) {
+            const converted = convertUnits(quantityValue, resolvedUnit, existing.unit);
+            if (converted !== null) {
+              existing.totalQuantity += converted;
+            } else {
+              existing.totalQuantity = null;
+              existing.unit = null;
+            }
+          } else {
+            const targetUnit = existing.unit ?? resolvedUnit;
+            if (!existing.unit && targetUnit) {
+              existing.unit = targetUnit;
+            }
+            existing.totalQuantity += quantityValue;
+          }
+        } else if (existing.unit && resolvedUnit && existing.unit !== resolvedUnit) {
+          // Ya es null, mantener inconsistencia capturada
+          existing.totalQuantity = null;
+        }
+      }
+
+      if (!existing.unit && resolvedUnit) {
+        existing.unit = resolvedUnit;
+      }
+
+      if (raw.recipeName && !existing.recipeSources.includes(raw.recipeName)) {
+        existing.recipeSources.push(raw.recipeName);
+      }
+      return;
+    }
+
+    aggregated.set(normalizedName, {
+      name: originalName,
+      totalQuantity: quantityValue,
+      unit: resolvedUnit,
+      recipeSources: raw.recipeName ? [raw.recipeName] : []
+    });
+  });
+
+  return aggregated;
+}
+
+async function fetchPantryStock(userId: string): Promise<Map<string, { quantity: number | null; unit: string | null }>> {
+  const { data, error } = await supabase
+    .from(PANTRY_TABLE)
+    .select('quantity, unit, ingredients ( name )')
+    .eq('user_id', userId);
+
+  if (error) {
+    handleError(error, {
+      component: 'shoppingListService',
+      action: 'fetchPantryStock',
+      severity: 'low',
+      userId
+    });
+    return new Map();
+  }
+
+  const stock = new Map<string, { quantity: number | null; unit: string | null }>();
+
+  (data as PantryRow[] | null)?.forEach((item) => {
+    const ingredientName = Array.isArray(item.ingredients)
+      ? item.ingredients[0]?.name?.trim()
+      : item.ingredients?.name?.trim();
+    if (!ingredientName) return;
+    if (isBasicPantryIngredient(ingredientName)) return;
+    const key = ingredientName.toLowerCase();
+    const normalizedUnit = resolveUnitForIngredient(ingredientName, item.unit);
+    const quantity = parseQuantity(item.quantity);
+    const existing = stock.get(key);
+
+    if (existing) {
+      if (existing.quantity !== null && quantity !== null) {
+        if (!existing.unit || !normalizedUnit || existing.unit === normalizedUnit) {
+          existing.quantity += quantity;
+          if (!existing.unit && normalizedUnit) {
+            existing.unit = normalizedUnit;
+          }
+        } else {
+          const converted = convertUnits(quantity, normalizedUnit, existing.unit);
+          if (converted !== null) {
+            existing.quantity += converted;
+          } else {
+            existing.quantity = null;
+            existing.unit = null;
+          }
+        }
+      } else {
+        existing.quantity = null;
+      }
+    } else {
+      stock.set(key, { quantity, unit: normalizedUnit });
+    }
+  });
+
+  return stock;
+}
+
+function computeFinalList(
+  aggregated: Map<string, AggregatedIngredient>,
+  pantryStock: Map<string, { quantity: number | null; unit: string | null }>
+): AggregatedIngredient[] {
+  const result: AggregatedIngredient[] = [];
+
+  aggregated.forEach((item, key) => {
+    const stock = pantryStock.get(key);
+    let missingQuantity = item.totalQuantity;
+
+    if (stock && missingQuantity !== null && stock.quantity !== null) {
+      if (!item.unit || !stock.unit || item.unit === stock.unit || item.unit === 'unidad') {
+        missingQuantity = Math.max(missingQuantity - stock.quantity, 0);
+      } else {
+        const converted = convertUnits(stock.quantity, stock.unit, item.unit);
+        if (converted !== null) {
+          missingQuantity = Math.max(missingQuantity - converted, 0);
+        }
+      }
+    }
+
+    if (missingQuantity === null || missingQuantity > 0) {
+      result.push({
+        name: item.name,
+        totalQuantity: missingQuantity,
+        unit: item.unit && !isImpreciseUnit(item.unit) ? item.unit : null,
+        recipeSources: item.recipeSources
+      });
+    }
+  });
+
+  return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+interface PersistableIngredient extends AggregatedIngredient {
+  categoryId: string | null;
+  categoryLabel: string | null;
+}
+
+const formatCategoryLabel = (categoryId: string): string => {
+  return categoryId
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+};
+
+async function enrichWithCategories(userId: string, items: AggregatedIngredient[]): Promise<PersistableIngredient[]> {
+  if (!items.length) {
+    return [];
+  }
+
+  const inferred = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const categoryId = await inferCategory(item.name);
+        return {
+          ...item,
+          categoryId,
+        };
+      } catch (error) {
+        handleError(error, {
+          component: 'shoppingListService',
+          action: 'inferCategory',
+          severity: 'low',
+          metadata: { ingredient: item.name },
+          userId,
+        });
+        return {
+          ...item,
+          categoryId: null,
+        };
+      }
+    })
+  );
+
+  const categoryIds = Array.from(new Set(inferred.map((item) => item.categoryId).filter(Boolean))) as string[];
+  const categoryLabels = new Map<string, string>();
+
+  if (categoryIds.length) {
     const { data, error } = await supabase
-        .from('recipes')
-        .select(`
-            *,
-            recipe_ingredients (
-                ingredient_id,
-                ingredient_name,
-                quantity,
-                unit
-            )
-        `)
-        .eq('id', recipeId)
-        .single();
+      .from('categories')
+      .select('id, name')
+      .in('id', categoryIds);
 
     if (error) {
-        console.error(`Error fetching recipe ${recipeId}:`, error);
-        return null;
+      handleError(error, {
+        component: 'shoppingListService',
+        action: 'fetchCategories',
+        severity: 'low',
+        metadata: { categoryIds },
+        userId,
+      });
+    } else {
+      (data ?? []).forEach((category) => {
+        if (category?.id) {
+          categoryLabels.set(category.id, category.name ?? formatCategoryLabel(category.id));
+        }
+      });
     }
-    // Asegurarse de que recipe_ingredients sea un array
-    if (data && !Array.isArray(data.recipe_ingredients)) {
-        data.recipe_ingredients = [];
-    }
-    return data as Recipe | null; // Castear al tipo correcto
+  }
+
+  return inferred.map((item) => ({
+    ...item,
+    categoryId: item.categoryId,
+    categoryLabel: item.categoryId ? categoryLabels.get(item.categoryId) ?? formatCategoryLabel(item.categoryId) : null,
+  }));
 }
 
+async function syncShoppingListWithDB(userId: string, items: PersistableIngredient[]) {
+  const { error: deleteError } = await supabase
+    .from(SHOPPING_LIST_TABLE)
+    .delete()
+    .eq('user_id', userId)
+    .eq('is_purchased', false);
 
-/**
- * Genera una lista de compras agregada basada en las comidas planificadas
- * para un rango de fechas específico.
- *
- * @param startDate Fecha de inicio (formato YYYY-MM-DD).
- * @param endDate Fecha de fin (formato YYYY-MM-DD).
- * @returns Una promesa que resuelve a un array de ShoppingListItem.
- * @throws Si ocurre un error irrecuperable durante la obtención de datos.
- */
-export async function generateShoppingList(startDate: string, endDate: string, userId: string): Promise<ShoppingListItem[]> {
-    console.log(`Generando lista de compras para ${startDate} a ${endDate} para usuario ${userId}`);
-
-    // 1. Obtener comidas planificadas
-    let plannedMeals: PlannedMeal[] = [];
-    try {
-        plannedMeals = await getPlannedMeals(startDate, endDate);
-        console.log(`Se encontraron ${plannedMeals.length} comidas planificadas.`);
-    } catch (error) {
-        console.error("Error obteniendo comidas planificadas:", error);
-        throw new Error("No se pudieron obtener las comidas planificadas.");
-    }
-
-    if (plannedMeals.length === 0) {
-        return []; // No hay nada que añadir a la lista
-    }
-
-    // 2. Obtener detalles de las recetas asociadas
-    const recipeIds = plannedMeals
-        .map(meal => meal.recipe_id)
-        .filter((id): id is string => !!id); // Filtrar IDs nulos/undefined
-
-    const uniqueRecipeIds = [...new Set(recipeIds)];
-    const recipePromises = uniqueRecipeIds.map(id => getRecipeById(id));
-    const recipeResults = await Promise.allSettled(recipePromises);
-
-    const recipesMap = new Map<string, Recipe>();
-    recipeResults.forEach((result, index) => {
-        if (result.status === 'fulfilled' && result.value) {
-            recipesMap.set(uniqueRecipeIds[index], result.value);
-        } else {
-            console.warn(`No se pudo cargar la receta con ID ${uniqueRecipeIds[index]}:`, result.status === 'rejected' ? result.reason : 'Resultado nulo');
-        }
+  if (deleteError) {
+    handleError(deleteError, {
+      component: 'shoppingListService',
+      action: 'clearPreviousList',
+      severity: 'medium',
+      userId,
     });
-    console.log(`Se cargaron ${recipesMap.size} recetas únicas.`);
+    throw new Error('No se pudo limpiar la lista de compras anterior.');
+  }
 
-    // 3. Extraer todos los ingredientes crudos
-    const allRawIngredients: RawIngredientInfo[] = [];
-    plannedMeals.forEach(meal => {
-        if (meal.recipe_id && recipesMap.has(meal.recipe_id)) {
-            const recipe = recipesMap.get(meal.recipe_id);
-            // Asegurarse de que recipe y recipe.recipe_ingredients existen y son arrays
-            if (recipe && Array.isArray(recipe.recipe_ingredients)) {
-                recipe.recipe_ingredients.forEach((ing: RecipeIngredient) => {
-                    // Usar ingredient_name si existe, si no el 'name' legado (si aplica)
-                    const ingredientName = ing.ingredient_name || (ing as any).name;
-                    if (ing.ingredient_id && ingredientName) { // Requiere ID y nombre
-                         allRawIngredients.push({
-                             ingredient_id: ing.ingredient_id, // Guardar ID
-                             name: ingredientName,
-                             quantity: ing.quantity,
-                             unit: ing.unit,
-                             recipeName: recipe.title || 'Receta sin nombre' // Usar title
-                         });
-                    } else {
-                         console.warn(`Ingrediente omitido por falta de ID o nombre: ${JSON.stringify(ing)} en receta ${recipe.id}`);
-                    }
-                });
-            }
-        } else if (meal.custom_meal_name) {
-            console.log(`Ignorando comida personalizada: ${meal.custom_meal_name}`);
-        }
+  if (!items.length) return;
+
+  const payloads: DBShoppingListInsert[] = items.map((item) => ({
+    user_id: userId,
+    name: item.name,
+    quantity: item.totalQuantity,
+    unit: item.unit,
+    is_purchased: false,
+    category_id: item.categoryId,
+    category_label: item.categoryLabel,
+    ingredient_name: item.name
+  }));
+
+  const { error: insertError } = await supabase.from(SHOPPING_LIST_TABLE).insert(payloads);
+  if (insertError) {
+    handleError(insertError, {
+      component: 'shoppingListService',
+      action: 'insertGeneratedList',
+      severity: 'medium',
+      userId,
+      metadata: { items: items.length }
     });
-    console.log(`Se extrajeron ${allRawIngredients.length} ingredientes crudos válidos en total.`);
-
-    // 4. Agrupar y sumar ingredientes
-    // 4. Agrupar y sumar ingredientes por ingredient_id
-    const aggregatedIngredients = new Map<string, AggregatedIngredient>();
-
-    allRawIngredients.forEach(rawIng => {
-        if (!rawIng.ingredient_id) return; // Saltar si no hay ID
-
-        const key = rawIng.ingredient_id;
-        const normalizedUnit = normalizeUnit(rawIng.unit);
-        const quantityValue = parseQuantity(rawIng.quantity);
-
-        let existingItem = aggregatedIngredients.get(key);
-
-        if (existingItem) {
-            // Intentar sumar cantidades
-            if (existingItem.totalQuantity !== null && quantityValue !== null) {
-                // Simplificación MVP: Solo sumar si las unidades son iguales o una es null/unidad
-                if (existingItem.unit === normalizedUnit || !existingItem.unit || !normalizedUnit || normalizedUnit === 'unidad') {
-                     existingItem.totalQuantity += quantityValue;
-                     // Si la unidad actual era null/unidad y la nueva no lo es, actualizarla
-                     if ((!existingItem.unit || existingItem.unit === 'unidad') && normalizedUnit && normalizedUnit !== 'unidad') {
-                         existingItem.unit = normalizedUnit;
-                     }
-                } else {
-                    // Unidades diferentes, intentar conversión básica (ej: g y kg)
-                    const convertedQuantity = convertUnits(quantityValue, normalizedUnit, existingItem.unit);
-                    if (convertedQuantity !== null) {
-                        existingItem.totalQuantity += convertedQuantity;
-                    } else {
-                        // No se pudo convertir, marcar cantidad como indeterminada
-                        console.warn(`No se pueden sumar unidades diferentes: ${existingItem.unit} y ${normalizedUnit} para ${existingItem.name}`);
-                        existingItem.totalQuantity = null; // O manejar de otra forma (ej. crear otra entrada)
-                    }
-                }
-            } else {
-                // Si alguna cantidad es null, el total es null
-                existingItem.totalQuantity = null;
-            }
-
-            // Añadir receta de origen si no está ya
-            if (rawIng.recipeName && !existingItem.recipeSources.includes(rawIng.recipeName)) {
-                existingItem.recipeSources.push(rawIng.recipeName);
-            }
-        } else {
-            // Crear nuevo ítem agregado
-            existingItem = {
-                ingredient_id: key,
-                name: rawIng.name.trim(), // Usar el nombre del primer ingrediente encontrado
-                totalQuantity: quantityValue,
-                unit: normalizedUnit, // Usar la unidad normalizada
-                recipeSources: rawIng.recipeName ? [rawIng.recipeName] : [],
-            };
-            aggregatedIngredients.set(key, existingItem);
-        }
-    });
-
-    console.log(`Se agregaron ${aggregatedIngredients.size} ingredientes únicos necesarios.`);
-
-    // 5. Filtrar ingredientes básicos y por unidades imprecisas (Ingredientes Clave)
-    const keyIngredients = new Map<string, AggregatedIngredient>();
-    aggregatedIngredients.forEach((item, key) => {
-        const nameLower = item.name.toLowerCase();
-        const unitLower = item.unit ? item.unit.toLowerCase() : 'unidad'; // Considerar null como 'unidad'
-
-        const isBasic = BASIC_INGREDIENTS.includes(nameLower);
-        const isImprecise = IMPRECISE_UNITS.includes(unitLower);
-
-        if (!isBasic && !isImprecise) {
-            keyIngredients.set(key, item);
-        } else {
-             console.log(`Filtrado: ${item.name} (Básico: ${isBasic}, Impreciso: ${isImprecise})`);
-        }
-    });
-    console.log(`Se identificaron ${keyIngredients.size} ingredientes clave.`);
-
-
-    // 6. Obtener items de la despensa
-    const { data: pantryItemsData, error: pantryError } = await supabase
-        .from('pantry_items')
-        .select('ingredient_id, quantity, unit')
-        .eq('user_id', userId);
-
-    if (pantryError) {
-        console.error("Error obteniendo items de la despensa:", pantryError);
-        throw new Error("No se pudieron obtener los items de la despensa.");
-    }
-
-    // 7. Agrupar items de la despensa por ingredient_id
-    const pantryStock = new Map<string, { quantity: number | null, unit: string | null }>();
-    // Definir un tipo local para los datos seleccionados de la despensa
-    type PantryStockItem = Pick<PantryItem, 'ingredient_id' | 'quantity' | 'unit'>;
-
-    (pantryItemsData as PantryStockItem[]).forEach((item) => { // Usar el tipo específico
-        if (!item.ingredient_id) return;
-
-        const key = item.ingredient_id;
-        const normalizedUnit = normalizeUnit(item.unit);
-        const quantityValue = parseQuantity(item.quantity);
-
-        let existingStock = pantryStock.get(key);
-
-        if (existingStock) {
-            if (existingStock.quantity !== null && quantityValue !== null) {
-                 // Simplificación MVP: Sumar solo si unidades coinciden o una es null/unidad
-                 if (existingStock.unit === normalizedUnit || !existingStock.unit || !normalizedUnit || normalizedUnit === 'unidad') {
-                    existingStock.quantity += quantityValue;
-                    if ((!existingStock.unit || existingStock.unit === 'unidad') && normalizedUnit && normalizedUnit !== 'unidad') {
-                        existingStock.unit = normalizedUnit;
-                    }
-                 } else {
-                     // Intentar conversión básica
-                     const convertedQuantity = convertUnits(quantityValue, normalizedUnit, existingStock.unit);
-                     if (convertedQuantity !== null) {
-                         existingStock.quantity += convertedQuantity;
-                     } else {
-                         console.warn(`No se pueden sumar unidades diferentes en despensa: ${existingStock.unit} y ${normalizedUnit} para ingrediente ${key}`);
-                         existingStock.quantity = null; // Marcar como indeterminado
-                     }
-                 }
-            } else {
-                existingStock.quantity = null;
-            }
-        } else {
-            pantryStock.set(key, { quantity: quantityValue, unit: normalizedUnit });
-        }
-    });
-    console.log(`Se agregaron ${pantryStock.size} ingredientes únicos de la despensa.`);
-
-    // 8. Calcular ingredientes faltantes y generar lista final
-    const finalShoppingList: ShoppingListItem[] = [];
-    keyIngredients.forEach((neededItem, key) => {
-        const stock = pantryStock.get(key);
-        let neededQuantity = neededItem.totalQuantity;
-        let stockQuantity = 0; // Asumir 0 si no está en despensa
-
-        if (stock && stock.quantity !== null && neededQuantity !== null) {
-            // Intentar comparar/restar cantidades (considerando unidades)
-            const stockInNeededUnit = convertUnits(stock.quantity, stock.unit, neededItem.unit);
-
-            if (stockInNeededUnit !== null) {
-                stockQuantity = stockInNeededUnit;
-            } else {
-                // No se pueden comparar unidades, asumir que se necesita todo
-                console.warn(`No se pueden comparar unidades para ${neededItem.name}: Necesario ${neededItem.unit}, Despensa ${stock.unit}. Añadiendo cantidad completa.`);
-                stockQuantity = 0; // Forzar compra
-                neededQuantity = neededItem.totalQuantity; // Asegurar que neededQuantity no sea null si la conversión falló
-            }
-        } else if (neededQuantity === null) {
-             // Si la cantidad necesaria es indeterminada (null), añadir a la lista sin cantidad
-             stockQuantity = 0; // No podemos restar de null
-        } else if (stock && stock.quantity === null) {
-            // Si el stock es indeterminado, necesitamos la cantidad calculada
-            stockQuantity = 0;
-        }
-        // Si neededQuantity sigue siendo null aquí, significa que no se pudo calcular la cantidad total necesaria.
-        // Lo añadimos a la lista sin cantidad específica.
-
-        const missingQuantity = neededQuantity !== null ? neededQuantity - stockQuantity : null;
-
-        // Añadir a la lista si falta cantidad (o si la cantidad necesaria es null)
-        if (missingQuantity === null || missingQuantity > 0) {
-            finalShoppingList.push({
-                id: neededItem.ingredient_id, // Usar ingredient_id como ID
-                ingredientName: neededItem.name,
-                quantity: missingQuantity, // Puede ser null
-                unit: neededItem.unit,
-                isChecked: false,
-                recipeSources: neededItem.recipeSources,
-            });
-        }
-    });
-
-    console.log(`Lista de compras final generada con ${finalShoppingList.length} ítems.`);
-
-    // Opcional: Ordenar la lista final
-    finalShoppingList.sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
-
-    return finalShoppingList;
+    throw new Error('No se pudieron guardar los nuevos ítems de la lista.');
+  }
 }
 
-// --- Funciones Opcionales (Si se persiste la lista) ---
+export async function generateShoppingList(
+  startDate: string,
+  endDate: string,
+  userId: string
+): Promise<ShoppingListItem[]> {
+  try {
+    log('Generating shopping list', { startDate, endDate, userId });
+    const meals = await getPlannedMeals(startDate, endDate);
+    if (!meals.length) {
+      return [];
+    }
 
-// async function saveShoppingList(items: ShoppingListItem[]): Promise<void> { ... }
-// async function getSavedShoppingList(): Promise<ShoppingListItem[]> { ... }
-// async function updateShoppingListItem(itemId: string, updates: Partial<ShoppingListItem>): Promise<void> { ... }
-// async function clearShoppingList(): Promise<void> { ... }
+    const recipes = await fetchRecipesForMeals(meals);
+    const rawIngredients: RawIngredientInfo[] = [];
+
+    meals.forEach((meal) => {
+      if (!meal.recipe_id) return;
+      const recipe = recipes.get(meal.recipe_id);
+      if (!recipe) return;
+
+      recipe.ingredients.forEach((ingredient) => {
+        const name = ingredient.ingredient_name?.trim();
+        if (!name) return;
+        rawIngredients.push({
+          name,
+          quantity: ingredient.quantity,
+          unit: ingredient.unit,
+          recipeName: recipe.title
+        });
+      });
+    });
+
+    if (!rawIngredients.length) {
+      return [];
+    }
+
+    const aggregated = aggregateIngredients(rawIngredients);
+    const pantryStock = await fetchPantryStock(userId);
+    const finalItems = computeFinalList(aggregated, pantryStock);
+    const categorizedItems = await enrichWithCategories(userId, finalItems);
+
+    await syncShoppingListWithDB(userId, categorizedItems);
+
+    return categorizedItems.map((item) => ({
+      id: item.name,
+      name: item.name,
+      quantity: item.totalQuantity,
+      unit: item.unit,
+      isChecked: false,
+      recipeSources: item.recipeSources
+    }));
+  } catch (error) {
+    handleError(error, {
+      component: 'shoppingListService',
+      action: 'generateShoppingList',
+      severity: 'medium',
+      metadata: { startDate, endDate },
+      userId,
+    });
+    throw error instanceof Error ? error : new Error('No se pudo generar la lista de compras.');
+  }
+}

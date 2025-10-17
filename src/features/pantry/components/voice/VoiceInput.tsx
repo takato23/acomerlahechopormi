@@ -40,7 +40,6 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   }, [isListening]);
 
-  console.log('VoiceInput - speechIsSupported:', speechIsSupported); // Log temporal
   if (!speechIsSupported) {
     return null;
   }

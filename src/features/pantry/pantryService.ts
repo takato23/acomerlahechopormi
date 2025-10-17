@@ -1,18 +1,29 @@
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
+import { handleError } from '@/lib/errorHandler';
 import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category } from './types';
 import { findOrCreateIngredient, normalizeIngredientName } from '../ingredients/ingredientService';
 import { inferCategory } from '../shopping-list/lib/categoryInference';
+import { MOCK_PANTRY_ITEMS } from '@/lib/mockData';
+
+// Función para detectar si usar datos mock
+const shouldUseMockData = () => {
+  return false; // Usar Supabase real
+};
 
 /**
  * Obtiene todos los items de la despensa para el usuario actual.
  */
 export const getPantryItems = async (): Promise<PantryItem[]> => {
+  if (shouldUseMockData()) {
+    return MOCK_PANTRY_ITEMS;
+  }
+
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) throw new Error("Usuario no autenticado");
 
   const { data, error } = await supabase
     .from('pantry_items')
-    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon)') // Especificar columnas y añadir nuevas
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
@@ -20,17 +31,28 @@ export const getPantryItems = async (): Promise<PantryItem[]> => {
 
   return (data || []).map(item => ({
     ...item,
+    // Convertir valores null a undefined para compatibilidad de tipos
+    ingredient_id: item.ingredient_id || null,
+    quantity: item.quantity || null,
+    unit: item.unit || null,
+    category_id: item.category_id || null,
+    expiry_date: item.expiry_date || null,
+    notes: item.notes || null,
+    location: item.location || null,
+    price: item.price || null,
+    min_stock: item.min_stock || null,
+    target_stock: item.target_stock || null,
     // Mapear datos de ingredientes y categorías explícitamente
     ingredient: item.ingredients ? {
-      id: item.ingredients.id, // Incluir ID si es necesario
+      id: item.ingredients.id,
       name: normalizeIngredientName(item.ingredients.name, item.quantity ?? 1),
-      image_url: item.ingredients.image_url // Añadir image_url
+      image_url: item.ingredients.image_url || null
     } : null,
     category: item.categories ? {
-      id: item.categories.id, // Incluir ID si es necesario
+      id: item.categories.id,
       name: item.categories.name,
-      icon_name: item.categories.icon_name // Añadir icon_name
-      // Añadir color si se usa en la UI directamente desde aquí
+      icon_name: item.categories.icon || null,
+      user_id: item.categories.user_id || undefined
     } : null,
     ingredients: undefined,
     categories: undefined
@@ -46,7 +68,7 @@ export const getCategories = async (): Promise<Category[]> => {
 
   const { data, error } = await supabase
     .from('categories')
-    .select('*, icon_name') // Añadir icon_name
+    .select('*, icon') // Añadir icon
     .or(orFilter)
     .order('is_default', { ascending: false })
     .order('order', { ascending: true });
@@ -75,7 +97,11 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
         finalCategoryId = inferredCategory;
       }
     } catch (error) {
-      console.error("Error during category inference:", error);
+      handleError(error, {
+        component: 'pantryService',
+        action: 'categoryInference',
+        severity: 'low'
+      });
     }
   }
 
@@ -89,8 +115,13 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
       category_id: finalCategoryId,
       expiry_date: itemData.expiry_date,
       notes: itemData.notes,
+      location: itemData.location,
+      price: itemData.price,
+      min_stock: itemData.min_stock,
+      target_stock: itemData.target_stock,
+      tags: itemData.tags ?? null,
     })
-    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon)') // Especificar columnas y añadir nuevas
     .single();
 
   if (error) throw error;
@@ -106,7 +137,7 @@ export const addPantryItem = async (itemData: CreatePantryItemData): Promise<Pan
     category: data.categories ? {
       id: data.categories.id,
       name: data.categories.name,
-      icon_name: data.categories.icon_name
+      icon_name: data.categories.icon
     } : null,
     ingredients: undefined,
     categories: undefined
@@ -128,7 +159,7 @@ export const updatePantryItem = async (itemId: string, updateData: UpdatePantryI
     })
     .eq('id', itemId)
     .eq('user_id', user.id)
-    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon)') // Especificar columnas y añadir nuevas
     .single();
 
   if (error) throw error;
@@ -144,7 +175,7 @@ export const updatePantryItem = async (itemId: string, updateData: UpdatePantryI
     category: data.categories ? {
       id: data.categories.id,
       name: data.categories.name,
-      icon_name: data.categories.icon_name
+      icon_name: data.categories.icon
     } : null,
     ingredients: undefined,
     categories: undefined
@@ -197,7 +228,7 @@ export const toggleFavoritePantryItem = async (itemId: string, isFavorite: boole
     .update({ is_favorite: isFavorite, updated_at: new Date().toISOString() })
     .eq('id', itemId)
     .eq('user_id', user.id)
-    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon_name)') // Especificar columnas y añadir nuevas
+    .select('*, is_favorite, ingredients(id, name, image_url), categories(id, name, icon)') // Especificar columnas y añadir nuevas
     .single();
 
   if (error) throw error;
@@ -213,7 +244,7 @@ export const toggleFavoritePantryItem = async (itemId: string, isFavorite: boole
     category: data.categories ? {
       id: data.categories.id,
       name: data.categories.name,
-      icon_name: data.categories.icon_name
+      icon_name: data.categories.icon
     } : null,
     ingredients: undefined,
     categories: undefined

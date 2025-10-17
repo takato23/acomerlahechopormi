@@ -10,6 +10,55 @@ interface KeywordInfo {
 const keywordCache = new Map<string, KeywordInfo[]>();
 let keywordsLoaded = false;
 
+// Función para detectar si usar datos mock
+const shouldUseMockData = () => {
+  return false; // Usar Supabase real
+};
+
+// Datos mock de keywords para categorías
+const MOCK_KEYWORDS = [
+  // Carnes
+  { keyword: 'pollo', category_id: 'carnes', priority: 10 },
+  { keyword: 'carne', category_id: 'carnes', priority: 10 },
+  { keyword: 'res', category_id: 'carnes', priority: 9 },
+  { keyword: 'cerdo', category_id: 'carnes', priority: 9 },
+  { keyword: 'ternera', category_id: 'carnes', priority: 8 },
+  { keyword: 'cordero', category_id: 'carnes', priority: 8 },
+
+  // Pescados y mariscos
+  { keyword: 'pescado', category_id: 'pescados', priority: 10 },
+  { keyword: 'salmón', category_id: 'pescados', priority: 9 },
+  { keyword: 'atún', category_id: 'pescados', priority: 9 },
+  { keyword: 'merluza', category_id: 'pescados', priority: 8 },
+  { keyword: 'gambas', category_id: 'pescados', priority: 8 },
+  { keyword: 'mejillones', category_id: 'pescados', priority: 7 },
+
+  // Verduras
+  { keyword: 'lechuga', category_id: 'verduras', priority: 10 },
+  { keyword: 'tomate', category_id: 'verduras', priority: 10 },
+  { keyword: 'cebolla', category_id: 'verduras', priority: 9 },
+  { keyword: 'zanahoria', category_id: 'verduras', priority: 9 },
+  { keyword: 'pimiento', category_id: 'verduras', priority: 8 },
+  { keyword: 'calabacín', category_id: 'verduras', priority: 8 },
+
+  // Frutas
+  { keyword: 'manzana', category_id: 'frutas', priority: 10 },
+  { keyword: 'plátano', category_id: 'frutas', priority: 10 },
+  { keyword: 'naranja', category_id: 'frutas', priority: 9 },
+  { keyword: 'pera', category_id: 'frutas', priority: 9 },
+
+  // Lácteos
+  { keyword: 'leche', category_id: 'lacteos', priority: 10 },
+  { keyword: 'queso', category_id: 'lacteos', priority: 10 },
+  { keyword: 'yogur', category_id: 'lacteos', priority: 9 },
+  { keyword: 'mantequilla', category_id: 'lacteos', priority: 8 },
+
+  // Panadería
+  { keyword: 'pan', category_id: 'panaderia', priority: 10 },
+  { keyword: 'bollería', category_id: 'panaderia', priority: 8 },
+  { keyword: 'croissant', category_id: 'panaderia', priority: 7 },
+];
+
 /**
  * Carga las palabras clave desde la base de datos.
  */
@@ -29,9 +78,11 @@ async function loadKeywords(): Promise<void> {
     if (error) throw error;
     if (!data?.length) throw new Error('No keywords found');
 
+    const dataToProcess = data;
+
     keywordCache.clear();
 
-    for (const { keyword, category_id, priority } of data) {
+    for (const { keyword, category_id, priority } of dataToProcess) {
       const normalizedKeyword = keyword.toLowerCase();
       const existing = keywordCache.get(normalizedKeyword) || [];
       existing.push({ categoryId: category_id, priority });

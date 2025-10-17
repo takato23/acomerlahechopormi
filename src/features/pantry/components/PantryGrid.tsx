@@ -9,7 +9,7 @@ interface PantryGridProps {
   isSelectionMode: boolean;
   selectedItems: Set<string>;
   onSelectItem: (itemId: string) => void;
-  onToggleFavorite: (itemId: string, currentState: boolean) => void;
+  onToggleFavorite: (itemId: string) => void;
 }
 
 const PantryGrid: React.FC<PantryGridProps> = ({
@@ -21,11 +21,6 @@ const PantryGrid: React.FC<PantryGridProps> = ({
   onSelectItem,
   onToggleFavorite
 }) => {
-  console.log('[PantryGrid] Received onToggleFavorite:', {
-    type: typeof onToggleFavorite,
-    isFunction: typeof onToggleFavorite === 'function'
-  });
-
   if (!items || items.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground" id="pantry-empty-state">
@@ -35,8 +30,8 @@ const PantryGrid: React.FC<PantryGridProps> = ({
   }
 
   return (
-    <div 
-      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1"
+    <div
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 p-1"
       data-testid="pantry-grid"
     >
       {items.map((item) => (

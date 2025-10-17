@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { PantryItem } from '../types'; // Asegúrate que PantryItem esté definido correctamente en este path
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, CalendarClock } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils'; // Asegúrate que cn esté disponible y configurado
 import { differenceInDays, isPast, parseISO, isValid } from 'date-fns'; // Usando date-fns para manejo de fechas
 
@@ -16,39 +16,102 @@ const PantryAccordionItemRow: React.FC<PantryAccordionItemRowProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparar solo fechas
+  // Procesar información de vencimiento
+  const expiryInfo = useMemo(() => {
+    if (!item.expiry_date) return null;
 
-  let expiryDate: Date | null = null;
-  let isExpired = false;
-  let isNearExpiry = false;
-  let daysUntilExpiry: number | null = null;
-  let displayDate: string | null = null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  if (item.expiry_date) {
     try {
-      // Intentar parsear la fecha. Asumir formato ISO 8601 o un objeto Date.
       const parsedDate = typeof item.expiry_date === 'string' ? parseISO(item.expiry_date) : item.expiry_date;
+      if (!(parsedDate instanceof Date) || !isValid(parsedDate)) return null;
 
-      // Validar si la fecha parseada es válida
-      if (parsedDate instanceof Date && isValid(parsedDate)) {
-          expiryDate = new Date(parsedDate); // Crear nueva instancia para evitar mutaciones
-          expiryDate.setHours(0, 0, 0, 0); // Normalizar a medianoche
-          displayDate = expiryDate.toLocaleDateString(); // Formatear para mostrar
+      const expiryDate = new Date(parsedDate);
+      expiryDate.setHours(0, 0, 0, 0);
 
-          isExpired = isPast(expiryDate);
-          daysUntilExpiry = differenceInDays(expiryDate, today);
-          // Considerar "near expiry" si faltan 3 días o menos y no está vencido
-          isNearExpiry = !isExpired && daysUntilExpiry !== null && daysUntilExpiry <= 3;
+      const isExpired = isPast(expiryDate);
+      const daysUntilExpiry = differenceInDays(expiryDate, today);
+
+      let status: 'expired' | 'urgent' | 'warning' | 'good' = 'good';
+      let message = '';
+
+      if (isExpired) {
+        status = 'expired';
+        message = 'Vencido';
+      } else if (daysUntilExpiry <= 1) {
+        status = 'urgent';
+        message = `Vence ${daysUntilExpiry === 0 ? 'hoy' : 'mañana'}`;
+      } else if (daysUntilExpiry <= 3) {
+        status = 'warning';
+        message = `Vence en ${daysUntilExpiry} días`;
       } else {
-          console.warn(`Invalid date format or value for item ${item.id}: ${item.expiry_date}`);
-          // No establecer expiryDate si no es válida
+        status = 'good';
+        message = expiryDate.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short'
+        });
       }
-    } catch (error) {
-        console.error(`Error processing date for item ${item.id}: ${item.expiry_date}`, error);
-        // No establecer expiryDate en caso de error
+
+      return { status, message };
+    } catch {
+      return null;
     }
-  }
+  }, [item.expiry_date]);
+
+  // Componente visual para el estado de vencimiento
+  const ExpiryIndicator = useMemo(() => {
+    if (!expiryInfo) return null;
+
+    const { status, message } = expiryInfo;
+
+    const getStatusConfig = () => {
+      switch (status) {
+        case 'expired':
+          return {
+            bgColor: 'bg-red-100 dark:bg-red-900/20',
+            textColor: 'text-red-700 dark:text-red-400',
+            icon: AlertTriangle,
+            iconColor: 'text-red-500'
+          };
+        case 'urgent':
+          return {
+            bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+            textColor: 'text-orange-700 dark:text-orange-400',
+            icon: AlertTriangle,
+            iconColor: 'text-orange-500'
+          };
+        case 'warning':
+          return {
+            bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
+            textColor: 'text-yellow-700 dark:text-yellow-400',
+            icon: AlertTriangle,
+            iconColor: 'text-yellow-500'
+          };
+        case 'good':
+          return {
+            bgColor: 'bg-green-100 dark:bg-green-900/20',
+            textColor: 'text-green-700 dark:text-green-400',
+            icon: CheckCircle,
+            iconColor: 'text-green-500'
+          };
+      }
+    };
+
+    const config = getStatusConfig();
+    const Icon = config.icon;
+
+    return (
+      <div className={cn(
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+        config.bgColor,
+        config.textColor
+      )}>
+        <Icon className={cn('h-3 w-3', config.iconColor)} />
+        {message}
+      </div>
+    );
+  }, [expiryInfo]);
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el clic se propague al contenedor padre (ej. acordeón)
@@ -67,23 +130,11 @@ const PantryAccordionItemRow: React.FC<PantryAccordionItemRowProps> = ({
         <span className="text-sm font-medium truncate w-full" title={item.ingredient?.name ?? 'Ingrediente desconocido'}>
           {item.ingredient?.name ?? 'Ingrediente desconocido'}
         </span>
-        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground mt-0.5"> {/* flex-wrap para fechas largas */}
-          <span>
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs mt-0.5"> {/* flex-wrap para elementos largos */}
+          <span className="text-muted-foreground">
             {item.quantity} {item.unit}
           </span>
-          {displayDate && (
-            <span
-              className={cn(
-                'flex items-center gap-1 whitespace-nowrap', // Evitar salto de línea en fecha
-                { 'text-destructive font-medium': isExpired },
-                { 'text-yellow-600 dark:text-yellow-500 font-medium': isNearExpiry }
-              )}
-              title={`Vence: ${displayDate}${isExpired ? ' (Vencido)' : isNearExpiry ? ` (Vence en ${daysUntilExpiry} días)` : ''}`}
-            >
-              <CalendarClock className="h-3 w-3 flex-shrink-0" /> {/* Evitar que el icono se encoja */}
-              {isExpired ? 'Vencido' : displayDate}
-            </span>
-          )}
+          {ExpiryIndicator}
         </div>
       </div>
 

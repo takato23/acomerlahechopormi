@@ -11,12 +11,9 @@ jest.mock('@/features/pantry/pantryService', () => ({
   addPantryItem: jest.fn(),
 }));
 
-jest.mock('sonner', () => ({
-  toast: {
-    success: jest.fn(),
-    error: jest.fn(),
-    info: jest.fn(),
-  },
+jest.mock('@/lib/notifications', () => ({
+  notifySuccess: jest.fn(),
+  notifyError: jest.fn(),
 }));
 
 jest.mock('@/features/pantry/components/InteractivePreview', () => ({
@@ -34,7 +31,7 @@ jest.mock('@/components/ui/Spinner', () => ({
 }));
 
 import { parsePantryInput } from '@/features/pantry/lib/pantryParser';
-import { toast } from 'sonner';
+import { notifyError, notifySuccess } from '@/lib/notifications';
 
 const mockCategories = [{ id: 'meat', name: 'Carnes y Pescados' }];
 
@@ -102,7 +99,6 @@ describe('UnifiedPantryInput', () => {
       expect(parsePantryInput).toHaveBeenCalledWith('2 kg harina');
       expect(screen.getByTestId('interactive-preview')).toBeInTheDocument();
     });
-    expect(toast.info).toHaveBeenCalled();
   });
 
   test('calls parsePantryInput and shows error toast on add button click with invalid input', async () => {
@@ -122,7 +118,7 @@ describe('UnifiedPantryInput', () => {
     await waitFor(() => {
       expect(parsePantryInput).toHaveBeenCalledWith('error input');
       expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
-      expect(toast.error).toHaveBeenCalledWith('No se pudo entender la entrada.');
+      expect(notifyError).toHaveBeenCalledWith('No pudimos entender la entrada.');
     });
   });
 
@@ -144,7 +140,9 @@ describe('UnifiedPantryInput', () => {
     const cancelButton = screen.getByRole('button', { name: /Cancel/i });
     fireEvent.click(cancelButton);
 
-    expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
+    });
   });
 
   test('calls onConfirm and onItemAdded when confirm button inside preview is clicked', async () => {
@@ -167,9 +165,9 @@ describe('UnifiedPantryInput', () => {
 
     await waitFor(() => {
       expect(mockOnItemAdded).toHaveBeenCalled();
-      expect(toast.success).toHaveBeenCalledWith('"Mock Item" añadido!');
+      expect(notifySuccess).toHaveBeenCalledWith('Agregamos "Mock Item" a tu despensa.');
+      expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
     expect(input).toHaveValue('');
   });
 
@@ -193,8 +191,8 @@ describe('UnifiedPantryInput', () => {
 
     await waitFor(() => {
       expect(mockOnEditRequest).toHaveBeenCalledWith({ ingredient_name: 'Mock Item' });
+      expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('interactive-preview')).not.toBeInTheDocument();
     expect(input).toHaveValue('');
   });
 });

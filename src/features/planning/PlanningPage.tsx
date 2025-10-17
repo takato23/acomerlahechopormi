@@ -1,563 +1,759 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/Spinner';
-import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
-import { AutocompleteConfigDialog, AutocompleteConfig } from './components/AutocompleteConfigDialog'; // Importar AutocompleteConfig
-import { PlannedMealWithRecipe } from './components/MealCard';
-import type { Recipe } from '@/types/recipeTypes';
-// Importar stores
-import { usePlanningStore, AutocompleteMode } from '@/stores/planningStore';
-import { Calendar, Copy, Eraser } from 'lucide-react';
-import { useRecipeStore } from '@/stores/recipeStore';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { generateRecipesFromPantry, GenerateRecipesResult } from '../recipes/generationService';
-import { getMealAlternatives } from '../suggestions/suggestionService';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { addWeeks, endOfWeek, format, startOfWeek } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
+import { usePlanningStore } from '@/stores/planningStore';
 import { getUserProfile } from '@/features/user/userService';
-import type { UserProfile } from '@/features/user/userTypes';
-import { ListPlus } from 'lucide-react';
-import { Sparkles, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isToday } from 'date-fns';
-import { MealFormModal } from './components/MealFormModal';
-import { WeekDaySelector } from './components/WeekDaySelector';
-import { PlanningDayView } from './components/PlanningDayView';
-import { MealCard } from './components/MealCard';
-import { useShoppingListStore } from '@/stores/shoppingListStore';
-import { generateShoppingList } from '@/features/shopping-list/shoppingListService';
+import { usePlanningPantrySync } from '@/hooks/usePlanningPantrySync';
+import { notifyError, notifyInfo, notifySuccess } from '@/lib/notifications';
+import { DayView } from './components/DayView';
+import MobileDayView from './components/MobileDayView';
+import { NutritionalDashboard } from './components/NutritionalDashboard';
+import { AddMealModal } from './components/AddMealModal';
+import { useShoppingListIntegration } from './hooks/useShoppingListIntegration';
+import type { GenerationRequest, MealType, PlannedMeal } from './types';
+import { AlternativePreviewModal } from './components/AlternativePreviewModal';
+import { VisionUploadCollapsible } from './components/VisionUploadCollapsible';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import useBreakpoint from '@/hooks/useBreakpoint';
-import { toast } from 'sonner';
+import { AlertTriangle, BarChart3, ChefHat, ChevronLeft, ChevronRight, Settings, Sparkles, CalendarDays, Plus, PanelLeft, PanelLeftOpen } from 'lucide-react';
+import type { VisionInsightNormalized } from '@/types/vision';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { PlanningSkeleton } from '@/components/common/PlanningSkeleton';
+import { TemplatePanel } from './components/TemplatePanel';
+import PlanningStatsDialog from './components/PlanningStatsDialog';
+import { GenerationConfigModal } from './components/GenerationConfigModal';
+import { WeekPlannerGrid } from './components/WeekPlannerGrid';
+import { InsightsDock } from './components/InsightsDock';
 
-const getWeekInterval = (date: Date): { start: Date; end: Date } => {
-  const start = startOfWeek(date, { weekStartsOn: 1 });
-  const end = endOfWeek(date, { weekStartsOn: 1 });
-  return { start, end };
-};
+interface MealModalState {
+  open: boolean;
+  date: Date;
+  mealType: MealType;
+  mode: 'create' | 'edit';
+  mealId?: string;
+  initialName?: string;
+  prepTime?: number;
+  cookTime?: number;
+  difficulty?: 'Fácil' | 'Medio' | 'Difícil';
+  notes?: string;
+}
 
-const PlanningPage: React.FC = (): JSX.Element => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
-  const [editingMeal, setEditingMeal] = useState<PlannedMealWithRecipe | null>(null);
-  const [isCopyingDay, setIsCopyingDay] = useState(false);
-  const [showAutocompleteConfig, setShowAutocompleteConfig] = useState(false);
-  const [isGeneratingList, setIsGeneratingList] = useState(false);
+interface ManualMealPayload {
+  date: string;
+  mealType: MealType;
+  name: string;
+  mode: 'create' | 'edit';
+  mealId?: string;
+  prepTime?: number;
+  cookTime?: number;
+  difficulty?: 'Fácil' | 'Medio' | 'Difícil';
+  notes?: string;
+}
 
-  // Hooks de autenticación y responsive
+
+function PlanningPage() {
   const { user } = useAuth();
-  const breakpoint = useBreakpoint();
-  const isDesktop = breakpoint !== 'mobile';
+  const [referenceDate, setReferenceDate] = useState(new Date());
+  const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [addMealModal, setAddMealModal] = useState<MealModalState>(() => ({
+    open: false,
+    date: new Date(),
+    mealType: 'Almuerzo',
+    mode: 'create',
+    initialName: '',
+    prepTime: undefined,
+    cookTime: undefined,
+    difficulty: undefined,
+    notes: '',
+  }));
+  const { addMissingIngredients } = useShoppingListIntegration();
 
-  // Obtener estado y acciones del store de planificación
-  const {
-    plannedMeals,
-    isLoading,
-    error,
-    loadPlannedMeals,
-    addPlannedMeal,
-    updatePlannedMeal,
-    deletePlannedMeal,
-    setCopiedMeal,
-    setCopiedDayMeals,
-    pasteCopiedMeal,
-    pasteCopiedDayMeals,
-    copiedMeal,
-    copiedDayMeals,
-    clearWeek
-  } = usePlanningStore();
+  const [showTemplatePanel, setShowTemplatePanel] = useState(false);
+  const [showStatsDialog, setShowStatsDialog] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Usar el store para las recetas
-  const { recipes: userRecipes, isLoading: isLoadingRecipes, fetchRecipes } = useRecipeStore();
+  // Detectar si es mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
 
-  const { start: weekStart, end: weekEnd } = getWeekInterval(currentDate);
-  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-  const mealTypes: MealType[] = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'];
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  // Agrupar comidas por día y asegurar que los campos requeridos estén presentes
-  const mealsByDay = useMemo(() => {
-    const grouped: { [date: string]: { [key in MealType]?: PlannedMealWithRecipe[] } } = {};
-    plannedMeals.forEach(meal => {
-      const dateStr = meal.plan_date;
-      if (!grouped[dateStr]) grouped[dateStr] = {};
-      if (!grouped[dateStr][meal.meal_type]) grouped[dateStr][meal.meal_type] = [];
-      
-      // Convertir meal a PlannedMealWithRecipe asegurando que todos los campos necesarios estén presentes
-      const mealWithRecipe: PlannedMealWithRecipe = {
-        ...meal,
-        recipes: meal.recipes ? {
-          id: meal.recipes.id,
-          title: meal.recipes.title,
-          description: meal.recipes.description || null,
-          image_url: meal.recipes.image_url || null
-        } : null
-      };
-      
-      grouped[dateStr][meal.meal_type]!.push(mealWithRecipe);
-    });
-    return grouped;
+  // Use individual selectors to avoid caching issues
+  const ui = usePlanningStore((state) => state.ui);
+  const plannedMeals = usePlanningStore((state) => state.plannedMeals);
+  const error = usePlanningStore((state) => state.error);
+  const nutritionalGoals = usePlanningStore((state) => state.nutritionalGoals);
+  const currentRange = usePlanningStore((state) => state.currentRange);
+  const preview = usePlanningStore((state) => state.preview);
+  const aiStatus = usePlanningStore((state) => state.aiStatus);
+  const isLoading = usePlanningStore((state) => state.isLoading);
+  const weeklyReport = usePlanningStore((state) => state.weeklyReport);
+
+  // Get functions
+  const loadWeek = usePlanningStore((state) => state.loadWeek);
+  const syncWithPantry = usePlanningStore((state) => state.syncWithPantry);
+  const syncWithRecipes = usePlanningStore((state) => state.syncWithRecipes);
+  const setUserProfile = usePlanningStore((state) => state.setUserProfile);
+  const addMeal = usePlanningStore((state) => state.addMeal);
+  const updateMeal = usePlanningStore((state) => state.updateMeal);
+  const deleteMeal = usePlanningStore((state) => state.deleteMeal);
+  const markMealExecuted = usePlanningStore((state) => state.markMealExecuted);
+  const markMealSkipped = usePlanningStore((state) => state.markMealSkipped);
+  const applyVisionInsight = usePlanningStore((state) => state.applyVisionInsight);
+  const generateAlternativePreview = usePlanningStore((state) => state.generateAlternativePreview);
+  const confirmAlternativePreview = usePlanningStore((state) => state.confirmAlternativePreview);
+  const cancelAlternativePreview = usePlanningStore((state) => state.cancelAlternativePreview);
+  const applyTemplate = usePlanningStore((state) => state.applyTemplate);
+  const loadTemplates = usePlanningStore((state) => state.loadTemplates);
+  const generateCustomMeals = usePlanningStore((state) => state.generateCustomMeals);
+  const generateStatsStore = usePlanningStore((state) => state.generateStats);
+  const generateWeeklyReportStore = usePlanningStore((state) => state.generateWeeklyReport);
+  const estimatedWeeklyCost = usePlanningStore((state) => state.estimatedWeeklyCost());
+  const goalProgress = usePlanningStore((state) => state.goalProgress());
+  const setSelectedDateStore = usePlanningStore((state) => state.setSelectedDate);
+
+  const aiBannerMessage = aiStatus.hasKey
+    ? aiStatus.source === 'user'
+      ? 'Las propuestas usan IA (Gemini) con tu clave personal.'
+      : 'Las propuestas usan IA (Gemini) con la clave del equipo como fallback.'
+    : 'Las propuestas usan IA (Gemini). Cargá tu clave en Perfil > Preferencias para habilitar la generación.';
+
+  const selectedDate = ui.selectedDate ?? referenceDate;
+
+  const weeklySummary = useMemo(() => {
+    const total = plannedMeals.length;
+    const executed = plannedMeals.filter((meal) => meal.status === 'executed').length;
+    const missing = plannedMeals.reduce(
+      (acc, meal) => acc + (meal.ingredient_status?.filter((item) => !item.available).length ?? 0),
+      0,
+    );
+    const calories = plannedMeals.reduce(
+      (acc, meal) => acc + (meal.nutritional_info?.calories ?? 0),
+      0,
+    );
+
+    return {
+      total,
+      executed,
+      pending: Math.max(total - executed, 0),
+      missing,
+      calories,
+      completion: total ? Math.round((executed / total) * 100) : 0,
+    };
   }, [plannedMeals]);
 
-  // Resto del código sin cambios...
-  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-  const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+  // Sincronización automática con pantry
+  usePlanningPantrySync();
 
-  const loadAndSetPlannedMeals = useMemo(() => {
-    return () => {
-      console.log(`[PlanningPage] Loading meals for week: ${weekStartStr} - ${weekEndStr}`);
-      loadPlannedMeals(weekStartStr, weekEndStr);
-    };
-  }, [weekStartStr, weekEndStr]); // Solo se recrea cuando cambia la semana
+  const handleAddMealRequest = (date?: Date, mealType: MealType = 'Almuerzo') => {
+    setAddMealModal({
+      open: true,
+      date: date ?? referenceDate,
+      mealType,
+      mode: 'create',
+      mealId: undefined,
+      initialName: '',
+    });
+  };
 
-  useEffect(() => {
-    loadAndSetPlannedMeals();
-  }, [loadAndSetPlannedMeals]);
+  const handleEditMeal = (meal: PlannedMeal) => {
+    setAddMealModal({
+      open: true,
+      date: new Date(`${meal.plan_date}T00:00:00`),
+      mealType: meal.meal_type,
+      mode: 'edit',
+      mealId: meal.id,
+      initialName: meal.custom_title ?? meal.recipes?.title ?? '',
+      prepTime: meal.prep_time_minutes,
+      cookTime: meal.cook_time_minutes,
+      difficulty: meal.difficulty as 'Fácil' | 'Medio' | 'Difícil',
+      notes: meal.notes || undefined,
+    });
+  };
 
-  useEffect(() => {
-    if (user?.id && userRecipes.length === 0 && !isLoadingRecipes) {
-      console.log("[PlanningPage] Fetching user recipes...");
-      fetchRecipes({ userId: user.id });
-    }
-  }, [user?.id, userRecipes.length, isLoadingRecipes, fetchRecipes]);
+  const handleConfirmAddMeal = async ({ date, mealType, name, mode, mealId, prepTime, cookTime, difficulty, notes }: ManualMealPayload): Promise<boolean> => {
+    if (mode === 'edit' && mealId) {
+      const existingMeal = plannedMeals.find((item) => item.id === mealId);
+      if (!existingMeal) {
+        notifyError('No encontramos la comida que querés editar');
+        return false;
+      }
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      if (user) {
-        try {
-          const profile = await getUserProfile(user.id);
-          setUserProfile(profile);
-        } catch (profileError) {
-          console.error("Error loading user profile:", profileError);
+      try {
+        const updated = await updateMeal(mealId, {
+          plan_date: date,
+          meal_type: mealType,
+          recipe_id: existingMeal.recipe_id ?? null,
+          custom_title: existingMeal.recipe_id ? undefined : name,
+          notes: notes || existingMeal.notes || undefined,
+          status: existingMeal.status,
+          difficulty: difficulty as any || existingMeal.difficulty,
+          prep_time_minutes: prepTime ?? existingMeal.prep_time_minutes,
+          cook_time_minutes: cookTime ?? existingMeal.cook_time_minutes,
+          nutritional_info: existingMeal.nutritional_info,
+        });
+
+        if (updated) {
+          notifySuccess('Actualizamos la comida en tu plan');
+          return true;
         }
+
+        notifyError('No pudimos actualizar la comida');
+        return false;
+      } catch (error) {
+        console.error('[PlanningPage] Error editando comida', error);
+        notifyError('No pudimos actualizar la comida');
+        return false;
       }
-    };
-    loadProfile();
-  }, [user]);
+    }
 
-  const goToPreviousWeek = () => {
-    const newDate = subDays(currentDate, 7);
-    setCurrentDate(newDate);
-    const today = new Date();
-    const startOfNewWeek = startOfWeek(newDate, { weekStartsOn: 1 });
-    setSelectedDate(startOfNewWeek < today ? startOfNewWeek : (isToday(startOfNewWeek) ? today : startOfNewWeek));
-    setIsCopyingDay(false); // Limpiar estado de copiado al cambiar de semana
-    setCopiedDayMeals(null);
-  };
-
-  const goToNextWeek = () => {
-    const newDate = addDays(currentDate, 7);
-    setCurrentDate(newDate);
-    setSelectedDate(startOfWeek(newDate, { weekStartsOn: 1 }));
-    setIsCopyingDay(false); // Limpiar estado de copiado al cambiar de semana
-    setCopiedDayMeals(null);
-  };
-
-  const handleOpenAddModal = (date: Date, mealType: MealType) => {
-    setSelectedDate(date);
-    setSelectedMealType(mealType);
-    setEditingMeal(null);
-    setShowModal(true);
-  };
-
-  const handleOpenEditModal = (meal: PlannedMealWithRecipe) => {
-    const mealDate = new Date(meal.plan_date + 'T00:00:00');
-    setSelectedDate(mealDate);
-    setSelectedMealType(meal.meal_type);
-    setEditingMeal(meal);
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingMeal(null);
-    setSelectedMealType(null);
-  };
-
-  const handleSaveMeal = async (data: UpsertPlannedMealData, mealId?: string) => {
     try {
-      let savedMeal: PlannedMeal | null;
-      
-      if (mealId) {
-        savedMeal = await updatePlannedMeal(mealId, data);
-      } else {
-        savedMeal = await addPlannedMeal(data);
-      }
+      const created = await addMeal({
+        plan_date: date,
+        meal_type: mealType,
+        custom_title: name,
+        status: 'confirmed',
+        prep_time_minutes: prepTime,
+        cook_time_minutes: cookTime,
+        difficulty: difficulty as any,
+        notes: notes,
+      });
 
-      if (savedMeal) {
-        handleCloseModal();
-        toast.success(`Comida ${mealId ? 'actualizada' : 'añadida'} con éxito`);
-      } else {
-        toast.error(`No se pudo ${mealId ? 'actualizar' : 'añadir'} la comida.`);
+      if (created) {
+        notifySuccess('Comida añadida al plan');
+        return true;
       }
-    } catch (err) {
-      console.error("Error saving meal:", err);
-      toast.error(`Error al guardar: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+    } catch (error) {
+      console.error('[PlanningPage] Error agregando comida', error);
+    }
+
+    notifyError('No se pudo registrar la comida. Intenta nuevamente.');
+    return false;
+  };
+
+  const handleAddMissingIngredients = async (mealId: string) => {
+    const meal = plannedMeals.find((item) => item.id === mealId);
+    if (!meal) return;
+    const missing = meal.ingredient_status?.filter((status) => !status.available) ?? [];
+    if (missing.length === 0) {
+      notifyInfo('Esta comida ya tiene todos los ingredientes disponibles');
+      return;
+    }
+    try {
+      await addMissingIngredients(mealId);
+      notifySuccess('Añadimos los faltantes de esa comida a tu lista');
+    } catch (error) {
+      notifyError('No se pudieron añadir los ingredientes faltantes');
     }
   };
+
+  const handleGenerateAlternative = async (mealId: string) => {
+    if (!aiStatus.hasKey) {
+      notifyInfo('Agregá tu clave de Gemini en tu perfil para generar alternativas');
+      return;
+    }
+
+    if (!user?.id) {
+      notifyError('Necesitás iniciar sesión para generar alternativas');
+      return;
+    }
+
+    const meal = plannedMeals.find((item) => item.id === mealId);
+    if (!meal) {
+      notifyError('No encontramos esa comida en tu plan actual');
+      return;
+    }
+
+    const result = await generateAlternativePreview({
+      userId: user.id,
+      mealId,
+    });
+
+    if (result) {
+      notifySuccess(
+        `Propuesta lista para ${meal.recipes?.title ?? meal.custom_title ?? meal.meal_type}`,
+      );
+    } else {
+      const { preview: previewState } = usePlanningStore.getState();
+      notifyError(previewState.error ?? 'No se pudo generar una alternativa');
+    }
+  };
+
+  const handleClosePreview = () => {
+    cancelAlternativePreview();
+  };
+
+  const handleConfirmPreview = async () => {
+    if (!user?.id) {
+      notifyError('Iniciá sesión para aplicar la alternativa');
+      return;
+    }
+
+    const success = await confirmAlternativePreview({ userId: user.id });
+    if (success) {
+      notifySuccess('Actualizamos la comida con la alternativa seleccionada');
+    } else {
+      const { preview: previewState } = usePlanningStore.getState();
+      notifyError(previewState.error ?? 'No se pudo aplicar la alternativa');
+    }
+  };
+
+  const closeAddMealModal = () => {
+    setAddMealModal((modal) => ({
+      ...modal,
+      open: false,
+      mode: 'create',
+      mealId: undefined,
+      initialName: '',
+      prepTime: undefined,
+      cookTime: undefined,
+      difficulty: undefined,
+      notes: '',
+    }));
+  };
+
+  const weekRangeLabel = useMemo(() => {
+    const start = currentRange.start
+      ? new Date(`${currentRange.start}T00:00:00`)
+      : startOfWeek(referenceDate, { weekStartsOn: 1 });
+    const end = currentRange.end
+      ? new Date(`${currentRange.end}T00:00:00`)
+      : endOfWeek(referenceDate, { weekStartsOn: 1 });
+
+    return `${format(start, "d 'de' MMMM", { locale: es })} – ${format(end, "d 'de' MMMM yyyy", { locale: es })}`;
+  }, [currentRange.end, currentRange.start, referenceDate]);
 
   const handleDeleteMeal = async (mealId: string) => {
-    try {
-      await deletePlannedMeal(mealId);
-      toast.success("Comida eliminada con éxito");
-    } catch (err) {
-      console.error("Error deleting meal:", err);
-      toast.error(`Error al eliminar: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+    const success = await deleteMeal(mealId);
+    if (success) {
+      notifySuccess('Eliminamos la comida del plan');
+    } else {
+      notifyError('No se pudo eliminar la comida seleccionada');
     }
   };
 
-  const handleCopyMeal = (meal: PlannedMealWithRecipe) => {
-    setCopiedMeal(meal);
-    toast.success("Comida copiada. Haz clic en el botón '+' donde desees pegarla.");
+  const handleToggleMeal = async (mealId: string) => {
+    const meal = plannedMeals.find(m => m.id === mealId);
+    if (!meal) return;
+
+    const success = meal.status === 'executed'
+      ? await markMealSkipped(mealId)
+      : await markMealExecuted(mealId);
+
+    if (success) {
+      notifySuccess(
+        meal.status === 'executed'
+          ? 'Comida marcada como pendiente'
+          : '¡Comida completada!'
+      );
+    } else {
+      notifyError('No se pudo actualizar el estado de la comida');
+    }
   };
 
-  const handleCopyDay = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const dayMeals = Object.values(mealsByDay[dateStr] || {}).flat();
-    
-    if (dayMeals.length === 0) {
-      toast.error("No hay comidas para copiar en este día");
+  useEffect(() => {
+    setAddMealModal((modal) =>
+      modal.mode === 'create'
+        ? { ...modal, date: referenceDate }
+        : modal,
+    );
+  }, [referenceDate]);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (!user?.id) return;
+    loadWeek(referenceDate).catch((loadError) => {
+      console.error('[PlanningPage] Error loading week', loadError);
+      notifyError('Error al cargar el plan semanal');
+    });
+  }, [user?.id, referenceDate, loadWeek]);
+
+  // Cargar perfil de usuario
+  useEffect(() => {
+    if (!user?.id) return;
+    getUserProfile(user.id)
+      .then((fetchedProfile) => {
+        setUserProfile(fetchedProfile);
+      })
+      .catch((profileError) => {
+        console.warn('[PlanningPage] No se pudo cargar el perfil', profileError);
+      });
+  }, [setUserProfile, user?.id]);
+
+  useEffect(() => {
+    if (showTemplatePanel) {
+      loadTemplates();
+    }
+  }, [loadTemplates, showTemplatePanel]);
+
+  useEffect(() => {
+    if (showStatsDialog) {
+      generateStatsStore();
+      generateWeeklyReportStore();
+    }
+  }, [generateStatsStore, generateWeeklyReportStore, showStatsDialog]);
+
+  // Sincronizar con recipes (pantry se maneja automáticamente con usePlanningPantrySync)
+  useEffect(() => {
+    syncWithRecipes();
+  }, [syncWithRecipes]);
+
+  // Forzar vista de día en mobile
+  const effectiveView = isMobile ? 'day' : ui.currentView;
+
+  const handleDateSelect = (date: Date) => {
+    setReferenceDate(date);
+    setSelectedDateStore(date);
+  };
+
+  const handleAddMeal = () => {
+    handleAddMealRequest(selectedDate);
+  };
+
+  const handleShowTemplates = () => {
+    setShowTemplatePanel(true);
+  };
+
+  const handleShowStats = () => {
+    setShowStatsDialog(true);
+  };
+
+  const handleShowSettings = () => {
+    setShowConfigModal(true);
+  };
+
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const updated = addWeeks(referenceDate, direction === 'prev' ? -1 : 1);
+    setReferenceDate(updated);
+    setSelectedDateStore(updated);
+  };
+
+  const handleGoToday = () => {
+    const today = new Date();
+    setReferenceDate(today);
+    setSelectedDateStore(today);
+  };
+
+  const handleApplyVisionInsight = async (insight: VisionInsightNormalized) => {
+    const result = await applyVisionInsight({ insight, date: referenceDate });
+    if (result) {
+      notifySuccess('Insight aplicado al plan. Podés ajustarlo ahora.');
+      handleEditMeal(result);
+    } else {
+      notifyError('No pudimos aplicar el insight al plan. Intenta nuevamente.');
+    }
+  };
+
+  const handleApplyTemplate = useCallback(async (templateId: string) => {
+    return applyTemplate(templateId);
+  }, [applyTemplate]);
+
+  const handleGenerateFromConfig = useCallback(async (request: GenerationRequest) => {
+    if (!aiStatus.hasKey) {
+      notifyInfo('Agregá una clave de Gemini en tu perfil para generar planes automáticos.');
       return;
     }
 
-    setCopiedDayMeals(dayMeals);
-    setIsCopyingDay(true);
-    toast.success("Día copiado. Selecciona otro día para pegar las comidas.");
-  };
-
-  const handlePasteDay = async (targetDate: Date) => {
-    if (!copiedDayMeals || copiedDayMeals.length === 0) {
-      toast.error("No hay comidas copiadas para pegar");
-      return;
+    const userId = user?.id ?? 'current-user';
+    const result = await generateCustomMeals({ userId, request });
+    if (result) {
+      notifySuccess('Plan generado con la configuración seleccionada');
+    } else {
+      notifyError('No se pudo generar el plan con los parámetros indicados');
     }
+  }, [aiStatus.hasKey, generateCustomMeals, user?.id]);
 
-    try {
-      const targetDateStr = format(targetDate, 'yyyy-MM-dd');
-      const addedMeals = await pasteCopiedDayMeals(targetDateStr);
-      
-      if (addedMeals.length > 0) {
-        toast.success(`${addedMeals.length} comidas copiadas al ${format(targetDate, 'd MMM', { locale: es })}`);
-      } else {
-        toast.error("No se pudieron copiar las comidas");
-      }
-    } catch (err) {
-      console.error("Error pasting day:", err);
-      toast.error("Error al pegar las comidas");
-    } finally {
-      setIsCopyingDay(false);
-    }
-  };
-
-  const handleRequestAlternatives = async (
-    context: MealAlternativeRequestContext
-  ): Promise<MealAlternative[] | null> => {
-    console.log('[PlanningPage] Requesting alternatives for:', context);
-    try {
-      const alternatives = await getMealAlternatives(context, userProfile);
-      console.log('[PlanningPage] Alternatives received:', alternatives);
-      return alternatives;
-    } catch (error) {
-      console.error('[PlanningPage] Error fetching alternatives:', error);
-      toast.error("Error al buscar alternativas.");
-      return null;
-    }
-  };
-
-  const handleOpenAutocomplete = () => {
-    if (!user?.id) {
-      toast.error("Debes iniciar sesión para autocompletar la semana.");
-      return;
-    }
-    setShowAutocompleteConfig(true);
-  };
-
-  const handleCloseAutocomplete = () => {
-    setShowAutocompleteConfig(false);
-  };
-
-  const { addGeneratedItems } = useShoppingListStore();
-
-  const handleGenerateListFromPlan = async () => {
-    if (!user?.id) {
-      toast.error("Debes iniciar sesión para generar la lista de compras.");
-      return;
-    }
-
-    setIsGeneratingList(true);
-
-    try {
-      const startDateStr = format(weekStart, 'yyyy-MM-dd');
-      const endDateStr = format(weekEnd, 'yyyy-MM-dd');
-
-      console.log(`[PlanningPage] Generando lista para ${startDateStr} - ${endDateStr}`);
-      const generatedItems = await generateShoppingList(startDateStr, endDateStr, user.id);
-
-      if (generatedItems.length === 0) {
-        toast.info("No se encontraron nuevos ingredientes necesarios para añadir a la lista.");
-      } else {
-        console.log(`[PlanningPage] ${generatedItems.length} ítems generados. Añadiendo al store...`);
-        const countAdded = await addGeneratedItems(generatedItems);
-
-        if (countAdded > 0) {
-          toast.success(`${countAdded} ítem(s) añadido(s) a tu lista de compras.`);
-        } else {
-          toast.info("Los ingredientes necesarios ya estaban en tu lista de compras.");
-        }
-      }
-    } catch (err: any) {
-      console.error('[PlanningPage] Error generando o añadiendo lista de compras:', err);
-      const message = err.message || 'Ocurrió un error al generar la lista de compras.';
-      toast.error(message);
-    } finally {
-      setIsGeneratingList(false);
-    }
-  };
-
-  const handleAutocompleteConfirm = (config: AutocompleteConfig) => { // Aceptar config
-    const startDateStr = format(weekStart, 'yyyy-MM-dd');
-    const endDateStr = format(weekEnd, 'yyyy-MM-dd');
-    console.log(`[PlanningPage] Autocompleting week ${startDateStr} to ${endDateStr} with config:`, config);
-    // Llamar a la función del store con la configuración completa
-    usePlanningStore.getState().handleAutocompleteWeek(startDateStr, endDateStr, config); // Pasar config completo
-    handleCloseAutocomplete(); // Cerrar el diálogo después de confirmar
-  };
-
-  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const selectedDayMeals = mealsByDay[selectedDateStr] || {};
-
-  const renderMobileLayout = () => (
-    <div className="flex flex-col w-full space-y-3">
-      <WeekDaySelector
-        days={weekDays}
-        selectedDay={selectedDate}
-        onDaySelect={setSelectedDate}
-        className="mx-auto w-full max-w-md"
-      />
-      <PlanningDayView
-        date={selectedDate}
-        mealsByType={selectedDayMeals}
-        mealTypes={mealTypes}
-        onAddClick={handleOpenAddModal}
-        onEditClick={handleOpenEditModal}
-        onDeleteClick={handleDeleteMeal}
-        onCopyClick={handleCopyMeal}
-        onCopyDayClick={isCopyingDay ? handlePasteDay : handleCopyDay}
-        className="max-w-md mx-auto w-full"
-      />
-    </div>
-  );
-
-  const renderDesktopLayout = () => (
-    <div className="overflow-x-auto w-full max-w-[1200px]">
-      <div className="grid grid-cols-7 grid-rows-[auto_repeat(4,auto)] gap-1 min-w-[900px] border border-border/20 rounded-lg overflow-hidden shadow-sm">
-        {weekDays.map((day) => (
-          <div
-            key={`header-${day.toISOString()}`}
-            className={cn(
-              "p-2 text-center border-b border-r border-border/10",
-              "bg-card",
-              isToday(day) ? "bg-primary/5" : "",
-              "relative"
-            )}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1 h-6 w-6 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
-              onClick={() => isCopyingDay ? handlePasteDay(day) : handleCopyDay(day)}
-              aria-label={isCopyingDay ? "Pegar comidas aquí" : "Copiar día"}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <div className="text-sm font-medium text-foreground/90">
-              {format(day, 'eee', { locale: es })}
-              <div
-                className={cn(
-                  "inline-flex items-center justify-center mt-1 rounded-full w-6 h-6 text-xs",
-                  isToday(day)
-                    ? "bg-primary/10 text-primary font-medium ring-1 ring-primary/10"
-                    : "text-muted-foreground"
-                )}
-              >
-                {format(day, 'd')}
-              </div>
-            </div>
-          </div>
-        ))}
-        {/* Iterar por tipo de comida (filas) y luego por día (columnas) */}
-        {mealTypes.map((mealType, mealIndex) => (
-          <React.Fragment key={mealType}>
-            {weekDays.map((day, dayIndex) => {
-              const dateStr = format(day, 'yyyy-MM-dd');
-              const dayMeals = mealsByDay[dateStr] || {};
-              const mealsForSlot = dayMeals[mealType] || [];
-              return (
-                <div
-                  // Usar una key combinada y estable
-                  key={`${dateStr}-${mealType}`}
-                  className="border-r border-b border-border/10 bg-card min-h-0"
-                >
-                  <MealCard
-                    date={day}
-                    mealType={mealType}
-                    plannedMeals={mealsForSlot} // Pasar el array filtrado
-                    onAddClick={handleOpenAddModal}
-                    onEditClick={handleOpenEditModal}
-                    onDeleteClick={handleDeleteMeal}
-                    onCopyClick={handleCopyMeal}
-                    className="h-full"
-                  />
-                </div>
-              );
-            })}
-          </React.Fragment>
-        ))}
+  if (isLoading && plannedMeals.length === 0) {
+    return (
+      <div className="mx-auto w-full max-w-6xl">
+        <PlanningSkeleton />
       </div>
-    </div>
+    );
+  }
+
+  const visionSection = (
+    <VisionUploadCollapsible
+      onApplyInsight={handleApplyVisionInsight}
+      className="mt-0 border-none pt-0"
+    />
   );
 
   return (
-    <div className="flex flex-col items-center w-full h-full px-2 py-3 mx-auto">
-      {/* Header */}
-      <div className="flex flex-col items-center mb-4 w-full max-w-[1200px]">
-        <div className="flex items-center gap-2 p-1.5 bg-gradient-to-r from-card/80 via-background/60 to-card/80 rounded-lg shadow-sm border border-border/20 backdrop-blur-sm">
-          <div className="flex items-center gap-2 px-4 py-2">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            <span className="text-xl font-bold text-foreground/90">
-              Planificación Semanal
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={goToPreviousWeek}
-            className="rounded-full h-7 w-7 p-0 hover:bg-background/70 hover:text-[hsl(var(--primary))] transition-all duration-200"
-            aria-label="Semana anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-sm font-medium px-4 py-1 bg-background/50 rounded-full text-foreground/80">
-            {format(weekStart, 'd MMM', { locale: es })} -{' '}
-            {format(weekEnd, 'd MMM yyyy', { locale: es })}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={goToNextWeek}
-            className="rounded-full h-7 w-7 p-0 hover:bg-background/70 hover:text-[hsl(var(--primary))] transition-all duration-200"
-            aria-label="Semana siguiente"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        {/* Botones de Acción */}
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Button
-            onClick={handleOpenAutocomplete}
-            disabled={isLoading}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Autocompletar Semana
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="border-destructive/50 text-destructive hover:bg-destructive/5"
-              >
-                <Eraser className="mr-2 h-4 w-4" />
-                Limpiar Semana
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Limpiar Planificación Semanal?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción eliminará todas las comidas planificadas para la semana del{' '}
-                  {format(weekStart, 'd MMM', { locale: es })} al{' '}
-                  {format(weekEnd, 'd MMM yyyy', { locale: es })}.
-                  Esta acción no se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive hover:bg-destructive/90"
-                  onClick={() => {
-                    clearWeek(weekStartStr, weekEndStr);
-                  }}
-                >
-                  Limpiar Semana
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <Button
-            variant="outline"
-            onClick={handleGenerateListFromPlan}
-            disabled={isGeneratingList || isLoading}
-            className="border-primary/50 text-primary hover:bg-primary/5 hover:text-primary"
-          >
-            {isGeneratingList ? (
-              <Spinner size="sm" className="mr-2" />
-            ) : (
-              <ListPlus className="mr-2 h-4 w-4" />
+    <div className="container-custom py-6 sm:py-8">
+      <div className={`grid gap-6 lg:grid-cols-12 lg:min-h-[calc(100vh-8rem)] ${isSidebarCollapsed ? 'lg:grid-cols-1' : ''}`}>
+        <section className={`order-2 space-y-6 lg:order-1 lg:self-start ${isSidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-10'}`}>
+          <div className="rounded-custom border border-border/60 bg-gradient-to-br from-background via-background to-muted/20 p-6 shadow-custom space-y-5">
+            {/* Header principal con título y acciones principales */}
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div className="space-y-1">
+                <h1 className="text-3xl font-bold text-foreground bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
+                  🍽️ Planificador semanal
+                </h1>
+                <p className="text-base text-muted-foreground font-medium">
+                  📅 {weekRangeLabel}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Acción principal */}
+                <Button variant="gradient" onClick={handleAddMeal} className="gap-2">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Añadir comida
+                </Button>
+
+                {/* Acciones rápidas */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
+                    Acciones:
+                  </span>
+                  <Button variant="outline" onClick={handleShowTemplates} className="gap-2">
+                    <ChefHat className="h-4 w-4" aria-hidden="true" />
+                    Plantillas
+                  </Button>
+                  <Button variant="outline" onClick={handleShowStats} className="gap-2">
+                    <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                    Resumen
+                  </Button>
+                  <Button variant="outline" onClick={handleShowSettings} className="gap-2">
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    Preferencias
+                  </Button>
+                  <div className="hidden lg:block h-6 w-px bg-border/60 mx-2" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="hidden lg:flex gap-2 px-3"
+                    aria-label={isSidebarCollapsed ? 'Expandir panel lateral' : 'Colapsar panel lateral'}
+                  >
+                    {isSidebarCollapsed ? (
+                      <PanelLeft className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    <span className="hidden xl:inline">
+                      {isSidebarCollapsed ? 'Mostrar' : 'Ocultar'}
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Barra de navegación y métricas */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/30 border border-border/40">
+              {/* Navegación de semanas */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground mr-2">Navegar:</span>
+                <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/50 px-1 py-1 shadow-sm">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 hover:bg-primary/10" onClick={() => navigateWeek('prev')}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="h-4 w-px bg-border/60 mx-1" />
+                  <Button variant="ghost" size="sm" className="h-8 gap-2 px-3 hover:bg-primary/10" onClick={handleGoToday}>
+                    <CalendarDays className="h-4 w-4" />
+                    Hoy
+                  </Button>
+                  <div className="h-4 w-px bg-border/60 mx-1" />
+                  <Button variant="ghost" size="sm" className="h-8 w-8 hover:bg-primary/10" onClick={() => navigateWeek('next')}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Métricas del progreso */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span className="font-medium">{weeklySummary.executed}/{weeklySummary.total || 0}</span>
+                    <span className="text-muted-foreground">completadas</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <span className="font-medium">{weeklySummary.calories}</span>
+                    <span className="text-muted-foreground">kcal</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span className="font-medium">{weeklySummary.missing}</span>
+                    <span className="text-muted-foreground">faltantes</span>
+                  </div>
+                </div>
+
+                {/* Barra de progreso visual */}
+                <div className="flex items-center gap-2 min-w-[120px]">
+                  <div className="flex-1 bg-muted rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${weeklySummary.completion}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">{weeklySummary.completion}%</span>
+                </div>
+              </div>
+            </div>
+
+            {!aiStatus.hasKey && (
+              <div className="flex items-start gap-3 rounded-lg border border-amber-200/60 bg-gradient-to-r from-amber-50/80 to-orange-50/40 px-4 py-3 text-sm">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                    <Sparkles className="h-3.5 w-3.5 text-white" />
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="font-medium text-amber-800">🤖 Potencia tu planificación con IA</p>
+                  <p className="text-amber-700/90 leading-relaxed">
+                    Agregá tu clave de Gemini en <span className="font-medium">Perfil → Preferencias</span> para generar planes automáticos y alternativas inteligentes.
+                  </p>
+                </div>
+              </div>
             )}
-            Generar Lista Semanal
-          </Button>
-        </div>
-        {error && (
-          <p className="text-red-500 text-xs mt-1 text-center">{error}</p>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-custom border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            {effectiveView === 'week' && isMobile && (
+              <MobileDayView
+                selectedDate={selectedDate}
+                onDateChange={handleDateSelect}
+                onAddMeal={handleAddMealRequest}
+                onEditMeal={handleEditMeal}
+                onDeleteMeal={handleDeleteMeal}
+                onToggleMeal={handleToggleMeal}
+                meals={plannedMeals}
+              />
+            )}
+
+            {effectiveView === 'week' && !isMobile && (
+              <WeekPlannerGrid
+                referenceDate={referenceDate}
+                selectedDate={selectedDate}
+                meals={plannedMeals}
+                onSelectDate={handleDateSelect}
+                onAddMeal={handleAddMealRequest}
+                onToggleMeal={handleToggleMeal}
+                onAddMissingIngredients={handleAddMissingIngredients}
+                onGenerateAlternative={handleGenerateAlternative}
+                onEditMeal={handleEditMeal}
+                onDeleteMeal={handleDeleteMeal}
+              />
+            )}
+
+            {effectiveView === 'day' && isMobile && (
+              <MobileDayView
+                selectedDate={selectedDate}
+                onDateChange={handleDateSelect}
+                onAddMeal={handleAddMealRequest}
+                onEditMeal={handleEditMeal}
+                onDeleteMeal={handleDeleteMeal}
+                onToggleMeal={handleToggleMeal}
+                meals={plannedMeals}
+              />
+            )}
+
+            {effectiveView === 'day' && !isMobile && (
+              <DayViewMemo
+                selectedDate={selectedDate}
+                onDateChange={handleDateSelect}
+                onAddMeal={handleAddMealRequest}
+                onAddMissingIngredients={handleAddMissingIngredients}
+                onGenerateAlternative={handleGenerateAlternative}
+                onEditMeal={handleEditMeal}
+                onDeleteMeal={handleDeleteMeal}
+              />
+            )}
+
+            {effectiveView === 'dashboard' && (
+              <NutritionalDashboardMemo
+                meals={plannedMeals}
+                goals={nutritionalGoals}
+                dateRange={{
+                  start: currentRange.start ? new Date(`${currentRange.start}T00:00:00`) : referenceDate,
+                  end: currentRange.end ? new Date(`${currentRange.end}T00:00:00`) : referenceDate,
+                }}
+              />
+            )}
+          </div>
+        </section>
+
+        {!isSidebarCollapsed && (
+          <InsightsDock
+            className="order-1 space-y-2 text-sm lg:order-2 lg:col-span-2 lg:sticky lg:top-24 lg:self-start"
+            aiStatus={aiStatus}
+            aiBannerMessage={aiBannerMessage}
+            estimatedCost={estimatedWeeklyCost}
+            goalProgress={goalProgress}
+            weeklyReport={weeklyReport}
+            visionContent={visionSection}
+          />
         )}
       </div>
 
-      {/* Contenido Principal (Layout Responsivo) */}
-      {isLoading ? (
-        <div className="flex justify-center items-center flex-grow">
-          <Spinner size="lg" />
-        </div>
-      ) : error ? (
-        <p className="text-red-500 text-center flex-grow flex items-center justify-center">
-          {error}
-        </p>
-      ) : (
-        isDesktop ? renderDesktopLayout() : renderMobileLayout()
-      )}
-
-      {/* Modal */}
-      <MealFormModal
-        isOpen={showModal}
-        onClose={handleCloseModal}
-        date={selectedDate}
-        mealType={selectedMealType}
-        mealToEdit={editingMeal}
-        userRecipes={userRecipes}
-        onSave={handleSaveMeal}
-        onRequestAlternatives={handleRequestAlternatives}
+      <AddMealModal
+        isOpen={addMealModal.open}
+        onClose={closeAddMealModal}
+        onConfirm={handleConfirmAddMeal}
+        defaultDate={addMealModal.date}
+        defaultMealType={addMealModal.mealType}
+        mode={addMealModal.mode}
+        mealId={addMealModal.mealId}
+        defaultName={addMealModal.initialName ?? ''}
+        prepTime={addMealModal.prepTime}
+        cookTime={addMealModal.cookTime}
+        difficulty={addMealModal.difficulty}
+        notes={addMealModal.notes}
       />
 
-      {/* Dialog de Autocompletado */}
-      <AutocompleteConfigDialog
-        isOpen={showAutocompleteConfig}
-        onClose={handleCloseAutocomplete}
-        onConfirm={handleAutocompleteConfirm}
-        isProcessing={usePlanningStore.getState().isAutocompleting} // Usar isProcessing
+      <AlternativePreviewModal
+        isOpen={preview.isOpen}
+        status={preview.status}
+        baseMeal={preview.baseMeal}
+        previewMeal={preview.previewMeal}
+        error={preview.error}
+        onClose={handleClosePreview}
+        onConfirm={handleConfirmPreview}
+      />
+
+      <TemplatePanel
+        isOpen={showTemplatePanel}
+        onClose={() => setShowTemplatePanel(false)}
+        onApplyTemplate={handleApplyTemplate}
+      />
+
+      <PlanningStatsDialog
+        isOpen={showStatsDialog}
+        onClose={() => setShowStatsDialog(false)}
+        stats={null}
+        weeklyReport={weeklyReport}
+        estimatedCost={estimatedWeeklyCost}
+        goalProgress={goalProgress}
+      />
+
+      <GenerationConfigModal
+        isOpen={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+        onGenerate={handleGenerateFromConfig}
+        currentWeekStart={startOfWeek(referenceDate, { weekStartsOn: 1 })}
       />
     </div>
   );
-};
+}
 
-export default PlanningPage;
+// Memoized components to prevent unnecessary re-renders
+const DayViewMemo = memo(DayView);
+const NutritionalDashboardMemo = memo(NutritionalDashboard);
+
+// Memoized main component
+export default memo(PlanningPage);

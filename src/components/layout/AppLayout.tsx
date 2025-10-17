@@ -8,11 +8,21 @@ import { BottomNavBar } from './BottomNavBar'; // Importar BottomNavBar
 // import { Button } from '@/components/ui/button'; // Ya no se usa para el menú
 // import { Menu } from 'lucide-react'; // Ya no se usa
 import { useAuth } from '@/features/auth/AuthContext';
-import { toast } from 'sonner';
+import { notifyError, notifyInfo, notifySuccess } from '@/lib/notifications';
 import type { PantryItem } from '@/features/pantry/types';
+import { LiquidGlassHeader, LiquidGlassHeaderMobile } from '@/components/ui/LiquidGlass';
 
 export function AppLayout() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Initialize sidebar state from localStorage with fallback to false
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar-collapsed');
+      return saved ? JSON.parse(saved) : false;
+    } catch (error) {
+      console.warn('Could not load sidebar preference from localStorage:', error);
+      return false;
+    }
+  });
   const [isFavoriteItemsSheetOpen, setIsFavoriteItemsSheetOpen] = useState(false); // Renombrar para items
   const [isFavoriteRecipesSheetOpen, setIsFavoriteRecipesSheetOpen] = useState(false); // Añadir estado para recetas
   const location = useLocation();
@@ -31,7 +41,7 @@ export function AppLayout() {
 
   useEffect(() => {
     if (pantryError) {
-      toast.error(`Error en la despensa: ${pantryError}`);
+      notifyError(`Error en la despensa: ${pantryError}`);
     }
   }, [pantryError]);
 
@@ -60,42 +70,60 @@ export function AppLayout() {
   // const handleMobileNavOpenChange = (open: boolean) => { ... };
 
   const handleEditItemFromSheet = useCallback((item: PantryItem) => {
-    toast.info(`Editar ${item.ingredient?.name} (funcionalidad pendiente)`);
+    notifyInfo(`Editar ${item.ingredient?.name} (funcionalidad pendiente)`);
     setIsFavoriteItemsSheetOpen(false); // Usar estado renombrado
   }, []);
 
   const handleDeleteItemFromSheet = useCallback(async (itemId: string) => {
     const success = await deletePantryItem(itemId);
     if (success) {
-      toast.success("Item eliminado de favoritos y despensa.");
+      notifySuccess("Item eliminado de favoritos y despensa.");
     } else {
-      toast.error("Error al eliminar item.");
+      notifyError("Error al eliminar item.");
     }
   }, [deletePantryItem]);
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar para Desktop */}
+      {/* Sidebar */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         toggleSidebar={toggleSidebar}
-        onOpenFavoriteItems={handleOpenFavoriteItems} // Usar handler renombrado
-        onOpenFavoriteRecipes={handleOpenFavoriteRecipes} // Pasar nuevo handler
+        onOpenFavoriteItems={handleOpenFavoriteItems}
+        onOpenFavoriteRecipes={handleOpenFavoriteRecipes}
       />
 
       {/* Contenido Principal */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Navbar Superior (simplificada) */}
-        <header className="flex items-center justify-end h-14 px-4 border-b bg-card md:px-6">
-           {/* Eliminar botón hamburguesa */}
-           {/* Aquí irían otros elementos de la Navbar */}
-           <div className="flex items-center gap-4">
-             <span>Usuario</span> {/* Placeholder */}
-           </div>
+        {/* Header Simple */}
+        <header className="h-16 px-6 border-b border-border bg-background">
+          <div className="flex items-center justify-between h-full">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
+                <span className="text-white text-lg font-bold">🍳</span>
+              </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                A Comerla
+              </span>
+            </div>
+
+            {/* Usuario */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user?.email}
+              </span>
+              <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-bold">
+                  {user?.email?.charAt(0).toUpperCase() || 'U'}
+                </span>
+              </div>
+            </div>
+          </div>
         </header>
 
-        {/* Área de Contenido Principal con padding inferior para BottomNavBar en móvil */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-20 md:pb-8"> {/* Añadido pb-20 para móvil */}
+        {/* Contenido */}
+        <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>

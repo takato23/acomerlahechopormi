@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from "path"
+import { fileURLToPath, URL } from 'node:url'
 import vercel from 'vite-plugin-vercel';
 import { visualizer } from 'rollup-plugin-visualizer'; // Importar visualizer
 // https://vite.dev/config/
@@ -18,15 +19,11 @@ export default defineConfig({
   ].filter(Boolean), // Filtrar undefined si ANALYZE_BUNDLE no está activo
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  // Definir variables globales para reemplazar import.meta.env
-  define: {
-    'process.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
-    'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
-    // Añade otras variables VITE_ que necesites exponer a process.env
-  },
+  // Vite automatically loads .env files and exposes VITE_ variables
+  // No need to manually define them
   css: {
     postcss: './postcss.config.js',
   },

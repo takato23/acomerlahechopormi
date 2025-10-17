@@ -51,6 +51,22 @@ describe('InteractivePreview', () => {
   let mockOnConfirm: jest.Mock<(itemData: CreatePantryItemData, addAnother: boolean) => Promise<void>>;
   let mockOnCancel: jest.Mock;
   let mockOnEditDetails: jest.Mock;
+  const renderPreview = async (
+    overrideProps: Partial<React.ComponentProps<typeof InteractivePreview>> = {},
+  ) => {
+    const props: React.ComponentProps<typeof InteractivePreview> = {
+      initialData: mockInitialData,
+      availableCategories: mockCategories,
+      onConfirm: mockOnConfirm,
+      onCancel: mockOnCancel,
+      onEditDetails: mockOnEditDetails,
+      ...overrideProps,
+    };
+
+    const utils = render(<InteractivePreview {...props} />);
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument());
+    return utils;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -60,16 +76,8 @@ describe('InteractivePreview', () => {
     mockOnEditDetails = jest.fn(); // Mantener jest.fn aquí
   });
 
-  test('renders initial data correctly', () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails}
-      />
-    );
+  test('renders initial data correctly', async () => {
+    await renderPreview();
 
     expect(screen.getByText('Pollo')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
@@ -78,29 +86,17 @@ describe('InteractivePreview', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('Carnes y Pescados');
   });
 
-   test('renders fallback indicator if usedFallback is true', () => {
-    render(
-      <InteractivePreview
-        initialData={{ ...mockInitialData, ingredientName: 'Algo Raro' }}
-        usedFallback={true}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-      />
-    );
+   test('renders fallback indicator if usedFallback is true', async () => {
+    await renderPreview({
+      initialData: { ...mockInitialData, ingredientName: 'Algo Raro' },
+      usedFallback: true,
+      onEditDetails: undefined,
+    });
     expect(screen.getByText('(Nombre inferido)')).toBeInTheDocument();
   });
 
   test('allows changing the category', async () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails}
-      />
-    );
+    await renderPreview();
 
     const selectTrigger = screen.getByRole('combobox');
     await userEvent.click(selectTrigger); // Abrir el select
@@ -114,15 +110,7 @@ describe('InteractivePreview', () => {
   });
 
   test('allows entering expiry date when details are expanded', async () => {
-     render(
-       <InteractivePreview
-         initialData={mockInitialData}
-         availableCategories={mockCategories}
-         onConfirm={mockOnConfirm} // Eliminar cast
-         onCancel={mockOnCancel}
-         onEditDetails={mockOnEditDetails}
-       />
-     );
+     await renderPreview();
 
      // Encontrar y hacer clic en el trigger del acordeón
      const accordionTrigger = screen.getByRole('button', { name: /Añadir Detalles/i });
@@ -137,15 +125,7 @@ describe('InteractivePreview', () => {
 
 
   test('calls onConfirm with correct data when "Confirmar" is clicked', async () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails}
-      />
-    );
+    await renderPreview();
 
     // Cambiar categoría y fecha para verificar que se envían los datos actualizados
     const selectTrigger = screen.getByRole('combobox');
@@ -165,26 +145,20 @@ describe('InteractivePreview', () => {
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
     expect(mockOnConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        ingredient_name: 'Pollo',
+        ingredient_name: 'pollo',
         quantity: 2,
         unit: 'kg',
         category_id: 'vegetables', // Categoría cambiada
         expiry_date: '2025-11-30', // Fecha añadida
+        location: null,
+        price: null,
       }),
       false // addAnother = false
     );
   });
 
    test('calls onConfirm with addAnother=true when "Confirmar y Añadir Otro" is clicked', async () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails}
-      />
-    );
+    await renderPreview();
 
     const confirmAddAnotherButton = screen.getByRole('button', { name: /Confirmar y Añadir Otro/i });
     await userEvent.click(confirmAddAnotherButton);
@@ -192,39 +166,25 @@ describe('InteractivePreview', () => {
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
     expect(mockOnConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        ingredient_name: 'Pollo',
+        ingredient_name: 'pollo',
         category_id: 'meat', // Categoría sugerida por defecto
         expiry_date: null, // Sin fecha
+        location: null,
+        price: null,
       }),
       true // addAnother = true
     );
   });
 
   test('calls onCancel when cancel button is clicked', async () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails}
-      />
-    );
+    await renderPreview();
     const cancelButton = screen.getByRole('button', { name: /Cancelar/i });
     await userEvent.click(cancelButton);
     expect(mockOnCancel).toHaveBeenCalledTimes(1);
   });
 
   test('calls onEditDetails when "Editar Detalles" button is clicked', async () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm} // Eliminar cast
-        onCancel={mockOnCancel}
-        onEditDetails={mockOnEditDetails} // Pasar el mock
-      />
-    );
+    await renderPreview();
     const editButton = screen.getByRole('button', { name: /Editar Detalles/i });
     await userEvent.click(editButton);
     expect(mockOnEditDetails).toHaveBeenCalledTimes(1);
@@ -236,16 +196,8 @@ describe('InteractivePreview', () => {
     );
   });
 
-   test('does not render edit button if onEditDetails is not provided', () => {
-    render(
-      <InteractivePreview
-        initialData={mockInitialData}
-        availableCategories={mockCategories}
-        onConfirm={mockOnConfirm}
-        onCancel={mockOnCancel}
-        // No onEditDetails prop
-      />
-    );
+   test('does not render edit button if onEditDetails is not provided', async () => {
+    await renderPreview({ onEditDetails: undefined });
     expect(screen.queryByRole('button', { name: /Editar Detalles/i })).not.toBeInTheDocument();
   });
 

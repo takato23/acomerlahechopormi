@@ -27,7 +27,7 @@ export const savePlanningTemplate = async (templateData: SaveTemplateData): Prom
     day_index: new Date(meal.plan_date).getDay() - 1, // -1 porque getDay() retorna 0 para Domingo
     meal_type: meal.meal_type,
     recipe_id: meal.recipe_id,
-    custom_meal_name: meal.custom_meal_name
+    custom_title: meal.custom_title
   }));
 
   const { data: template, error } = await supabase

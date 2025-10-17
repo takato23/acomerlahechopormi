@@ -1,0 +1,9 @@
+export const track = jest.fn();
+export const setAnalyticsClient = jest.fn();
+export const trackOnboardingStepView = jest.fn();
+export const trackOnboardingStepCompleted = jest.fn();
+export const trackOnboardingCompleted = jest.fn();
+export const trackPlanningGenerationStarted = jest.fn();
+export const trackPlanningGenerationCompleted = jest.fn();
+export const trackPlanningGenerationFailed = jest.fn();
+export const trackShoppingListGenerated = jest.fn();

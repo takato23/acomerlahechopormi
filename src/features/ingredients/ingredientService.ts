@@ -1,5 +1,5 @@
-import { supabase } from '../../lib/supabaseClient';
-import type { Ingredient } from '../../types/ingredientTypes';
+import { supabase } from '@/lib/supabaseClient';
+import type { Ingredient } from '@/types/ingredientTypes';
 
 // Reglas básicas de singularización en español
 const PLURAL_RULES: [RegExp, string][] = [

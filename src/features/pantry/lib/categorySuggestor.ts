@@ -14,15 +14,11 @@ import { inferCategory } from '../../shopping-list/lib/categoryInference';
  */
 export const suggestCategory = async (itemName: string): Promise<string | null> => {
     if (!itemName?.trim()) {
-        console.log('[categorySuggestor] Empty item name, no suggestion');
         return null;
     }
 
     try {
-        console.log(`[categorySuggestor] Attempting to suggest category for "${itemName}"`);
-        const suggestedCategory = await inferCategory(itemName);
-        console.log(`[categorySuggestor] Suggestion result:`, suggestedCategory);
-        return suggestedCategory;
+        return await inferCategory(itemName);
     } catch (error) {
         console.error('[categorySuggestor] Error suggesting category:', error);
         return null;

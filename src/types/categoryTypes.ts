@@ -7,4 +7,7 @@ export interface Category {
   name: string; // Nombre de la categoría (ej. "Lácteos", "Frutas", "Carnes")
   icon?: string | null; // Nombre o identificador del icono asociado (opcional)
   color?: string | null; // Color asociado a la categoría (ej. código hexadecimal) (opcional)
+  order?: number;
+  user_id?: string | null;
+  is_default?: boolean;
 }

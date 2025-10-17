@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Trash2 } from 'lucide-react'; // Añadir Trash2
-import { toast } from 'sonner';
+import { notifyError, notifySuccess } from '@/lib/notifications';
 import { useAuth } from '@/features/auth/AuthContext';
 import { addRecipe, updateRecipe, getRecipeById } from '@/features/recipes/services/recipeService'; // Importar getRecipeById
-import type { GeneratedRecipeData, RecipeIngredient, Recipe } from '@/types/recipeTypes'; // Importar Recipe
+import type { GeneratedRecipeData } from '@/types/recipeTypes';
 import type { Ingredient } from '@/types/ingredientTypes'; // Importar Ingredient
 import ImageUpload from '@/components/common/ImageUpload'; // Importar ImageUpload
 import { IngredientCombobox } from '../components/IngredientCombobox'; // Importar Combobox
@@ -23,6 +23,7 @@ interface RecipeIngredientInput {
   name: string; // Nombre para mostrar (puede venir del ingrediente maestro o ser temporal)
   quantity: string | null;
   unit: string | null;
+  notes: string;
 }
 
 const RecipePageContent: React.FC = () => {
@@ -49,71 +50,95 @@ const RecipePageContent: React.FC = () => {
   // --- Lógica de Carga Inicial ---
   useEffect(() => {
     const recipeData = location.state?.generatedRecipe as GeneratedRecipeData | undefined;
+
     if (recipeData && !recipeId) {
       console.log("Receta generada recibida, poblando formulario:", recipeData);
       setTitle(recipeData.title || '');
       setDescription(recipeData.description || '');
-      // Mapear ingredientes de GeneratedRecipeData a RecipeIngredientInput
-      setIngredients(recipeData.ingredients?.map((ing, index) => ({
-        localId: crypto.randomUUID(), // Generar ID local único
-        ingredient_id: null, // No tenemos ID maestro aquí
-        name: ing.name || '',
-        quantity: String(ing.quantity ?? ''),
-        unit: ing.unit || null, // Asegurar que sea string | null
-      })) || []);
+      setIngredients(
+        recipeData.ingredients?.map((ing) => ({
+          localId: crypto.randomUUID(),
+          ingredient_id: null,
+          name: ing.name || '',
+          quantity: String(ing.quantity ?? ''),
+          unit: ing.unit || '',
+          notes: ''
+        })) || []
+      );
       setInstructions(recipeData.instructions || []);
-      setPrepTime(String(recipeData.prepTimeMinutes ?? ''));
-      setCookTime(String(recipeData.cookTimeMinutes ?? ''));
-      setServings(recipeData.servings ?? '');
-      setImageUrl(null); // No hay imagen en receta generada inicialmente
-      setTags(recipeData.tags?.join(', ') || ''); // Unir tags si existen
+      setPrepTime(recipeData.prepTimeMinutes != null ? String(recipeData.prepTimeMinutes) : '');
+      setCookTime(recipeData.cookTimeMinutes != null ? String(recipeData.cookTimeMinutes) : '');
+      setServings(recipeData.servings != null ? String(recipeData.servings) : '');
+      setImageUrl(recipeData.imageUrl ?? null);
+      setTags(recipeData.tags?.join(', ') || '');
+      setSaveError(null);
 
-      // Limpiar el estado de location para evitar repoblar si se navega atrás/adelante
-      window.history.replaceState({}, document.title)
-
-    } else if (recipeId) {
-      // --- Lógica para cargar receta existente (simplificada) ---
-      // TODO: Implementar carga real desde el servicio getRecipeById(recipeId).
-      // Cuando se haga, asegurar que recipe.instructions (string con \n) se convierta a string[]:
-      // const loadedInstructions = loadedRecipe.instructions ? loadedRecipe.instructions.split('\n').filter(line => line.trim() !== '') : [];
-      // setInstructions(loadedInstructions);
-      console.log("Modo Edición - ID:", recipeId);
-      setIsLoading(true);
-      // Simulación de carga - Reemplazar con llamada a getRecipeById(recipeId)
-      setTimeout(() => {
-        const mockRecipe: Partial<Recipe> = { // Usar Partial<Recipe> para simulación
-            id: recipeId,
-            title: "Receta de Ejemplo Cargada",
-            description: "Esta es una descripción cargada.",
-            // Usar la estructura de RecipeIngredient para el mock
-            ingredients: [{ id: 'mock-ing-1', recipe_id: recipeId, ingredient_id: 'mock-ing-id-1', ingredient_name: "Ingrediente Mock 1", quantity: 1, unit: "unidad" }],
-            instructions: ["Paso 1 cargado", "Paso 2 cargado"], // Esto ya es string[]
-            prep_time_minutes: 10,
-            cook_time_minutes: 25,
-            servings: 2,
-            image_url: 'https://via.placeholder.com/150', // URL de ejemplo
-            tags: ['cargada', 'ejemplo'],
-        };
-        setTitle(mockRecipe.title || '');
-        setDescription(mockRecipe.description || '');
-        // Mapear correctamente de RecipeIngredient (mock) a RecipeIngredientInput (local)
-        setIngredients(mockRecipe.ingredients?.map(ing => ({
-            localId: crypto.randomUUID(), // Generar ID local único
-            ingredient_id: ing.ingredient_id || null, // Usar el ID del mock si existe
-            name: ing.ingredient_name || '',
-            quantity: String(ing.quantity ?? ''),
-            unit: ing.unit || null,
-        })) || []);
-        setInstructions(mockRecipe.instructions || []); // mockRecipe.instructions ya es string[]
-        setPrepTime(String(mockRecipe.prep_time_minutes ?? ''));
-        setCookTime(String(mockRecipe.cook_time_minutes ?? ''));
-        setServings(mockRecipe.servings ?? '');
-        setImageUrl(mockRecipe.image_url || null);
-        setTags(mockRecipe.tags?.join(', ') || '');
-        setIsLoading(false);
-      }, 1000);
+      window.history.replaceState({}, document.title);
+      return;
     }
-  }, [location.state, recipeId]);
+
+    if (!recipeId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadRecipe = async () => {
+      setIsLoading(true);
+      setSaveError(null);
+      try {
+        const existingRecipe = await getRecipeById(recipeId);
+        if (!isMounted) {
+          return;
+        }
+
+        if (!existingRecipe) {
+          notifyError("No se encontró la receta solicitada.");
+          navigate('/app/recipes');
+          return;
+        }
+
+        setTitle(existingRecipe.title || '');
+        setDescription(existingRecipe.description || '');
+        const mappedIngredients = (existingRecipe.ingredients || []).map((ing) => ({
+          localId: crypto.randomUUID(),
+          ingredient_id: ing.ingredient_id || null,
+          name: ing.ingredient_name || '',
+          quantity: ing.quantity !== null && ing.quantity !== undefined ? String(ing.quantity) : '',
+          unit: ing.unit || '',
+          notes: ing.notes ?? ''
+        }));
+        setIngredients(
+          mappedIngredients.length > 0
+            ? mappedIngredients
+            : [{ localId: crypto.randomUUID(), ingredient_id: null, name: '', quantity: '', unit: '', notes: '' }]
+        );
+        setInstructions(Array.isArray(existingRecipe.instructions) ? existingRecipe.instructions : []);
+        setPrepTime(existingRecipe.prep_time_minutes != null ? String(existingRecipe.prep_time_minutes) : '');
+        setCookTime(existingRecipe.cook_time_minutes != null ? String(existingRecipe.cook_time_minutes) : '');
+        setServings(existingRecipe.servings != null ? String(existingRecipe.servings) : '');
+        setImageUrl(existingRecipe.image_url || null);
+        setTags(existingRecipe.tags?.join(', ') || '');
+      } catch (error: any) {
+        console.error("Error al cargar la receta:", error);
+        if (isMounted) {
+          const message = error?.message || 'No se pudo cargar la receta seleccionada.';
+          setSaveError(message);
+          notifyError(message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadRecipe();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.state, recipeId, navigate]);
 
   // --- Helpers para Textarea (Eliminados ya que no se usarán) ---
   // const formatIngredientsForTextarea = ...
@@ -124,15 +149,22 @@ const RecipePageContent: React.FC = () => {
   const handleIngredientChange = (index: number, field: keyof RecipeIngredientInput, value: any) => {
     const newIngredients = [...ingredients];
     // Si cambia el ingrediente desde el combobox, 'value' será el objeto Ingredient completo
-    if (field === 'ingredient_id' && typeof value === 'object' && value !== null) {
+  if (field === 'ingredient_id' && typeof value === 'object' && value !== null) {
         newIngredients[index] = {
             ...newIngredients[index],
             ingredient_id: value.id,
             name: value.name, // Actualizar el nombre para mostrar
         };
+    } else if (field === 'notes') {
+        newIngredients[index] = {
+            ...newIngredients[index],
+            notes: typeof value === 'string' ? value : ''
+        };
     } else {
-        // @ts-ignore // Permitir asignación dinámica, TypeScript puede quejarse aquí
-        newIngredients[index][field] = value;
+        newIngredients[index] = {
+            ...newIngredients[index],
+            [field]: value
+        } as RecipeIngredientInput;
     }
     setIngredients(newIngredients);
   };
@@ -140,7 +172,7 @@ const RecipePageContent: React.FC = () => {
   const addIngredientRow = () => {
     setIngredients([
       ...ingredients,
-      { localId: crypto.randomUUID(), ingredient_id: null, name: '', quantity: '', unit: '' }
+      { localId: crypto.randomUUID(), ingredient_id: null, name: '', quantity: '', unit: '', notes: '' }
     ]);
   };
 
@@ -157,71 +189,153 @@ const RecipePageContent: React.FC = () => {
   // --- Lógica de Guardado ---
   const handleSaveRecipe = useCallback(async () => {
     if (!user) {
-      toast.error("Debes iniciar sesión para guardar recetas.");
+      notifyError('Iniciá sesión para guardar recetas.');
       return;
     }
-    if (!title.trim()) {
-       toast.error("El título de la receta es obligatorio.");
-       return;
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      const message = "El título de la receta es obligatorio.";
+      setSaveError(message);
+      notifyError(message);
+      return;
     }
+
+    const hasAtLeastOneIngredient = ingredients.some(
+      (ing) => (ing.name && ing.name.trim() !== '') || ing.ingredient_id
+    );
+    if (!hasAtLeastOneIngredient) {
+      const message = "Añade al menos un ingrediente con nombre.";
+      setSaveError(message);
+      notifyError(message);
+      return;
+    }
+
+    const cleanedIngredients = ingredients
+      .filter((ing) => ing.ingredient_id || (ing.name && ing.name.trim() !== ''))
+      .map((ing) => {
+        const trimmedName = ( ing.name || '' ).trim();
+        const rawQuantity = typeof ing.quantity === 'string' ? ing.quantity.trim() : ing.quantity;
+        const normalizedQuantity = rawQuantity === '' || rawQuantity === null || rawQuantity === undefined ? null : rawQuantity;
+        const rawUnit = typeof ing.unit === 'string' ? ing.unit.trim() : '';
+        return {
+          name: trimmedName,
+          quantity: normalizedQuantity,
+          unit: rawUnit ? rawUnit : null,
+        };
+      });
+
+    if (cleanedIngredients.length === 0) {
+      const message = "Añade al menos un ingrediente con nombre.";
+      setSaveError(message);
+      notifyError(message);
+      return;
+    }
+
+    const parseNonNegative = (value: string) => {
+      const normalized = value.trim();
+      if (normalized === '') return null;
+      const parsed = Number(normalized);
+      if (!Number.isFinite(parsed) || parsed < 0) return Number.NaN;
+      return Math.round(parsed);
+    };
+
+    const parsePositiveInt = (value: string) => {
+      const normalized = value.trim();
+      if (normalized === '') return null;
+      const parsed = Number(normalized);
+      if (!Number.isFinite(parsed) || parsed < 1) return Number.NaN;
+      return Math.floor(parsed);
+    };
+
+    const prepMinutes = parseNonNegative(String(prepTime));
+    if (Number.isNaN(prepMinutes)) {
+      const message = "El tiempo de preparación debe ser un número mayor o igual a 0.";
+      setSaveError(message);
+      notifyError(message);
+      return;
+    }
+
+    const cookMinutes = parseNonNegative(String(cookTime));
+    if (Number.isNaN(cookMinutes)) {
+      const message = "El tiempo de cocción debe ser un número mayor o igual a 0.";
+      setSaveError(message);
+      notifyError(message);
+      return;
+    }
+
+    const servingsValue = parsePositiveInt(String(servings));
+    if (Number.isNaN(servingsValue)) {
+      const message = "Las porciones deben ser un número entero igual o mayor a 1.";
+      setSaveError(message);
+      notifyError(message);
+      return;
+    }
+
+    const cleanedInstructions = Array.isArray(instructions)
+      ? instructions.map((inst) => inst.trim()).filter((inst) => inst !== '')
+      : [];
+
+    const rawTags = tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter((tag) => tag !== '');
+    const uniqueTags: string[] = [];
+    const seenTags = new Set<string>();
+    rawTags.forEach((tag) => {
+      const key = tag.toLowerCase();
+      if (!seenTags.has(key)) {
+        seenTags.add(key);
+        uniqueTags.push(tag);
+      }
+    });
 
     setIsSaving(true);
     setSaveError(null);
 
     const recipeDataToSave = {
       user_id: user.id,
-      title: title.trim(),
+      title: trimmedTitle,
       description: description.trim() || null,
-      // Mantener instrucciones como array, el servicio se encargará de convertir si es necesario
-      // Pasar el array de instrucciones directamente (el servicio se encarga de la conversión a string para la BD)
-      // Filtrar pasos vacíos antes de enviar
-      instructions: Array.isArray(instructions) ? instructions.filter(inst => inst.trim() !== '') : [],
-      prep_time_minutes: prepTime ? parseInt(prepTime, 10) || null : null,
-      cook_time_minutes: cookTime ? parseInt(cookTime, 10) || null : null,
-      servings: servings ? parseInt(String(servings), 10) || null : null,
-      // Mapeo de ingredientes usando la nueva estructura RecipeIngredientInput
-      ingredients: ingredients
-        .filter(ing => ing.ingredient_id || (ing.name && ing.name.trim() !== '')) // Guardar si tiene ID o nombre
-        .map(ing => ({
-          // El servicio usará findOrCreateIngredient, así que solo necesitamos el nombre si no hay ID
-          name: ing.name.trim(),
-          quantity: ing.quantity, // El servicio parseará esto
-          unit: ing.unit || null,
-          // ingredient_id se manejará en el servicio al llamar a findOrCreateIngredient
-          // No necesitamos pasarlo explícitamente aquí si el servicio lo deriva del nombre.
-          // Sin embargo, el servicio actual SÍ espera el ID si lo tenemos, así que lo pasamos.
-          // CORRECCIÓN: El servicio NO espera el ID, usa findOrCreate. Solo pasamos name, quantity, unit.
-      })),
-      image_url: imageUrl, // Usar el estado imageUrl
-      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-      is_favorite: false, // Añadir valor por defecto para nueva receta
+      instructions: cleanedInstructions,
+      prep_time_minutes: prepMinutes,
+      cook_time_minutes: cookMinutes,
+      servings: servingsValue,
+      ingredients: cleanedIngredients,
+      image_url: imageUrl,
+      tags: uniqueTags,
     };
 
     try {
-      let savedRecipe: Recipe | null = null;
       if (recipeId) {
-        // Usar updateRecipe (asegúrate que esté importado y exista en el servicio)
-        // El tipo recipeDataToSave ahora debería coincidir con Partial<RecipeInputData>
-        // (asumiendo que updateRecipe maneja la conversión de quantity string a number si es necesario)
-        savedRecipe = await updateRecipe(recipeId, recipeDataToSave);
-        toast.success("Receta actualizada con éxito!");
+        await updateRecipe(recipeId, recipeDataToSave);
+        notifySuccess('Actualizamos la receta.');
       } else {
-        // Usar addRecipe
-        // El tipo recipeDataToSave ahora debería coincidir con RecipeInputData
-        savedRecipe = await addRecipe(recipeDataToSave);
-        toast.success("Receta guardada con éxito!");
+        await addRecipe(recipeDataToSave);
+        notifySuccess('Guardamos la receta.');
       }
       navigate('/app/recipes');
-
     } catch (error: any) {
       console.error("Error al guardar receta:", error);
-      setSaveError(error.message || "Ocurrió un error desconocido al guardar.");
-      toast.error(`Error al guardar: ${error.message || "desconocido"}`);
+      const message = error?.message || "Ocurrió un error desconocido al guardar.";
+      setSaveError(message);
+      notifyError(`No pudimos guardar la receta: ${message}`);
     } finally {
       setIsSaving(false);
     }
   }, [
-    user, title, description, ingredients, instructions, prepTime, cookTime, servings, imageUrl, tags, recipeId, navigate // Añadir imageUrl y tags a dependencias
+    user,
+    title,
+    description,
+    ingredients,
+    instructions,
+    prepTime,
+    cookTime,
+    servings,
+    imageUrl,
+    tags,
+    recipeId,
+    navigate,
   ]);
 
 

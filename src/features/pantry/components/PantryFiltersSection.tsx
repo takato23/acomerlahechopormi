@@ -1,6 +1,7 @@
 import React from 'react';
 import { Category, PantryItem } from '../types';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { FavoriteTags } from './FavoriteTags';
 import { CategorySelect } from './CategorySelect';
 import { ClearPantryDialog } from './ClearPantryDialog';
@@ -58,7 +59,7 @@ export default function PantryFiltersSection({
         />
 
         {/* Barra de búsqueda, filtros y botón de limpiar */}
-        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           {/* Input de Búsqueda */}
           <div className="flex-1 w-full">
             <Input
@@ -70,9 +71,9 @@ export default function PantryFiltersSection({
           </div>
 
           {/* Contenedor para Select y Botón */}
-          <div className="flex gap-2 items-center w-full sm:w-auto">
+          <div className="flex w-full items-center gap-2 md:w-auto md:justify-end">
             {/* Div wrapper para que Select crezca en móvil */}
-            <div className="flex-grow">
+            <div className="grow md:grow-0 md:w-48">
               <CategorySelect
                 categories={categories}
                 value={filters.categoryId}
@@ -97,6 +98,26 @@ export default function PantryFiltersSection({
               </Tooltip>
             )}
           </div>
+        </div>
+
+        <div className="w-full">
+          <Label htmlFor="pantry-tags-filter" className="text-xs text-muted-foreground block mb-1">
+            Filtrar por etiquetas
+          </Label>
+          <Input
+            id="pantry-tags-filter"
+            placeholder="Ej: oferta, sin gluten"
+            value={filters.tags}
+            onChange={(e) =>
+              onFilterChange({
+                ...filters,
+                tags: e.target.value
+              })
+            }
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Separa las etiquetas con comas. Buscamos coincidencias exactas (sin distinguir mayúsculas).
+          </p>
         </div>
       </div>
     </TooltipProvider>

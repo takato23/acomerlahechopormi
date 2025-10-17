@@ -16,8 +16,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-// Importar Ingredient desde el servicio que lo devuelve
-import { searchIngredients, Ingredient } from "@/features/ingredients/ingredientService";
+import { searchIngredients } from "@/features/ingredients/ingredientService";
+import type { Ingredient } from "@/types/ingredientTypes";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Spinner } from "@/components/ui/Spinner"; // Importar Spinner
 
@@ -148,7 +148,9 @@ export function IngredientCombobox({
                      const newIngredientPlaceholder: Ingredient = {
                        id: '--new--', // ID especial
                        name: searchQuery.trim(),
-                       created_at: new Date().toISOString(),
+                       category_id: '',
+                       default_unit: null,
+                       image_url: null,
                      };
                      handleSelect(newIngredientPlaceholder, true);
                    }}

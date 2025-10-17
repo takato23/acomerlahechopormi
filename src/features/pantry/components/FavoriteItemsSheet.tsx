@@ -39,8 +39,6 @@ export function FavoriteItemsSheet({
 
   // Memoizar el handler que llama a la acción del store
   const handleToggleFavorite = useCallback((itemId: string) => {
-    // Ya no necesitamos pasar currentState, la acción del store lo maneja
-    console.log(`[FavoriteItemsSheet] Calling toggleFavorite action for ${itemId}`);
     toggleFavoriteAction(itemId);
   }, [toggleFavoriteAction]); // Depender de la acción del store
 

@@ -1,14 +1,41 @@
 // src/features/recipes/services/recipeService.ts
-import { supabase } from '../../../lib/supabaseClient'; // Corregir ruta relativa
-import type { Recipe, RecipeIngredient } from '../../../types/recipeTypes'; // Corregir ruta relativa
-import { findOrCreateIngredient } from '../../ingredients/ingredientService'; // Importar servicio de ingredientes
+import { supabase } from '@/lib/supabaseClient';
+import { handleError } from '@/lib/errorHandler';
+import type { Recipe, RecipeIngredient, GeneratedRecipeData, RecipeInstructions } from '@/types/recipeTypes';
+import { VALID_COOKING_METHODS } from '@/types/recipeRecommendationTypes';
+import type { Database } from '@/lib/database.types';
+import { findOrCreateIngredient } from '../../ingredients/ingredientService';
+import { MOCK_RECIPES } from '@/lib/mockData';
 
-// Añadir isBaseRecipe al tipo de entrada
-export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients' | 'is_generated_base'> & {
-  user_id?: string | null; // Hacer user_id opcional aquí también
+// Función para detectar si usar datos mock
+const shouldUseMockData = () => {
+  return false; // Usar Supabase real
+};
+
+// Funciones auxiliares para conversión de instrucciones
+const instructionsToString = (instructions: RecipeInstructions | string | null | undefined): string => {
+  if (Array.isArray(instructions)) {
+    return instructions.filter(inst => inst && inst.trim() !== '').join('\n');
+  }
+  if (typeof instructions === 'string') {
+    return instructions.trim();
+  }
+  return '';
+};
+
+const instructionsToArray = (text: string | null): RecipeInstructions => {
+  if (!text) return [];
+  return text.split('\n').filter(line => line && line.trim() !== '');
+};
+
+// Tipo de entrada para añadir/actualizar recetas
+export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'ingredients' | 'is_generated_base' | 'instructions' | 'main_ingredients'> & {
+  user_id?: string | null;
   ingredients: Array<{ name: string; quantity: string | number | null; unit?: string | null }>;
-  isBaseRecipe?: boolean; // Flag para indicar si es receta base generada
-  tags?: string[] | null; // Tags/categorías predefinidas para la receta
+  instructions: RecipeInstructions | string | null; // Permitir string o array como entrada
+  isBaseRecipe?: boolean;
+  tags?: string[] | null;
+  mainIngredients?: string[]; // Usar camelCase para la entrada desde UI/Generación
 };
 
 // Importar tipo de filtros
@@ -26,11 +53,92 @@ interface GetRecipesResult {
   hasMore: boolean;
 }
 
-// Tipo intermedio para la respuesta de Supabase con la relación
-type RecipeWithIngredientsRaw = Omit<Recipe, 'ingredients' | 'instructions'> & {
-  instructions: string | null; // Viene como string de la DB
-  recipe_ingredients: RecipeIngredient[] | null;
+type DbRecipeRow = Database['public']['Tables']['recipes']['Row'];
+type DbRecipeIngredient = Database['public']['Tables']['recipe_ingredients']['Row'];
+
+// Tipo intermedio para la respuesta de Supabase (usa snake_case y string para instructions)
+type RecipeFromDB = DbRecipeRow & {
+  recipe_ingredients: DbRecipeIngredient[] | null;
 };
+
+const normalizeCookingMethods = (value: unknown) => {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((method): method is typeof VALID_COOKING_METHODS[number] =>
+    typeof method === 'string' && VALID_COOKING_METHODS.includes(method as typeof VALID_COOKING_METHODS[number])
+  );
+};
+
+export const getEffectiveRecipeTotalTime = (recipe: Recipe): number | null => {
+  const estimatedTime = typeof recipe.estimated_time === 'number' && !Number.isNaN(recipe.estimated_time)
+    ? Math.max(0, recipe.estimated_time)
+    : null;
+
+  if (estimatedTime !== null) {
+    return estimatedTime;
+  }
+
+  const prep = typeof recipe.prep_time_minutes === 'number' ? Math.max(0, recipe.prep_time_minutes) : null;
+  const cook = typeof recipe.cook_time_minutes === 'number' ? Math.max(0, recipe.cook_time_minutes) : null;
+
+  if (prep === null && cook === null) {
+    return null;
+  }
+
+  return (prep ?? 0) + (cook ?? 0);
+};
+
+export const filterRecipesByMaxTime = (recipes: Recipe[], maxMinutes: number): Recipe[] => {
+  if (!Number.isFinite(maxMinutes)) {
+    return recipes;
+  }
+  const normalizedMax = Math.max(0, maxMinutes);
+  return recipes.filter((recipe) => {
+    const totalTime = getEffectiveRecipeTotalTime(recipe);
+    if (totalTime === null) {
+      return false;
+    }
+    return totalTime <= normalizedMax;
+  });
+};
+
+/**
+ * Convierte el formato de la DB al formato de la UI (Recipe)
+ */
+function mapDBDataToRecipe(dbData: RecipeFromDB): Recipe {
+  const ingredients = (dbData.recipe_ingredients || []).map((ingredient) => ({
+    ...ingredient,
+    notes: ingredient.notes ?? null
+  })) as RecipeIngredient[];
+
+  const cookingMethods = normalizeCookingMethods((dbData as Record<string, unknown>).cooking_methods);
+
+  return {
+    id: dbData.id,
+    user_id: dbData.user_id,
+    title: dbData.title,
+    description: dbData.description,
+    instructions: instructionsToArray(dbData.instructions),
+    created_at: dbData.created_at,
+    updated_at: dbData.updated_at ?? null,
+    image_url: dbData.image_url ?? null,
+    prep_time_minutes: dbData.prep_time_minutes ?? null,
+    cook_time_minutes: dbData.cook_time_minutes ?? null,
+    servings: dbData.servings ?? null,
+    tags: dbData.tags ?? null,
+    is_favorite: (dbData as DbRecipeRow & { is_favorite?: boolean }).is_favorite ?? false,
+    category_id: (dbData as DbRecipeRow & { category_id?: string | null }).category_id ?? null,
+    ingredients,
+    main_ingredients: (dbData as DbRecipeRow & { main_ingredients?: string[] | null }).main_ingredients ?? null,
+    is_generated_base: (dbData as DbRecipeRow & { is_generated_base?: boolean }).is_generated_base ?? undefined,
+    cooking_methods: cookingMethods,
+    difficulty_level: (dbData as DbRecipeRow & { difficulty_level?: Recipe['difficulty_level'] }).difficulty_level,
+    cuisine_type: (dbData as DbRecipeRow & { cuisine_type?: Recipe['cuisine_type'] }).cuisine_type,
+    estimated_time: (dbData as DbRecipeRow & { estimated_time?: Recipe['estimated_time'] }).estimated_time ?? null,
+    nutritional_info: (dbData as DbRecipeRow & { nutritional_info?: Recipe['nutritional_info'] }).nutritional_info,
+    seasonal_flags: (dbData as DbRecipeRow & { seasonal_flags?: Recipe['seasonal_flags'] }).seasonal_flags,
+    equipment_needed: (dbData as DbRecipeRow & { equipment_needed?: Recipe['equipment_needed'] }).equipment_needed
+  };
+}
 
 /**
  * Obtiene las recetas para un usuario específico, aplicando filtros y paginación.
@@ -42,125 +150,176 @@ export const getRecipes = async ({
   limit = 12
 }: GetRecipesParams): Promise<GetRecipesResult> => {
   if (!userId) {
-    console.error("User ID es necesario para obtener recetas.");
-    // Devolver estructura esperada incluso en error temprano
+    handleError(new Error("User ID es necesario para obtener recetas."), {
+      component: 'recipeService',
+      action: 'getRecipes',
+      severity: 'medium'
+    });
     return { data: [], hasMore: false };
   }
-  let query = supabase
-    .from('recipes')
-    .select(`
-      id,
-      user_id,
-      title,
-      description,
-      image_url,
-      prep_time_minutes,
-      cook_time_minutes,
-      servings,
-      is_favorite,
-      instructions,
-      created_at,
-      recipe_ingredients (
-        id,
-        recipe_id,
-        ingredient_name,
-        quantity,
-        unit,
-        ingredient_id
-      )
-    `)
-    .eq('user_id', userId);
 
-  // Aplicar filtros dinámicamente
-  if (filters.searchTerm) {
-    query = query.ilike('title', `%${filters.searchTerm}%`);
-  }
-  if (filters.showOnlyFavorites) {
-    query = query.eq('is_favorite', true);
-  }
+  if (shouldUseMockData()) {
+    console.log('Using mock recipe data');
 
-  // Filtro por Ingredientes (contiene al menos uno)
-  if (filters.selectedIngredients && filters.selectedIngredients.length > 0) {
-    // Necesitamos filtrar en la tabla relacionada. Esto puede ser complejo.
-    // Una forma es usar .filter() si Supabase lo soporta bien en relaciones anidadas para 'in'
-    // Nota: Esto requiere que los nombres coincidan exactamente.
-    // Asegúrate de escapar las comillas simples en los nombres si es necesario.
-    const ingredientNames = filters.selectedIngredients.map(name => name.replace(/'/g, "''"));
-    // Usamos `or` para buscar recetas que tengan CUALQUIERA de los ingredientes seleccionados.
-    // La sintaxis exacta puede variar, consultando la documentación de PostgREST/Supabase para filtros anidados.
-    // Ejemplo tentativo usando 'or' y 'in' en la relación:
-    query = query.filter('recipe_ingredients.ingredient_name', 'in', `(${ingredientNames.map(name => `'${name}'`).join(',')})`);
-    // Alternativa si lo anterior no funciona o para buscar TODOS (más complejo, usualmente RPC):
-    // Podrías necesitar una función RPC para una lógica de "contiene todos".
-    console.log(`Applying ingredient filter (at least one): ${ingredientNames.join(', ')}`);
-  }
+    let filteredRecipes = [...MOCK_RECIPES];
 
-  // Filtro por Tags (contiene todos los seleccionados)
-  if (filters.selectedTags && filters.selectedTags.length > 0) {
-    // Usar '@>' (contains array) para aprovechar el índice GIN
-    query = query.filter('tags', '@>', filters.selectedTags);
-    console.log(`Applying tags filter (contains all selected): ${filters.selectedTags.join(', ')}`);
-  }
+    // Aplicar filtros
+    if (filters.searchTerm) {
+      filteredRecipes = filteredRecipes.filter(recipe =>
+        recipe.title.toLowerCase().includes(filters.searchTerm!.toLowerCase())
+      );
+    }
+    if (filters.showOnlyFavorites) {
+      filteredRecipes = filteredRecipes.filter(recipe => recipe.is_favorite);
+    }
+    if (filters.selectedIngredients && filters.selectedIngredients.length > 0) {
+      filteredRecipes = filteredRecipes.filter(recipe =>
+        recipe.ingredients.some(ing =>
+          filters.selectedIngredients!.some(selected =>
+            ing.ingredient_name.toLowerCase().includes(selected.toLowerCase())
+          )
+        )
+      );
+    }
+    if (filters.selectedTags && filters.selectedTags.length > 0) {
+      filteredRecipes = filteredRecipes.filter(recipe =>
+        recipe.tags && filters.selectedTags!.some(tag => recipe.tags!.includes(tag))
+      );
+    }
+    if (filters.categoryId) {
+      filteredRecipes = filteredRecipes.filter(recipe => recipe.category_id === filters.categoryId);
+    }
+    if (filters.maxTotalTimeMinutes !== undefined && filters.maxTotalTimeMinutes !== null) {
+      filteredRecipes = filterRecipesByMaxTime(filteredRecipes, filters.maxTotalTimeMinutes);
+    }
 
-  // Aplicar ordenamiento dinámico basado en filters.sortOption
-  const sortOption = filters.sortOption || 'created_at_desc'; // Default a más recientes
-  let sortColumn: string = 'created_at';
-  let sortAscending: boolean = false;
+    // Aplicar ordenamiento
+    const sortOption = filters.sortOption || 'created_at_desc';
+    filteredRecipes.sort((a, b) => {
+      switch (sortOption) {
+        case 'created_at_asc':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'title_asc':
+          return a.title.localeCompare(b.title);
+        case 'title_desc':
+          return b.title.localeCompare(a.title);
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
 
-  switch (sortOption) {
-    case 'created_at_asc':
-      sortColumn = 'created_at';
-      sortAscending = true;
-      break;
-    case 'title_asc':
-      sortColumn = 'title';
-      sortAscending = true;
-      break;
-    case 'title_desc':
-      sortColumn = 'title';
-      sortAscending = false;
-      break;
-    case 'created_at_desc': // Incluido el default
-    default:
-      sortColumn = 'created_at';
-      sortAscending = false;
-      break;
+    // Aplicar paginación
+    const from = (page - 1) * limit;
+    const to = from + limit;
+    const paginatedRecipes = filteredRecipes.slice(from, to);
+    const hasMore = filteredRecipes.length > to;
+
+    return { data: paginatedRecipes, hasMore };
   }
 
-  console.log(`Applying sort: column=${sortColumn}, ascending=${sortAscending}`);
-  query = query.order(sortColumn, { ascending: sortAscending });
+  const selectColumns = (includeEstimatedTime: boolean) => `
+      id, user_id, title, description, image_url, prep_time_minutes, cook_time_minutes,
+      servings, instructions, created_at, updated_at, category_id, tags${includeEstimatedTime ? ', estimated_time' : ''},
+      recipe_ingredients ( id, recipe_id, ingredient_id, ingredient_name, quantity, unit, notes )
+    `;
 
-  // Aplicar paginación
+  const maxTotalTime = filters.maxTotalTimeMinutes ?? null;
   const from = (page - 1) * limit;
   const to = from + limit - 1;
-  console.log(`Applying range: from ${from} to ${to}`);
-  query = query.range(from, to);
+
+  const buildQuery = (includeEstimatedTime: boolean) => {
+    let builtQuery = supabase
+      .from('recipes')
+      .select(selectColumns(includeEstimatedTime))
+      .eq('user_id', userId);
+
+    if (filters.searchTerm) builtQuery = builtQuery.ilike('title', `%${filters.searchTerm}%`);
+    if (filters.showOnlyFavorites) builtQuery = builtQuery.eq('is_favorite', true);
+    if (filters.selectedIngredients && filters.selectedIngredients.length > 0) {
+      const ingredientNames = filters.selectedIngredients.map(name => name.replace(/'/g, "''"));
+      builtQuery = builtQuery.filter('recipe_ingredients.ingredient_name', 'in', `(${ingredientNames.map(name => `'${name}'`).join(',')})`);
+    }
+    if (filters.selectedTags && filters.selectedTags.length > 0) builtQuery = builtQuery.filter('tags', '@>', filters.selectedTags);
+    if (filters.categoryId) {
+      builtQuery = builtQuery.eq('category_id', filters.categoryId);
+    }
+
+    const sortOption = filters.sortOption || 'created_at_desc';
+    let sortColumn: string = 'created_at';
+    let sortAscending: boolean = false;
+    switch (sortOption) {
+      case 'created_at_asc': sortColumn = 'created_at'; sortAscending = true; break;
+      case 'title_asc': sortColumn = 'title'; sortAscending = true; break;
+      case 'title_desc': sortColumn = 'title'; sortAscending = false; break;
+      default: sortColumn = 'created_at'; sortAscending = false; break;
+    }
+    builtQuery = builtQuery.order(sortColumn, { ascending: sortAscending });
+
+    if (maxTotalTime === null) {
+      builtQuery = builtQuery.range(from, to);
+    }
+
+    return builtQuery;
+  };
+
+  let query = buildQuery(true);
 
   const { data, error } = await query;
 
+  if (error?.code === '42703') {
+    query = buildQuery(false);
+    const fallbackResult = await query;
+    if (fallbackResult.error) {
+      handleError(fallbackResult.error, {
+        component: 'recipeService',
+        action: 'getRecipes',
+        severity: 'high'
+      });
+      return { data: [], hasMore: false };
+    }
+    const fallbackData = fallbackResult.data || [];
+    const fallbackRecipes = Array.isArray(fallbackData)
+      ? fallbackData.map(dbRecipe => mapDBDataToRecipe(dbRecipe as unknown as RecipeFromDB))
+      : [];
+
+    if (maxTotalTime !== null) {
+      const filteredRecipes = filterRecipesByMaxTime(fallbackRecipes, maxTotalTime);
+      const pageStart = from;
+      const pageEnd = pageStart + limit;
+      const paginatedRecipes = filteredRecipes.slice(pageStart, pageEnd);
+      const hasMoreFiltered = pageEnd < filteredRecipes.length;
+      return { data: paginatedRecipes, hasMore: hasMoreFiltered };
+    }
+
+    const hasMoreFallback = fallbackRecipes.length === limit;
+    return { data: fallbackRecipes, hasMore: hasMoreFallback };
+  }
+
   if (error) {
-    console.error('Error fetching recipes:', error);
-    // Devolver estructura esperada en caso de error
+    handleError(error, {
+      component: 'recipeService',
+      action: 'getRecipes',
+      severity: 'high'
+    });
     return { data: [], hasMore: false };
   }
 
-  // Si data es null (puede pasar si no hay resultados), inicializar a array vacío
   const safeData = data || [];
-  // Mapear los ingredientes al formato esperado por el tipo Recipe
-  // Añadir tipo explícito al parámetro del map
-  const recipesWithMappedIngredients = safeData.map((recipe: RecipeWithIngredientsRaw): Recipe => ({
-    ...recipe,
-    // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
-    ingredients: (recipe.recipe_ingredients || []) as RecipeIngredient[],
-    // Convertir instructions (string) a string[]
-    instructions: typeof recipe.instructions === 'string' ? recipe.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
-  }));
+  const recipes = Array.isArray(safeData)
+    ? safeData.map(dbRecipe => mapDBDataToRecipe(dbRecipe as unknown as RecipeFromDB))
+    : [];
 
-  // Determinar si hay más páginas comparando la cantidad obtenida con el límite
-  const hasMore = recipesWithMappedIngredients.length === limit;
+  if (maxTotalTime !== null) {
+    const filteredRecipes = filterRecipesByMaxTime(recipes, maxTotalTime);
+    const pageStart = from;
+    const pageEnd = pageStart + limit;
+    const paginatedRecipes = filteredRecipes.slice(pageStart, pageEnd);
+    const hasMoreFiltered = pageEnd < filteredRecipes.length;
+    return { data: paginatedRecipes, hasMore: hasMoreFiltered };
+  }
 
-  console.log(`Recipes fetched (Page ${page}, Limit ${limit}): ${recipesWithMappedIngredients.length} items. Has More: ${hasMore}`);
-  return { data: recipesWithMappedIngredients, hasMore };
+  const hasMore = recipes.length === limit;
+  return { data: recipes, hasMore };
 };
 
 /**
@@ -169,220 +328,181 @@ export const getRecipes = async ({
 export const getRecipeById = async (recipeId: string): Promise<Recipe | null> => {
   if (!recipeId) return null;
 
+  if (shouldUseMockData()) {
+    console.log(`Using mock data for recipe ${recipeId}`);
+    const recipe = MOCK_RECIPES.find(r => r.id === recipeId);
+    return recipe || null;
+  }
+
   const { data, error } = await supabase
     .from('recipes')
     .select(`
-      id,
-      user_id,
-      title,
-      description,
-      image_url,
-      prep_time_minutes,
-      cook_time_minutes,
-      servings,
-      is_favorite,
-      instructions,
-      created_at,
-      recipe_ingredients (
-        id,
-        recipe_id,
-        ingredient_name,
-        quantity,
-        unit,
-        ingredient_id
-      )
+      id, user_id, title, description, image_url, prep_time_minutes, cook_time_minutes,
+      servings, instructions, created_at, updated_at, tags,
+      recipe_ingredients ( id, recipe_id, ingredient_id, ingredient_name, quantity, unit, notes )
     `)
     .eq('id', recipeId)
     .single();
 
   if (error) {
-    console.error(`Error fetching recipe ${recipeId}:`, error);
-    // Podrías querer manejar el error 'No rows found' de forma diferente si es necesario
-    if (error.code === 'PGRST116') { // Código para 'No rows found'
-        return null;
-    }
+    handleError(error, {
+      component: 'recipeService',
+      action: 'getRecipeById',
+      severity: 'high'
+    });
+    if (error.code === 'PGRST116') return null;
     throw new Error(`Error al obtener la receta: ${error.message}`);
   }
 
-   if (!data) return null;
+  if (!data) return null;
 
-   // Mapear ingredientes
-   // Añadir aserción de tipo a 'data'
-   const rawData = data as RecipeWithIngredientsRaw; // Usar el tipo definido arriba
-   const recipeWithMappedIngredients: Recipe = {
-     ...rawData,
-     // Asegurarse de que recipe_ingredients sea un array y renombrar a ingredients
-     ingredients: (rawData.recipe_ingredients || []) as RecipeIngredient[],
-     // Convertir instructions (string) a string[]
-     instructions: typeof rawData.instructions === 'string' ? rawData.instructions.split('\n').filter((line: string) => line.trim() !== '') : [],
-   };
-
-  return recipeWithMappedIngredients;
+  return mapDBDataToRecipe(data as RecipeFromDB);
 };
 
 
 /**
  * Añade una nueva receta y sus ingredientes a la base de datos.
  */
-export const addRecipe = async (recipeData: RecipeInputData): Promise<Recipe> => { // Cambiar tipo de retorno a Recipe completo
-  console.log("Guardando receta:", recipeData);
+export const addRecipe = async (recipeInput: RecipeInputData): Promise<Recipe> => {
+  console.log("Guardando receta:", recipeInput);
 
-  // Validar: Se necesita título. Se necesita user_id a menos que sea isBaseRecipe
-  if (!recipeData.title || (!recipeData.user_id && !recipeData.isBaseRecipe)) {
-    throw new Error("El título es obligatorio. Se requiere user_id si no es una receta base.");
+  if (!recipeInput.title || !recipeInput.user_id) {
+    throw new Error("El título y user_id son obligatorios.");
   }
 
-  // Construir el objeto a insertar basado en si es base o no
+  // Preparar datos para insertar en la tabla 'recipes'
   const recipeToInsert = {
-    user_id: recipeData.isBaseRecipe ? null : recipeData.user_id, // Null si es base
-    title: recipeData.title,
-    description: recipeData.description,
-    instructions: Array.isArray(recipeData.instructions)
-      ? (recipeData.instructions as string[]).join('\n')
-      : recipeData.instructions,
-    prep_time_minutes: recipeData.prep_time_minutes,
-    cook_time_minutes: recipeData.cook_time_minutes,
-    servings: recipeData.servings,
-    is_generated_base: recipeData.isBaseRecipe || false, // Establecer el flag
-    is_favorite: false, // Las recetas base no son favoritas por defecto
-    tags: recipeData.tags || null, // Añadir tags
-    // image_url se añadirá después
+    user_id: recipeInput.user_id,
+    title: recipeInput.title,
+    description: recipeInput.description,
+    instructions: instructionsToString(recipeInput.instructions), // Convertir a string para DB
+    prep_time_minutes: recipeInput.prep_time_minutes,
+    cook_time_minutes: recipeInput.cook_time_minutes,
+    servings: recipeInput.servings,
+    tags: recipeInput.tags || null
   };
 
-  const { data: newRecipe, error: recipeError } = await supabase
+  // Insertar la receta principal
+  const { data: newRecipeData, error: recipeError } = await supabase
     .from('recipes')
     .insert(recipeToInsert)
-    .select()
+    .select(`*, recipe_ingredients ( * )`) // Seleccionar todo, incluyendo ingredientes (estarán vacíos inicialmente)
     .single();
 
-  if (recipeError || !newRecipe) {
-    console.error('Error al insertar receta:', recipeError);
+  if (recipeError || !newRecipeData) {
+    handleError(recipeError || new Error('Error al insertar receta'), {
+      component: 'recipeService',
+      action: 'addRecipe',
+      severity: 'high'
+    });
     throw new Error(`Error al guardar la receta: ${recipeError?.message || 'Error desconocido'}`);
   }
 
-  console.log("Receta principal guardada (sin imagen aún), ID:", newRecipe.id);
+  let newRecipeDB = newRecipeData as RecipeFromDB; // Castear a tipo DB
 
-  // --- Llamar a Edge Function para generar imagen ---
-  let imageUrl: string | null = null;
-  try {
-    console.log(`Invocando Edge Function 'generate-recipe-image' para: ${newRecipe.title}`);
-    const { data: functionData, error: functionError } = await supabase.functions.invoke(
-      'generate-recipe-image',
-      { body: { recipeTitle: newRecipe.title } }
-    );
+  console.log("Receta principal guardada, ID:", newRecipeDB.id);
 
-    if (functionError) {
-      throw functionError;
-    }
-
-    imageUrl = functionData?.imageUrl; // Asumiendo que la función devuelve { imageUrl: '...' }
-    console.log("Imagen generada, URL/Data:", imageUrl);
-
-    // --- Actualizar receta con la URL de la imagen ---
-    if (imageUrl) {
-      const { data: updatedRecipe, error: updateError } = await supabase
-        .from('recipes')
-        .update({ image_url: imageUrl })
-        .eq('id', newRecipe.id)
-        .select() // Devolver la fila actualizada
-        .single();
-
-      if (updateError) {
-        throw updateError;
-      }
-      if (updatedRecipe) {
-         console.log("Receta actualizada con image_url.");
-         // Sobrescribir newRecipe con la versión actualizada que incluye la imagen
-         Object.assign(newRecipe, updatedRecipe);
-      }
-    } else {
-        console.warn("La Edge Function no devolvió una imageUrl.");
-    }
-
-  } catch (error) {
-    // No detener el proceso si falla la generación/actualización de imagen, solo loguear
-    console.error('Error al generar o guardar imagen para la receta:', error);
-    // Opcional: podrías querer notificar al usuario de alguna manera
-  }
-  // --- Fin de generación de imagen ---
-
-  if (recipeData.ingredients && recipeData.ingredients.length > 0) {
-    console.log("Procesando ingredientes para obtener/crear IDs...");
-    const ingredientsToInsertPromises = recipeData.ingredients.map(async (ing) => {
-      if (!ing.name) {
-        console.warn("Ingrediente sin nombre omitido:", ing);
-        return null; // Omitir ingredientes sin nombre
-      }
+  // Procesar e insertar ingredientes asociados
+  let insertedIngredients: RecipeIngredient[] = [];
+  if (recipeInput.ingredients && recipeInput.ingredients.length > 0) {
+    const ingredientsToInsertPromises = recipeInput.ingredients.map(async (ing) => {
+      if (!ing.name) return null;
       const quantityValue = typeof ing.quantity === 'string' ? parseFloat(ing.quantity.replace(',', '.')) || 1 : (ing.quantity ?? 1);
       try {
-        const foundOrCreatedIngredient = await findOrCreateIngredient(ing.name, quantityValue);
+        const found = await findOrCreateIngredient(ing.name, quantityValue);
         return {
-          recipe_id: newRecipe.id,
-          ingredient_id: foundOrCreatedIngredient.id, // ID del ingrediente maestro
-          ingredient_name: ing.name, // Nombre original proporcionado
-          quantity: quantityValue === 1 && typeof ing.quantity !== 'number' ? null : quantityValue, // Guardar null si la cantidad era 1 por defecto y no numérica
+          recipe_id: newRecipeDB.id,
+          ingredient_id: found.id,
+          ingredient_name: ing.name,
+          quantity: quantityValue === 1 && typeof ing.quantity !== 'number' ? null : quantityValue,
           unit: ing.unit || null,
+          notes: null
         };
-      } catch (error) {
-        console.error(`Error procesando ingrediente "${ing.name}":`, error);
-        // Decidir si continuar o lanzar error. Por ahora, omitimos este ingrediente.
+      } catch (e) {
+        handleError(e instanceof Error ? e : new Error(String(e)), {
+          component: 'recipeService',
+          action: 'processIngredient',
+          severity: 'medium'
+        });
         return null;
       }
     });
 
-    const resolvedIngredients = await Promise.all(ingredientsToInsertPromises);
-    const validIngredientsToInsert = resolvedIngredients.filter(ing => ing !== null);
+    const resolved = await Promise.all(ingredientsToInsertPromises);
+    const validToInsert = resolved.filter((ing): ing is NonNullable<typeof ing> => ing !== null);
 
-    if (validIngredientsToInsert.length > 0) {
-        console.log("Insertando ingredientes con IDs:", validIngredientsToInsert);
-        const { error: ingredientsError } = await supabase
-          .from('recipe_ingredients')
-          .insert(validIngredientsToInsert); // Insertar los objetos completos
+    if (validToInsert.length > 0) {
+      const { data: insertedData, error: ingredientsError } = await supabase
+        .from('recipe_ingredients')
+        .insert(validToInsert)
+        .select(); // Devolver los ingredientes insertados
 
-        // Mover el manejo de errores DENTRO del if
-        if (ingredientsError) {
-          console.error('Error al insertar ingredientes:', ingredientsError);
-          // Considerar si eliminar la receta principal si fallan los ingredientes (transacción?)
-          throw new Error(`Error al guardar los ingredientes: ${ingredientsError.message}`);
-        }
-        console.log("Ingredientes guardados.");
-    } else {
-        console.log("No hay ingredientes válidos para insertar después del procesamiento.");
+      if (ingredientsError) {
+        handleError(ingredientsError, {
+          component: 'recipeService',
+          action: 'addRecipeIngredients',
+          severity: 'high'
+        });
+        // Considerar rollback o manejo de error
+        throw new Error(`Error al guardar los ingredientes: ${ingredientsError.message}`);
+      }
+      insertedIngredients = (insertedData || []) as RecipeIngredient[];
+      console.log("Ingredientes guardados:", insertedIngredients);
     }
-    // Eliminar el bloque if (ingredientsError) duplicado/fuera de scope
   }
 
-  // Devolver la receta completa (puede o no tener image_url si la función falló)
-  // Necesitamos añadir los ingredientes al objeto devuelto si queremos el tipo Recipe completo
-  // Por simplicidad, podemos seguir devolviendo Omit<Recipe, 'ingredients'> o ajustar
-  // Aquí devolvemos la receta actualizada (con o sin imagen) pero sin los ingredientes detallados
-  // Para devolver Recipe completo, necesitaríamos re-leer los ingredientes o añadirlos manualmente
-  return newRecipe as Recipe; // Castear temporalmente si estamos seguros que tiene los campos necesarios
+  // Asignar ingredientes insertados a la receta recuperada
+  newRecipeDB.recipe_ingredients = insertedIngredients;
+
+  if (!recipeInput.image_url) {
+    try {
+      // Enviar el objeto directamente como body, sin anidamiento extra
+      const { data: funcData, error: funcError } = await supabase.functions.invoke(
+        'generate-recipe-image',
+        { body: { recipeTitle: newRecipeDB.title } }
+      );
+      if (funcError) throw funcError;
+      const imageUrl = funcData?.imageUrl;
+      if (imageUrl) {
+        const { data: updatedImgData, error: imgUpdateError } = await supabase
+          .from('recipes')
+          .update({ image_url: imageUrl })
+          .eq('id', newRecipeDB.id)
+          .select('image_url')
+          .single();
+        if (imgUpdateError) throw imgUpdateError;
+        if (updatedImgData) newRecipeDB.image_url = updatedImgData.image_url;
+      }
+    } catch (error) {
+      handleError(error, {
+        component: 'recipeService',
+        action: 'generateAndSaveImage',
+        severity: 'medium'
+      });
+    }
+  }
+
+  // Devolver la receta completa mapeada al tipo UI
+  return mapDBDataToRecipe(newRecipeDB);
 };
 
 /**
  * Elimina una receta por su ID.
  */
 export const deleteRecipe = async (recipeId: string): Promise<void> => {
-    if (!recipeId) {
-        throw new Error("Se requiere ID de receta para eliminar.");
-    }
-
-    // Supabase maneja la eliminación en cascada de recipe_ingredients si está configurada la FK
-    const { error } = await supabase
-        .from('recipes')
-        .delete()
-        .eq('id', recipeId);
-
+    if (!recipeId) throw new Error("Se requiere ID de receta para eliminar.");
+    const { error } = await supabase.from('recipes').delete().eq('id', recipeId);
     if (error) {
-        console.error(`Error deleting recipe ${recipeId}:`, error);
+        handleError(error, {
+          component: 'recipeService',
+          action: 'deleteRecipe',
+          severity: 'high'
+        });
         throw new Error(`Error al eliminar la receta: ${error.message}`);
     }
+    console.log(`Receta ${recipeId} eliminada.`);
+};
 
-    console.log(`Receta ${recipeId} eliminada.`); // Mover console.log aquí
-}; // Llave de cierre correcta para deleteRecipe
-
-// Renombrar updateRecipeFavoriteStatus a toggleRecipeFavorite para coincidir con el store
 /**
  * Cambia el estado de favorito de una receta.
  */
@@ -392,154 +512,127 @@ export async function toggleRecipeFavorite(recipeId: string, isFavorite: boolean
 
   const { data, error } = await supabase
     .from('recipes')
-    .update({ is_favorite: isFavorite, updated_at: new Date().toISOString() }) // Añadir updated_at
+    .update({ is_favorite: isFavorite, updated_at: new Date().toISOString() })
     .eq('id', recipeId)
     .eq('user_id', user.id)
-    .select('*') // Devolver receta completa para actualizar estado optimista si es necesario
+    .select(`*, recipe_ingredients ( * )`) // Seleccionar todo para devolver completo
     .single();
 
   if (error) {
-    console.error("Error toggling recipe favorite:", error);
-    if (error.code === 'PGRST116') {
-        console.warn(`Recipe ${recipeId} not found or permission denied.`);
-        return null;
-    }
+    handleError(error, {
+      component: 'recipeService',
+      action: 'toggleRecipeFavorite',
+      severity: 'medium'
+    });
+    if (error.code === 'PGRST116') return null;
     throw error;
   }
   console.log(`Recipe ${recipeId} favorite status updated to ${isFavorite}`);
-  return data; // Devolver la receta completa actualizada
+  return mapDBDataToRecipe(data as RecipeFromDB); // Mapear al formato UI
 }
-// Eliminar llave extra
 
+/**
+ * Obtiene la lista de categorías disponibles.
+ */
+export const getCategories = async (): Promise<{ id: string; name: string; icon: string | null }[]> => {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, icon, order')
+    .order('order', { ascending: true })
+    .order('name', { ascending: true });
 
-// TODO: Añadir función para updateRecipe
+  if (error) {
+    handleError(error, {
+      component: 'recipeService',
+      action: 'getCategories',
+      severity: 'medium'
+    });
+    throw new Error(`Error al obtener las categorías: ${error.message}`);
+  }
+  return (data || []) as { id: string; name: string; icon: string | null }[];
+};
+
 
 /**
  * Actualiza una receta existente y sus ingredientes.
  */
-export const updateRecipe = async (recipeId: string, recipeData: Partial<RecipeInputData>): Promise<Recipe | null> => { // Asegurar tipo de retorno correcto
-  console.log(`Actualizando receta ${recipeId}:`, recipeData);
+export const updateRecipe = async (recipeId: string, recipeInput: Partial<RecipeInputData>): Promise<Recipe | null> => {
+  console.log(`Actualizando receta ${recipeId}:`, recipeInput);
+  if (!recipeId) throw new Error("El ID de la receta es obligatorio para actualizar.");
 
-  if (!recipeId) {
-    throw new Error("El ID de la receta es obligatorio para actualizar.");
-  }
+  const { ingredients, instructions: instructionsInput, mainIngredients, ...recipeFieldsToUpdate } = recipeInput;
 
-  // Separar los datos de la receta de los ingredientes
-  const { ingredients, instructions: instructionsArray, ...recipeFieldsToUpdate } = recipeData;
-
-  // Preparar el payload para actualizar la tabla 'recipes'
-  const updatePayload: { [key: string]: any } = { // Usar un tipo más flexible para el payload
+  const updatePayload: { [key: string]: any } = {
       ...recipeFieldsToUpdate,
       updated_at: new Date().toISOString(),
-      // Incluir tags solo si se proporcionan explícitamente en la actualización parcial
-      ...(recipeData.tags !== undefined && { tags: recipeData.tags }),
+      ...(recipeInput.tags !== undefined && { tags: recipeInput.tags }),
+      ...(mainIngredients !== undefined && { main_ingredients: mainIngredients }),
   };
 
-  // Convertir instructions a string si viene como array
-  if (Array.isArray(instructionsArray)) {
-      updatePayload.instructions = instructionsArray.filter(inst => inst.trim() !== '').join('\n');
-  } else if (typeof instructionsArray === 'string') {
-      // Si ya es string (aunque el tipo espera array), usarlo directamente
-      updatePayload.instructions = instructionsArray;
+  // Convertir instructions a string si se proporcionan
+  if (instructionsInput !== undefined) {
+      updatePayload.instructions = instructionsToString(instructionsInput);
   }
 
+  delete updatePayload.user_id; // No actualizar user_id
 
-  // Eliminar user_id del payload si está presente, no se debe actualizar
-  delete updatePayload.user_id;
-  // Eliminar is_favorite si no se está actualizando explícitamente (para evitar sobreescribir)
-  // A menos que el tipo RecipeInputData lo incluya como opcional
-  // delete updatePayload.is_favorite; // Descomentar si es necesario
-
-  // Actualizar los campos principales de la receta
+  // Actualizar campos principales
   const { data: updatedRecipeData, error: recipeError } = await supabase
     .from('recipes')
     .update(updatePayload)
     .eq('id', recipeId)
-    .select()
+    .select(`*, recipe_ingredients ( * )`) // Seleccionar todo para devolver completo
     .single();
 
   if (recipeError || !updatedRecipeData) {
-    console.error(`Error al actualizar receta ${recipeId}:`, recipeError);
+    handleError(recipeError || new Error('Error al actualizar receta'), {
+      component: 'recipeService',
+      action: 'updateRecipe',
+      severity: 'high'
+    });
     throw new Error(`Error al actualizar la receta: ${recipeError?.message || 'Error desconocido'}`);
   }
 
-  console.log(`Receta ${recipeId} actualizada (campos principales).`);
+  let updatedRecipeDB = updatedRecipeData as RecipeFromDB;
 
-  // --- Lógica de actualización de ingredientes ---
-  if (ingredients) { // Solo si se proporcionan ingredientes explícitamente
-      console.log(`Actualizando ingredientes para receta ${recipeId}...`);
-      // 1. Eliminar ingredientes existentes para esta receta
+  // Actualizar ingredientes si se proporcionan
+  if (ingredients) {
       const { error: deleteError } = await supabase
           .from('recipe_ingredients')
           .delete()
           .eq('recipe_id', recipeId);
+      if (deleteError) throw new Error(`Error al actualizar ingredientes (eliminación): ${deleteError.message}`);
 
-      if (deleteError) {
-          console.error(`Error eliminando ingredientes antiguos para ${recipeId}:`, deleteError);
-          // Considerar si revertir o continuar con error parcial
-          throw new Error(`Error al actualizar ingredientes (eliminación): ${deleteError.message}`);
-      }
-
-      // 2. Insertar los nuevos ingredientes (si hay alguno)
       if (ingredients.length > 0) {
-          console.log("Procesando nuevos ingredientes para obtener/crear IDs...");
           const ingredientsToInsertPromises = ingredients.map(async (ing) => {
-            if (!ing.name) {
-              console.warn("Ingrediente sin nombre omitido en actualización:", ing);
-              return null;
-            }
+            if (!ing.name) return null;
             const quantityValue = typeof ing.quantity === 'string' ? parseFloat(ing.quantity.replace(',', '.')) || 1 : (ing.quantity ?? 1);
             try {
-              const foundOrCreatedIngredient = await findOrCreateIngredient(ing.name, quantityValue);
-              return {
-                recipe_id: recipeId,
-                ingredient_id: foundOrCreatedIngredient.id,
-                ingredient_name: ing.name,
-                quantity: quantityValue === 1 && typeof ing.quantity !== 'number' ? null : quantityValue,
-                unit: ing.unit || null,
-              };
-            } catch (error) {
-              console.error(`Error procesando ingrediente "${ing.name}" en actualización:`, error);
-              return null;
-            }
+              const found = await findOrCreateIngredient(ing.name, quantityValue);
+              return { recipe_id: recipeId, ingredient_id: found.id, ingredient_name: ing.name, quantity: quantityValue, unit: ing.unit || null, notes: null };
+            } catch (e) {
+        handleError(e instanceof Error ? e : new Error(String(e)), {
+          component: 'recipeService',
+          action: 'processIngredient',
+          severity: 'medium'
+        });
+        return null;
+      }
           });
-
-          const resolvedIngredients = await Promise.all(ingredientsToInsertPromises);
-          const validIngredientsToInsert = resolvedIngredients.filter(ing => ing !== null);
-
-          if (validIngredientsToInsert.length > 0) {
-              console.log("Insertando nuevos ingredientes con IDs:", validIngredientsToInsert);
-              const { error: insertError } = await supabase
-                .from('recipe_ingredients')
-                .insert(validIngredientsToInsert); // Insertar objetos completos
-
-              // Mover el manejo de errores DENTRO del if
-              if (insertError) {
-                  console.error(`Error insertando nuevos ingredientes para ${recipeId}:`, insertError);
-                  // Considerar si revertir o continuar con error parcial
-                  throw new Error(`Error al actualizar ingredientes (inserción): ${insertError.message}`);
-              }
-              console.log(`Ingredientes para receta ${recipeId} actualizados.`);
+          const resolved = await Promise.all(ingredientsToInsertPromises);
+          const validToInsert = resolved.filter((ing): ing is NonNullable<typeof ing> => ing !== null);
+          if (validToInsert.length > 0) {
+              const { data: insertedData, error: insertError } = await supabase.from('recipe_ingredients').insert(validToInsert).select();
+              if (insertError) throw new Error(`Error al actualizar ingredientes (inserción): ${insertError.message}`);
+              updatedRecipeDB.recipe_ingredients = (insertedData || []) as RecipeIngredient[];
           } else {
-              console.log("No hay ingredientes válidos para insertar en la actualización.");
+              updatedRecipeDB.recipe_ingredients = [];
           }
-      } // Cierre del if (ingredients.length > 0)
-  }
-  // --- Fin Lógica de ingredientes ---
-
-
-  // Devolver la receta actualizada. Para tenerla 100% completa con los nuevos
-  // ingredientes, necesitaríamos volver a consultarla o construirla manualmente.
-  // Hacemos un getRecipeById para asegurar que devolvemos el estado más reciente.
-  const finalRecipe = await getRecipeById(recipeId);
-  if (!finalRecipe) {
-      // Esto no debería pasar si la actualización fue exitosa, pero es una salvaguarda
-      console.error(`Error crítico: No se pudo recuperar la receta ${recipeId} después de actualizar.`);
-      // Devolver null si no se pudo recuperar la receta final
-      return null;
-      // O lanzar un error más específico
-      // throw new Error("No se pudo obtener la receta actualizada después de la operación.");
+      } else {
+          updatedRecipeDB.recipe_ingredients = [];
+      }
   }
 
-  return finalRecipe;
-}; // Llave de cierre final
+  // Devolver la receta completa mapeada al tipo UI
+  return mapDBDataToRecipe(updatedRecipeDB);
+};

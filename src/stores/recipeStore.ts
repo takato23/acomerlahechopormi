@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import { Recipe } from '@/types/recipeTypes'; // Asegúrate que la ruta sea correcta
-import { getRecipes, toggleRecipeFavorite, deleteRecipe as deleteRecipeService } from '@/features/recipes/services/recipeService'; // Asegúrate que la ruta sea correcta
-import { toast } from 'sonner';
+import { Category } from '@/types/categoryTypes'; // Importar tipo Category
+// Importaciones consolidadas del servicio de recetas
+import {
+  getRecipes,
+  toggleRecipeFavorite,
+  deleteRecipe as deleteRecipeService,
+  getCategories // Asegurarse que getCategories esté aquí
+} from '@/features/recipes/services/recipeService';
+import { notifyError, notifySuccess } from '@/lib/notifications';
 import { PREDEFINED_RECIPE_TAGS } from '@/config/recipeTags'; // Importar tags predefinidos
 
 // Exportar tipo para filtros para que pueda ser usado por el servicio
@@ -11,6 +18,8 @@ export interface RecipeFilters {
   sortOption?: string; // Añadido para ordenamiento
   selectedIngredients?: string[]; // Nuevo filtro por ingredientes (IDs o nombres)
   selectedTags?: string[]; // Nuevo filtro por tags
+  categoryId?: string | null; // Nuevo filtro por ID de categoría
+  maxTotalTimeMinutes?: number | null;
 }
 
 interface RecipeState {
@@ -28,6 +37,11 @@ interface RecipeState {
   selectedTags: string[]; // Estado para tags seleccionados
   viewMode: 'card' | 'list'; // Estado para el modo de vista
   availableTags: string[]; // Lista de tags disponibles para filtrar
+  // Estado para categorías
+  categories: Category[]; // Lista de categorías disponibles
+  selectedCategoryId: string | null; // ID de la categoría seleccionada para filtrar
+  isLoadingCategories: boolean; // Indica si se están cargando las categorías
+  maxTotalTimeMinutes: number | null;
 }
 
 interface RecipeActions {
@@ -40,12 +54,17 @@ interface RecipeActions {
   toggleFavorite: (recipeId: string) => Promise<void>;
   deleteRecipe: (recipeId: string) => Promise<void>;
   fetchNextPage: (userId: string) => Promise<void>; // Nueva acción para cargar más
+  // Acciones para categorías
+  fetchCategories: () => Promise<void>; // Nueva acción para cargar categorías
+  setSelectedCategory: (categoryId: string | null, userId: string) => void; // Nueva acción para seleccionar categoría
+  // Acciones existentes
   setSortOption: (option: string, userId: string) => void; // Acción para cambiar ordenamiento
   setSelectedIngredients: (ingredients: string[], userId: string) => void; // Acción para filtro de ingredientes
   setSelectedTags: (tags: string[], userId: string) => void; // Acción para filtro de tags (puede usarse para setear todos)
   toggleTagFilter: (tag: string, userId: string) => void; // Acción para añadir/quitar un tag
   clearTagFilters: (userId: string) => void; // Acción para limpiar filtros de tags
   setViewMode: (mode: 'card' | 'list') => void; // Acción para cambiar el modo de vista
+  setMaxTotalTimeMinutes: (value: number | null, userId: string) => void;
 }
 
 const initialState: RecipeState = {
@@ -63,42 +82,41 @@ const initialState: RecipeState = {
   selectedTags: [],
   viewMode: 'card', // Vista inicial por defecto
   availableTags: PREDEFINED_RECIPE_TAGS, // Cargar tags predefinidos
+  // Estado inicial para categorías
+  categories: [],
+  selectedCategoryId: null, // Ninguna categoría seleccionada por defecto
+  isLoadingCategories: false,
+  maxTotalTimeMinutes: null,
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
   ...initialState,
 
-  setSearchTerm: (term) => {
+  setSearchTerm: (term: string) => {
     set({ searchTerm: term, currentPage: 1 }); // Resetear página al cambiar búsqueda
-    // Nota: fetchRecipes debe ser llamado explícitamente desde el componente
-    // después de actualizar el término de búsqueda, usualmente con un debounce.
-    // Por ahora, solo actualizamos el término y reseteamos la página.
-    // Si se requiere fetch automático, se necesitaría userId y lógica de debounce aquí.
-    // Ejemplo (requiere userId):
-    // const userId = get().userId; // Asumiendo que userId está en el estado
-    // if (userId) {
-    //   get().fetchRecipes({ userId, filters: { searchTerm: term, showOnlyFavorites: get().showOnlyFavorites }, page: 1, reset: true });
-    // }
-  },
+  }, // Coma añadida
 
   fetchRecipes: async ({ userId, filters = {}, page = 1, reset = false }) => {
     const state = get();
-    const currentFilters = {
+    // Incluir categoryId en los filtros que se pasan al servicio
+    const currentFilters: RecipeFilters = {
       searchTerm: filters.searchTerm ?? state.searchTerm,
       showOnlyFavorites: filters.showOnlyFavorites ?? state.showOnlyFavorites,
-      sortOption: filters.sortOption ?? state.sortOption, // Incluir sortOption
-      selectedIngredients: filters.selectedIngredients ?? state.selectedIngredients, // Incluir ingredientes
-      selectedTags: filters.selectedTags ?? state.selectedTags, // Incluir tags
+      sortOption: filters.sortOption ?? state.sortOption,
+      selectedIngredients: filters.selectedIngredients ?? state.selectedIngredients,
+      selectedTags: filters.selectedTags ?? state.selectedTags,
+      categoryId: filters.categoryId ?? state.selectedCategoryId, // Añadir categoryId aquí
+      maxTotalTimeMinutes: filters.maxTotalTimeMinutes ?? state.maxTotalTimeMinutes,
     };
     const limit = state.recipesPerPage;
 
-    // Determinar si es carga inicial/reseteo o carga de "más"
     const isLoadingState = page === 1 || reset ? { isLoading: true } : { isLoadingMore: true };
     set({ ...isLoadingState, error: null });
 
     console.log(`[RecipeStore] Fetching recipes - Page: ${page}, Limit: ${limit}, Filters:`, currentFilters, `Reset: ${reset}`);
 
     try {
+      // Pasar los filtros completos (incluyendo categoryId) al servicio
       const { data: fetchedRecipes, hasMore } = await getRecipes({
         userId,
         filters: currentFilters,
@@ -107,7 +125,6 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
       });
 
       set((currentState) => ({
-        // Si es la página 1 o se pide reseteo, reemplazar recetas. Si no, añadir.
         recipes: page === 1 || reset ? fetchedRecipes : [...currentState.recipes, ...fetchedRecipes],
         currentPage: page,
         hasMore: hasMore,
@@ -116,24 +133,25 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         // Actualizar filtros en el estado si se pasaron explícitamente
         searchTerm: currentFilters.searchTerm,
         showOnlyFavorites: currentFilters.showOnlyFavorites,
-        sortOption: currentFilters.sortOption, // Actualizar sortOption en el estado
-        selectedIngredients: currentFilters.selectedIngredients, // Actualizar ingredientes en el estado
-        selectedTags: currentFilters.selectedTags, // Actualizar tags en el estado
+        sortOption: currentFilters.sortOption,
+        selectedIngredients: currentFilters.selectedIngredients,
+        selectedTags: currentFilters.selectedTags,
+        selectedCategoryId: currentFilters.categoryId, // Actualizar categoryId en el estado
+        maxTotalTimeMinutes: currentFilters.maxTotalTimeMinutes ?? null,
       }));
 
     } catch (err) {
       console.error('Error fetching recipes:', err);
       const errorMessage = err instanceof Error ? err.message : 'Ocurrió un error desconocido al cargar las recetas.';
-      set({ error: errorMessage, isLoading: false, isLoadingMore: false, recipes: page === 1 || reset ? [] : state.recipes }); // Limpiar solo si es la primera página o reseteo
+      set({ error: errorMessage, isLoading: false, isLoadingMore: false, recipes: page === 1 || reset ? [] : state.recipes });
     }
-  },
+  }, // Coma añadida
 
   addRecipe: (recipe: Recipe) => {
     set((state) => ({
-      // Añadir siempre, el filtrado se hace al obtener o en el componente
       recipes: [...state.recipes, recipe],
     }));
-  },
+  }, // Coma añadida
 
   updateRecipeState: (recipeId: string, updatedRecipeData: Partial<Recipe>) => {
     set((state) => ({
@@ -141,18 +159,17 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         recipe.id === recipeId ? { ...recipe, ...updatedRecipeData } : recipe
       ),
     }));
-  },
+  }, // Coma añadida
 
   removeRecipe: (recipeId: string) => {
     set((state) => ({
       recipes: state.recipes.filter((recipe) => recipe.id !== recipeId),
     }));
-  },
+  }, // Coma añadida
 
   toggleFavoriteFilter: (userId: string) => {
     const newState = !get().showOnlyFavorites;
-    set({ showOnlyFavorites: newState, currentPage: 1 }); // Resetear página
-    // Volver a cargar las recetas desde la página 1 con el filtro actualizado y los demás filtros actuales
+    set({ showOnlyFavorites: newState, currentPage: 1 });
     get().fetchRecipes({
       userId,
       filters: {
@@ -161,11 +178,13 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         sortOption: get().sortOption,
         selectedIngredients: get().selectedIngredients,
         selectedTags: get().selectedTags,
+        categoryId: get().selectedCategoryId, // Incluir categoryId actual
+        maxTotalTimeMinutes: get().maxTotalTimeMinutes ?? undefined,
       },
       page: 1,
       reset: true
     });
-  },
+  }, // Coma añadida
 
   toggleFavorite: async (recipeId: string) => {
     const currentRecipes = get().recipes;
@@ -175,7 +194,6 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     const currentIsFavorite = recipe.is_favorite ?? false;
     const newIsFavorite = !currentIsFavorite;
 
-    // Optimistic update
     set((state) => ({
       recipes: state.recipes.map((r) =>
         r.id === recipeId ? { ...r, is_favorite: newIsFavorite } : r
@@ -184,140 +202,143 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
 
     try {
       await toggleRecipeFavorite(recipeId, newIsFavorite);
-      toast.success(`Receta ${newIsFavorite ? 'añadida a' : 'quitada de'} favoritos`);
+      notifySuccess(`Receta ${newIsFavorite ? 'añadida a' : 'quitada de'} favoritos`);
     } catch (error) {
       console.error("Error toggling favorite recipe:", error);
-      toast.error("Error al actualizar favorito");
-      // Revertir
+      notifyError("Error al actualizar favorito");
       set((state) => ({
         recipes: state.recipes.map((r) =>
           r.id === recipeId ? { ...r, is_favorite: currentIsFavorite } : r
         ),
       }));
     }
-  },
+  }, // Coma añadida
 
   deleteRecipe: async (recipeId: string) => {
     const currentRecipes = get().recipes;
-    // Optimistic update (eliminar del estado local primero)
     set((state) => ({
       recipes: state.recipes.filter((recipe) => recipe.id !== recipeId),
     }));
 
     try {
       await deleteRecipeService(recipeId);
-      toast.success('Receta eliminada');
+      notifySuccess('Receta eliminada');
     } catch (error) {
       console.error('Error deleting recipe:', error);
-      toast.error('Error al eliminar la receta');
-      // Revertir si falla la eliminación en el backend
+      notifyError('Error al eliminar la receta');
       set({ recipes: currentRecipes });
     }
-  },
+  }, // Coma añadida
 
   fetchNextPage: async (userId: string) => {
     const { isLoading, isLoadingMore, hasMore, currentPage, fetchRecipes } = get();
     if (isLoading || isLoadingMore || !hasMore) {
       console.log("[RecipeStore] Cannot fetch next page:", { isLoading, isLoadingMore, hasMore });
-      return; // No cargar si ya está cargando o no hay más páginas
+      return;
     }
 
     const nextPage = currentPage + 1;
     console.log(`[RecipeStore] Fetching next page: ${nextPage}`);
-    await fetchRecipes({ userId, page: nextPage }); // Los filtros (incluido sortOption) se toman del estado actual dentro de fetchRecipes
-  }, // Fin de fetchNextPage
+    // fetchRecipes ya toma categoryId del estado actual
+    await fetchRecipes({ userId, page: nextPage });
+  }, // Coma añadida
 
-  setSortOption: (option, userId) => {
-    set({ sortOption: option, currentPage: 1 }); // Resetear página al cambiar ordenamiento
-    // Volver a cargar las recetas desde la página 1 con la nueva opción de ordenamiento
+  // --- Acciones para Categorías ---
+  fetchCategories: async () => {
+    set({ isLoadingCategories: true, error: null });
+    try {
+      // getCategories ya se importa estáticamente
+      const fetchedCategories = await getCategories();
+      set({ categories: fetchedCategories, isLoadingCategories: false });
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Ocurrió un error desconocido al cargar las categorías.';
+      set({ error: errorMessage, isLoadingCategories: false, categories: [] });
+    }
+  }, // Coma añadida
+
+  setSelectedCategory: (categoryId: string | null, userId: string) => {
+    set({ selectedCategoryId: categoryId, currentPage: 1 });
     get().fetchRecipes({
       userId,
       filters: {
-        searchTerm: get().searchTerm,
-        showOnlyFavorites: get().showOnlyFavorites,
-        sortOption: option, // Usar la nueva opción
-        selectedIngredients: get().selectedIngredients, // Mantener filtro ingredientes
-        selectedTags: get().selectedTags, // Mantener filtro tags
+        // Pasar explícitamente categoryId aquí, los demás se toman del estado
+        categoryId: categoryId,
+        maxTotalTimeMinutes: get().maxTotalTimeMinutes ?? undefined,
       },
       page: 1,
       reset: true,
     });
-  }, // Fin de setSortOption
+  }, // Coma añadida
+  // --- Fin Acciones para Categorías ---
 
-  setSelectedIngredients: (ingredients, userId) => {
-    set({ selectedIngredients: ingredients, currentPage: 1 }); // Resetear página
-    // Volver a cargar las recetas desde la página 1 con el filtro actualizado
+  setSortOption: (option: string, userId: string) => {
+    set({ sortOption: option, currentPage: 1 });
     get().fetchRecipes({
       userId,
-      filters: {
-        searchTerm: get().searchTerm,
-        showOnlyFavorites: get().showOnlyFavorites,
-        sortOption: get().sortOption,
-        selectedIngredients: ingredients, // Usar los nuevos ingredientes
-        selectedTags: get().selectedTags,
-      },
+      filters: { sortOption: option }, // Pasar solo el filtro que cambia
       page: 1,
       reset: true,
     });
-  }, // Fin de setSelectedIngredients
+  }, // Coma añadida
 
-  setSelectedTags: (tags, userId) => {
-    set({ selectedTags: tags, currentPage: 1 }); // Resetear página
-    // Volver a cargar las recetas desde la página 1 con el filtro actualizado
+  setSelectedIngredients: (ingredients: string[], userId: string) => {
+    set({ selectedIngredients: ingredients, currentPage: 1 });
     get().fetchRecipes({
       userId,
-      filters: {
-        searchTerm: get().searchTerm,
-        showOnlyFavorites: get().showOnlyFavorites,
-        sortOption: get().sortOption,
-        selectedIngredients: get().selectedIngredients,
-        selectedTags: tags, // Usar los nuevos tags
-      },
+      filters: { selectedIngredients: ingredients }, // Pasar solo el filtro que cambia
       page: 1,
       reset: true,
     });
-  }, // Fin de setSelectedTags
+  }, // Coma añadida
 
-  toggleTagFilter: (tag, userId) => {
+  setSelectedTags: (tags: string[], userId: string) => {
+    set({ selectedTags: tags, currentPage: 1 });
+    get().fetchRecipes({
+      userId,
+      filters: { selectedTags: tags }, // Pasar solo el filtro que cambia
+      page: 1,
+      reset: true,
+    });
+  }, // Coma añadida
+
+  toggleTagFilter: (tag: string, userId: string) => {
     const currentTags = get().selectedTags;
     const newTags = currentTags.includes(tag)
       ? currentTags.filter(t => t !== tag)
       : [...currentTags, tag];
-    set({ selectedTags: newTags, currentPage: 1 }); // Resetear página
-    // Volver a cargar las recetas desde la página 1 con el filtro actualizado
+    set({ selectedTags: newTags, currentPage: 1 });
     get().fetchRecipes({
       userId,
-      filters: {
-        searchTerm: get().searchTerm,
-        showOnlyFavorites: get().showOnlyFavorites,
-        sortOption: get().sortOption,
-        selectedIngredients: get().selectedIngredients,
-        selectedTags: newTags, // Usar los nuevos tags
-      },
+      filters: { selectedTags: newTags }, // Pasar solo el filtro que cambia
       page: 1,
       reset: true,
     });
-  }, // Fin de toggleTagFilter
+  }, // Coma añadida
 
-  clearTagFilters: (userId) => {
-    set({ selectedTags: [], currentPage: 1 }); // Resetear página
-    // Volver a cargar las recetas desde la página 1 sin filtro de tags
+  clearTagFilters: (userId: string) => {
+    set({ selectedTags: [], currentPage: 1 });
     get().fetchRecipes({
       userId,
-      filters: {
-        searchTerm: get().searchTerm,
-        showOnlyFavorites: get().showOnlyFavorites,
-        sortOption: get().sortOption,
-        selectedIngredients: get().selectedIngredients,
-        selectedTags: [], // Filtro vacío
-      },
+      filters: { selectedTags: [] }, // Pasar solo el filtro que cambia
       page: 1,
       reset: true,
     });
-  }, // Fin de clearTagFilters
+  }, // Coma añadida
 
-  setViewMode: (mode) => {
+  setViewMode: (mode: 'card' | 'list') => {
     set({ viewMode: mode });
-  }, // Fin de setViewMode
+  },
+
+  setMaxTotalTimeMinutes: (value: number | null, userId: string) => {
+    const normalizedValue = typeof value === 'number' && !Number.isNaN(value) ? value : null;
+    set({ maxTotalTimeMinutes: normalizedValue, currentPage: 1 });
+    get().fetchRecipes({
+      userId,
+      filters: { maxTotalTimeMinutes: normalizedValue },
+      page: 1,
+      reset: true,
+    });
+  }
 
 })); // Fin de create

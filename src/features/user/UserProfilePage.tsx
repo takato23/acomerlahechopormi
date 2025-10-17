@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input'; 
 import { Button } from '@/components/ui/button'; 
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'; 
+import { notifySuccess, notifyError } from '@/lib/notifications';
+import { handleError } from '@/lib/errorHandler';
 
 /**
  * Página para que el usuario vea y edite su perfil.
@@ -77,18 +79,23 @@ export function UserProfilePage() {
       if (userProfile) {
         setProfile(userProfile);
         setUsernameInput(userProfile.username || ''); 
-        setAvatarUrl(userProfile.avatar_url); 
-        setGeminiApiKey(userProfile.gemini_api_key || null); // Cargar la API Key de Gemini
+        setAvatarUrl(userProfile.avatarUrl ?? userProfile.avatar_url ?? null); 
+        setGeminiApiKey(userProfile.geminiApiKey ?? userProfile.gemini_api_key ?? null);
       } else {
         setError("No se pudo cargar el perfil."); 
       }
     } catch (err) {
-      console.error("Error loading profile in page:", err);
+      handleError(err, {
+        component: 'UserProfilePage',
+        action: 'loadProfile',
+        severity: 'medium',
+      });
       setError("Ocurrió un error al cargar tu perfil.");
+      notifyError('No pudimos cargar tu perfil. Intentalo nuevamente.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadProfile();
@@ -125,12 +132,20 @@ export function UserProfilePage() {
         setProfile({ ...profile, username: trimmedUsername || null });
         setUsernameSuccess(true);
         setTimeout(() => setUsernameSuccess(false), 3000);
+        notifySuccess('Nombre de usuario actualizado correctamente.');
       } else {
         setUsernameError("No se pudo guardar el nombre de usuario.");
+        notifyError('No pudimos actualizar tu nombre de usuario.');
       }
     } catch (err) {
-      console.error("Error updating username in page:", err);
+      handleError(err, {
+        component: 'UserProfilePage',
+        action: 'updateUsername',
+        severity: 'medium',
+        userId: user?.id,
+      });
       setUsernameError("Ocurrió un error al guardar el nombre de usuario.");
+      notifyError('Tuvimos un problema al guardar el nombre de usuario.');
     } finally {
       setIsSavingUsername(false);
     }
@@ -166,17 +181,25 @@ export function UserProfilePage() {
         const success = await updateUserProfile(user.id, updateData);
         if (success && profile) {
           setProfile({ ...profile, ...updateData }); 
+          notifySuccess('Preferencias actualizadas');
           return true;
         } else {
           // El error se mostrará en el componente hijo que llamó a esta función
+          notifyError('No pudimos actualizar tus preferencias');
           return false;
         }
       } catch (err) {
-        console.error("Error updating preference/info in page:", err);
+        handleError(err, {
+          component: 'UserProfilePage',
+          action: 'updatePreference',
+          severity: 'medium',
+          userId: user?.id,
+        });
         setError("Ocurrió un error al guardar la información.");
+        notifyError('Ocurrió un error al guardar la información.');
         return false;
       }
-  }, [profile]); 
+  }, [profile, user?.id]); 
 
   /**
    * Maneja la actualización de la lista de ingredientes excluidos.
@@ -195,17 +218,29 @@ export function UserProfilePage() {
         }
         // Asegurarse de que el array no contenga strings vacíos si viene de un input
         const cleanedTags = newTags.map(tag => tag.trim()).filter(tag => tag.length > 0);
-        const success = await updateUserProfile(user.id, { excluded_ingredients: cleanedTags });
+        const success = await updateUserProfile(user.id, { excludedIngredients: cleanedTags });
         if (success && profile) {
-          setProfile({ ...profile, excluded_ingredients: cleanedTags });
+          setProfile({
+            ...profile,
+            excludedIngredients: cleanedTags,
+            excluded_ingredients: cleanedTags,
+          });
+          notifySuccess('Actualizamos tus ingredientes excluidos');
           return true;
         } else {
           setError("Error al guardar los ingredientes excluidos.");
+          notifyError('No pudimos guardar los ingredientes excluidos');
           return false;
         }
       } catch (err) {
-        console.error("Error updating excluded ingredients:", err);
+        handleError(err, {
+          component: 'UserProfilePage',
+          action: 'updateExcludedIngredients',
+          severity: 'medium',
+          userId: user?.id,
+        });
         setError("Error inesperado al guardar los ingredientes excluidos.");
+        notifyError('Ocurrió un error al guardar los ingredientes excluidos');
         return false;
       }
     },
@@ -229,17 +264,29 @@ export function UserProfilePage() {
         }
         // Asegurarse de que el array no contenga strings vacíos
         const cleanedEquipment = newEquipment.map(eq => eq.trim()).filter(eq => eq.length > 0);
-        const success = await updateUserProfile(user.id, { available_equipment: cleanedEquipment });
+        const success = await updateUserProfile(user.id, { availableEquipment: cleanedEquipment });
         if (success && profile) {
-          setProfile({ ...profile, available_equipment: cleanedEquipment });
+          setProfile({
+            ...profile,
+            availableEquipment: cleanedEquipment,
+            available_equipment: cleanedEquipment,
+          });
+          notifySuccess('Actualizamos tu equipamiento disponible');
           return true;
         } else {
           setError("Error al guardar el equipamiento.");
+          notifyError('No pudimos guardar el equipamiento');
           return false;
         }
       } catch (err) {
-        console.error("Error updating available equipment:", err);
+        handleError(err, {
+          component: 'UserProfilePage',
+          action: 'updateAvailableEquipment',
+          severity: 'medium',
+          userId: user?.id,
+        });
         setError("Error inesperado al guardar el equipamiento.");
+        notifyError('Ocurrió un error al guardar el equipamiento');
         return false;
       }
     },
@@ -256,7 +303,7 @@ export function UserProfilePage() {
   const handleAvatarUpdate = (newUrl: string) => {
     setAvatarUrl(newUrl);
     if (profile) {
-      setProfile({ ...profile, avatar_url: newUrl }); 
+      setProfile({ ...profile, avatar_url: newUrl, avatarUrl: newUrl });
     }
   };
 
@@ -294,19 +341,27 @@ export function UserProfilePage() {
     setError(null); // Limpiar error general
 
     try {
-      const success = await updateUserProfile(user.id, { gemini_api_key: newGeminiApiKey.trim() });
+      const success = await updateUserProfile(user.id, { geminiApiKey: newGeminiApiKey.trim() });
       if (success) {
         setGeminiApiKey(newGeminiApiKey.trim());
         setNewGeminiApiKey(''); // Limpiar input
         setApiKeySuccess("Clave API de Gemini guardada correctamente.");
         setShowApiKey(false); // Ocultar la clave después de guardar
         setTimeout(() => setApiKeySuccess(null), 4000); // Ocultar mensaje de éxito
+        notifySuccess('Guardamos tu clave de Gemini.');
       } else {
         setApiKeyError("No se pudo guardar la clave API.");
+        notifyError('No pudimos guardar la clave API.');
       }
     } catch (err) {
-      console.error("Error updating Gemini API Key:", err);
+      handleError(err, {
+        component: 'UserProfilePage',
+        action: 'updateGeminiKey',
+        severity: 'medium',
+        userId: user?.id,
+      });
       setApiKeyError("Ocurrió un error al guardar la clave API.");
+      notifyError('Ocurrió un error al guardar la clave API.');
     } finally {
       setIsSavingApiKey(false);
     }
@@ -334,19 +389,27 @@ export function UserProfilePage() {
     setError(null); // Limpiar error general
 
     try {
-      const success = await updateUserProfile(user.id, { gemini_api_key: null });
+      const success = await updateUserProfile(user.id, { geminiApiKey: null });
       if (success) {
         setGeminiApiKey(null);
         setNewGeminiApiKey(''); // Limpiar input por si acaso
         setApiKeySuccess("Clave API de Gemini eliminada.");
         setShowApiKey(false);
         setTimeout(() => setApiKeySuccess(null), 4000);
+        notifySuccess('Eliminamos tu clave de Gemini.');
       } else {
         setApiKeyError("No se pudo eliminar la clave API.");
+        notifyError('No pudimos eliminar la clave API.');
       }
     } catch (err) {
-      console.error("Error deleting Gemini API Key:", err);
+      handleError(err, {
+        component: 'UserProfilePage',
+        action: 'deleteGeminiKey',
+        severity: 'medium',
+        userId: user?.id,
+      });
       setApiKeyError("Ocurrió un error al eliminar la clave API.");
+      notifyError('Ocurrió un error al eliminar la clave API.');
     } finally {
       setIsSavingApiKey(false);
     }
@@ -415,7 +478,7 @@ export function UserProfilePage() {
                id="excluded-ingredients-input"
                label="Ingredientes a evitar"
                placeholder="Añade ingredientes (ej: cilantro) y presiona Enter..."
-               currentTags={profile.excluded_ingredients}
+               currentTags={profile.excludedIngredients}
                onUpdateTags={handleUpdateExcludedIngredients}
              />
              <p className="text-xs text-muted-foreground mt-2">
@@ -432,7 +495,7 @@ export function UserProfilePage() {
            <CardContent>
              <EquipmentCheckboxes
                label="Selecciona el equipamiento que tienes disponible:"
-               currentEquipment={profile.available_equipment}
+               currentEquipment={profile.availableEquipment}
                onUpdateEquipment={handleUpdateAvailableEquipment}
              />
               <p className="text-xs text-muted-foreground mt-2">

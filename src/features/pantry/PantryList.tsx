@@ -1,6 +1,7 @@
 import React from 'react';
 import { PantryItem } from './types';
 import { PantryListItemRow } from './components/PantryListItemRow';
+import { cn } from '@/lib/utils';
 
 interface PantryListProps {
   items: PantryItem[];
@@ -33,14 +34,20 @@ const PantryList: React.FC<PantryListProps> = ({
     <div className="rounded-md border"> {/* Eliminada altura fija y overflow */}
       <div className="w-full">
         {/* Header */}
-        <div className="flex w-full bg-muted/50 border-b sticky top-0 z-10"> {/* Hacer header pegajoso */}
-          {isSelectionMode && <div className="p-3 w-10 flex-shrink-0"></div>}
-          <div className="flex-1 p-3 font-medium">Nombre</div>
-          <div className="p-3 font-medium w-20 text-center">Cant.</div> {/* Ancho fijo */}
-          <div className="p-3 font-medium w-24">Unidad</div> {/* Ancho fijo */}
-          <div className="p-3 font-medium w-32">Categoría</div> {/* Ancho fijo */}
-          <div className="p-3 font-medium w-28">Caducidad</div> {/* Ancho fijo */}
-          <div className="p-3 font-medium text-right w-24">Acciones</div> {/* Ancho fijo */}
+        <div
+          className={cn(
+            "hidden sm:grid bg-muted/50 border-b sticky top-0 z-10 text-sm font-medium",
+            isSelectionMode
+              ? "sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto]"
+              : "sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]"
+          )}
+        >
+          {isSelectionMode && <div className="py-3 pl-3" />}
+          <div className="py-3 px-3 text-left">Nombre</div>
+          <div className="py-3 text-center">Stock</div>
+          <div className="py-3 text-center">Categoría</div>
+          <div className="py-3 text-center">Caducidad</div>
+          <div className="py-3 pr-3 text-right">Acciones</div>
         </div>
         {/* Rows */}
         <div className="w-full">

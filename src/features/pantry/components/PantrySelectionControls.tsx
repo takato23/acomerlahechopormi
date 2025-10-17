@@ -41,7 +41,7 @@ const PantrySelectionControls: React.FC<PantrySelectionControlsProps> = ({
   const selectedCount = selectedItems.size;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {/* Contador de selección */}
       <span className="text-sm">
         {selectedCount} de {totalVisibleItems} seleccionados

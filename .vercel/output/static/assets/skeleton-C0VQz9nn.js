@@ -1,0 +1,1 @@
+import{r,j as m}from"./framer-motion-D5H-6pwU.js";import{a_ as d,q as n}from"./index-D4Yj-RDb.js";const p=r.forwardRef(({className:e,asChild:a=!1,...s},t)=>{const o=a?d:"div";return m.jsx(o,{ref:t,className:n("animate-pulse rounded-md bg-muted/60 dark:bg-muted/40",e),...s})});p.displayName="Skeleton";export{p as S};

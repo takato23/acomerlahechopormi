@@ -1,0 +1,27 @@
+'Log files:
+/Users/santiagobalosky/Downloads/A comerla HECHA POR MI/.npm-cache/_logs/2025-10-13T04_27_19_105Z-debug-0.log
+
+# npm resolution error report
+
+While resolving: @testing-library/react@16.3.0
+Found: @testing-library/dom@9.3.4
+node_modules/@testing-library/dom
+  dev @testing-library/dom@"^9.3.1" from the root project
+  peer @testing-library/dom@">=7.21.4" from @testing-library/user-event@14.6.1
+  node_modules/@testing-library/user-event
+    dev @testing-library/user-event@"^14.6.1" from the root project
+
+Could not resolve dependency:
+peer @testing-library/dom@"^10.0.0" from @testing-library/react@16.3.0
+node_modules/@testing-library/react
+  dev @testing-library/react@"^16.2.0" from the root project
+
+Conflicting peer dependency: @testing-library/dom@10.4.1
+node_modules/@testing-library/dom
+  peer @testing-library/dom@"^10.0.0" from @testing-library/react@16.3.0
+  node_modules/@testing-library/react
+    dev @testing-library/react@"^16.2.0" from the root project
+
+Fix the upstream dependency conflict, or retry
+this command with --force or --legacy-peer-deps
+to accept an incorrect (and potentially broken) dependency resolution.

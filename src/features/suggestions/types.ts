@@ -1,46 +1,40 @@
-import { MealType } from '@/features/planning/types';
+import type { MealDifficulty, MealType } from '@/features/planning/types';
 
-export interface SuggestionContext {
-  date: string;
-  mealType: MealType;
-  userId: string;
-  currentPantryItems?: Array<{
-    ingredient_id: string;
-    name: string;
-  }>;
-  favoriteRecipeIds?: string[];
-  planningHistory?: Array<{
-    recipe_id: string;
-    count: number;
-  }>;
-}
-
-export interface Suggestion {
-  type: 'recipe' | 'custom';
-  id?: string;
-  title: string;
-  reason?: string;
+export interface RecipeSuggestion {
+  name: string;
+  description: string;
+  estimatedTime?: string;
+  difficulty?: 'fácil' | 'media' | 'difícil';
+  ingredients?: string[];
 }
 
 export interface SuggestionResponse {
-  pantrySuggestion?: Suggestion;
-  discoverySuggestion?: Suggestion;
-  pendingShoppingListCheck?: {
-    recipeId: string;
-    ingredientsCount: number;
-  };
+  suggestions: RecipeSuggestion[];
+  error?: string;
 }
 
-export interface IngredientMatch {
-  matched: boolean;
-  reason?: string;
-  missingQuantity?: number;
-  unit?: string;
-}
-
-export interface MissingIngredient {
+export interface SuggestionPantryItem {
+  ingredientId?: string | null;
   name: string;
-  quantity: number;
-  unit: string;
-  recipeId?: string;
+  quantity?: number | null;
+  unit?: string | null;
+}
+
+export interface SuggestionPreferences {
+  difficulty?: MealDifficulty;
+  maxPrepTime?: number;
+  avoidIngredients?: string[];
+  preferredTags?: string[];
+}
+
+export interface SuggestionRequest {
+  mealType: MealType;
+  pantryItems: SuggestionPantryItem[];
+  dietary?: {
+    vegetarian?: boolean;
+    vegan?: boolean;
+    glutenFree?: boolean;
+    restrictions?: string[];
+  };
+  preferences?: SuggestionPreferences;
 }

@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { Link } from 'react-router-dom';
 import { StarOff } from 'lucide-react'; // O un icono similar para quitar favorito
-import { toast } from 'sonner';
 
 interface FavoriteRecipesSheetProps {
   open: boolean;

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2, UploadCloud, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifyInfo, notifySuccess } from '@/lib/notifications';
 
 interface ImageUploadProps {
   bucketName: string; // Nombre del bucket de Supabase Storage
@@ -44,7 +44,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // Límite de 5MB
         setUploadError("El archivo es demasiado grande (máximo 5MB).");
-        toast.error("El archivo es demasiado grande (máximo 5MB).");
+        notifyError("El archivo es demasiado grande (máximo 5MB).");
         setSelectedFile(null);
         setPreviewUrl(initialImageUrl); // Volver al inicial si había uno
         event.target.value = ''; // Reset input
@@ -100,13 +100,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       onUploadSuccess(publicUrlData.publicUrl);
       // No necesitamos actualizar previewUrl aquí, se hará a través de initialImageUrl en el componente padre
       setSelectedFile(null); // Limpiar archivo seleccionado después de subir
-      toast.success("Imagen subida con éxito.");
+      notifySuccess("Imagen subida con éxito.");
 
     } catch (error: any) {
       console.error('Error subiendo imagen:', error);
       const errorMessage = error.message || 'Error desconocido al subir la imagen.';
       setUploadError(errorMessage);
-      toast.error(`Error al subir: ${errorMessage}`);
+      notifyError(`Error al subir: ${errorMessage}`);
       if (onUploadError) {
         onUploadError(error);
       }
@@ -136,7 +136,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     if (input) {
         input.value = '';
     }
-    toast.info("Imagen eliminada.");
+    notifyInfo("Imagen eliminada.");
   };
 
 

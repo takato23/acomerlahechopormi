@@ -1,128 +1,179 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { UserProfile } from './userTypes';
+import type { UserProfile, UserProfileUpdate } from './userTypes';
+import type { PreferredMealTimes, UserObjectives } from '@/types/userPreferences';
 
-/**
- * Nombre del bucket de Supabase Storage utilizado para los avatares.
- * @constant {string}
- */
-const AVATAR_BUCKET = 'avatars'; 
+const AVATAR_BUCKET = 'avatars';
 
-/**
- * Obtiene el perfil completo del usuario autenticado actualmente.
- * Combina datos de `auth.users` y la tabla `profiles`.
- * Si no existe un perfil en la tabla `profiles`, devuelve los datos básicos de auth.
- * @async
- * @function getUserProfile
- * @returns {Promise<UserProfile | null>} Una promesa que resuelve al perfil del usuario o null si no está autenticado o hay un error irrecuperable.
- */
+const toMealTimes = (value: unknown): PreferredMealTimes => {
+  if (!value || typeof value !== 'object') return {};
+  return Object.entries(value as Record<string, unknown>).reduce<PreferredMealTimes>((acc, [meal, time]) => {
+    if (typeof time === 'string') {
+      acc[meal as keyof PreferredMealTimes] = time;
+    }
+    return acc;
+  }, {});
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  value.forEach(item => {
+    if (typeof item === 'string' && item.trim().length > 0) {
+      unique.add(item);
+    }
+  });
+  return Array.from(unique);
+};
+
+const ensureObjectives = (value: unknown): UserObjectives => {
+  if (!value || typeof value !== 'object') {
+    return {
+      primaryGoal: null,
+      weeklySavingsTarget: null,
+      calorieTarget: null,
+      householdBudget: null
+    };
+  }
+
+  const obj = value as Record<string, unknown>;
+  return {
+    primaryGoal: (obj.primaryGoal ?? null) as UserObjectives['primaryGoal'],
+    weeklySavingsTarget: typeof obj.weeklySavingsTarget === 'number' ? obj.weeklySavingsTarget : null,
+    calorieTarget: typeof obj.calorieTarget === 'number' ? obj.calorieTarget : null,
+    householdBudget: typeof obj.householdBudget === 'number' ? obj.householdBudget : null
+  };
+};
+
+const mapProfile = (row: Record<string, any>): UserProfile => {
+  // Usar campos básicos que siempre existen
+  const dietaryRestrictions = toStringArray(row.dietary_restrictions ?? row.dietaryRestrictions ?? []);
+  const dislikedIngredients = toStringArray(row.disliked_ingredients ?? row.dislikedIngredients ?? []);
+  const preferredCuisines = toStringArray(row.preferred_cuisines ?? row.preferredCuisines ?? []);
+  const excludedIngredients = toStringArray(row.excluded_ingredients ?? row.excludedIngredients ?? []);
+  const availableEquipment = toStringArray(row.available_equipment ?? row.availableEquipment ?? []);
+
+  const profile: UserProfile = {
+    id: row.id,
+    username: row.username ?? null,
+    avatarUrl: row.avatar_url ?? null,
+    geminiApiKey: row.gemini_api_key ?? null,
+    dietaryRestrictions,
+    dislikedIngredients,
+    preferredCuisines,
+    cuisinePreferences: toStringArray(row.cuisine_preferences ?? row.cuisinePreferences ?? preferredCuisines),
+    cookingSkillLevel: typeof row.cooking_skill_level === 'string' ? row.cooking_skill_level : null,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+    // Campos opcionales con valores por defecto si no existen
+    preferredMealTimes: toMealTimes(row.preferred_meal_times ?? row.preferredMealTimes ?? {}),
+    maxCalories: typeof row.max_calories === 'number' ? row.max_calories : null,
+    householdSize: typeof row.household_size === 'number' && row.household_size > 0 ? row.household_size : 1,
+    onboardingCompletedAt: row.onboarding_completed_at ?? null,
+    excludedIngredients,
+    availableEquipment,
+    cuisine_preferences: toStringArray(row.cuisine_preferences ?? row.cuisinePreferences ?? preferredCuisines),
+    preferred_meal_times: toMealTimes(row.preferred_meal_times ?? row.preferredMealTimes ?? {}),
+    max_calories: typeof row.max_calories === 'number' ? row.max_calories : null,
+    household_size: typeof row.household_size === 'number' && row.household_size > 0 ? row.household_size : 1,
+    onboarding_completed_at: row.onboarding_completed_at ?? null,
+    objectives: ensureObjectives(row.objectives ?? {}),
+    dietary_preference: row.dietary_preference ?? null,
+    difficulty_preference: row.difficulty_preference ?? null,
+    max_prep_time: typeof row.max_prep_time === 'number' ? row.max_prep_time : null,
+    allergies_restrictions: row.allergies_restrictions ?? null,
+    avatar_url: row.avatar_url ?? null,
+    gemini_api_key: row.gemini_api_key ?? null,
+    excluded_ingredients: excludedIngredients,
+    available_equipment: availableEquipment
+  };
+
+  return profile;
+};
+
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   if (!userId) {
     console.error('getUserProfile called without userId');
     return null;
   }
-  try {
-    // Obtener el perfil de la tabla 'profiles' seleccionando campos específicos
-    // Nota: 'email' no suele estar en 'profiles', se omite aquí. Ajustar si es necesario.
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, username, dietary_preference, avatar_url, difficulty_preference, max_prep_time, allergies_restrictions, gemini_api_key, excluded_ingredients, available_equipment') // Seleccionar explícitamente, incluyendo nuevos campos
-      .eq('id', userId) // Usar userId del parámetro
-      .single();
 
-    if (profileError) {
-      // Código 'PGRST116' significa "Not Found"
-      if (profileError.code !== 'PGRST116') {
-         console.warn(`Error fetching profile for user ${userId} (but not PGRST116):`, profileError.message);
+  try {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.warn(`Error fetching profile for user ${userId}: ${error.message}`);
       }
-      // Si no se encuentra el perfil o hay otro error no fatal, devolver null.
       return null;
     }
 
-    // Si se encontró el perfil, construir el objeto UserProfile
-    // Asignar null a email ya que no se obtiene de 'profiles'
-    const userProfile: UserProfile = {
-      id: profileData.id,
-      email: undefined, // Email no está en la tabla profiles, usar undefined según el tipo.
-      username: profileData.username || null,
-      dietary_preference: profileData.dietary_preference || null,
-      avatar_url: profileData.avatar_url || null,
-      difficulty_preference: profileData.difficulty_preference || null,
-      max_prep_time: profileData.max_prep_time || null,
-      allergies_restrictions: profileData.allergies_restrictions || null,
-      gemini_api_key: profileData.gemini_api_key || null, // Incluir gemini_api_key
-      excluded_ingredients: profileData.excluded_ingredients || [], // Añadir nuevo campo (array)
-      available_equipment: profileData.available_equipment || [], // Añadir nuevo campo (array)
-    };
-    return userProfile;
-
-  } catch (error) {
-    console.error(`Unexpected error fetching user profile for user ${userId}:`, error);
+    return mapProfile(data ?? {});
+  } catch (err) {
+    console.error(`Unexpected error fetching user profile for user ${userId}:`, err);
     return null;
   }
 }
 
-/**
- * Actualiza los datos del perfil del usuario autenticado en la tabla 'profiles'.
- * No permite actualizar 'id' ni 'email'.
- * @async
- * @function updateUserProfile
- * @param {Partial<Omit<UserProfile, 'id' | 'email'>>} profileData - Un objeto con los campos a actualizar.
- * @returns {Promise<boolean>} Una promesa que resuelve a `true` si la actualización fue exitosa, `false` en caso contrario.
- */
-// Ajustamos la firma para ser más flexible y permitir actualizar otros campos como avatar_url
-export async function updateUserProfile(userId: string, profileData: Partial<Omit<UserProfile, 'id' | 'email'>>): Promise<boolean> {
-   if (!userId) {
-     console.error('updateUserProfile called without userId');
-     return false;
-   }
-   // Validar que profileData no esté vacío
-   if (!profileData || Object.keys(profileData).length === 0) {
-       console.warn(`updateUserProfile called for user ${userId} with empty profileData.`);
-       // Devolver true si no hay nada que hacer.
-       return true;
-   }
-   // No necesitamos la validación estricta de 'gemini_api_key' aquí
-   // ya que Omit<> maneja los campos no permitidos (id, email).
+export async function updateUserProfile(userId: string, profileData: UserProfileUpdate): Promise<boolean> {
+  if (!userId) {
+    console.error('updateUserProfile called without userId');
+    return false;
+  }
 
-   try {
-    // Usar el userId proporcionado.
-    // Asegurarse de no intentar actualizar id o email (Omit ya lo hace)
-    const updateData = { ...profileData }; // Copia para seguridad
+  if (!profileData || Object.keys(profileData).length === 0) {
+    return true;
+  }
 
-    // Si no hay datos para actualizar (esto no debería pasar por la validación anterior, pero por si acaso)
-    if (Object.keys(updateData).length === 0) {
-        console.warn(`updateUserProfile called for user ${userId} with effectively no data to update after potential filtering.`);
-        return true;
-    }
+  const payload: Record<string, unknown> = {};
 
-    const { error: updateError } = await supabase
+  if ('username' in profileData) payload.username = profileData.username ?? null;
+  if ('avatarUrl' in profileData) payload.avatar_url = profileData.avatarUrl ?? null;
+  if ('avatar_url' in profileData) payload.avatar_url = profileData.avatar_url ?? null;
+  if ('geminiApiKey' in profileData) payload.gemini_api_key = profileData.geminiApiKey ?? null;
+  if ('gemini_api_key' in profileData) payload.gemini_api_key = profileData.gemini_api_key ?? null;
+  if ('cuisinePreferences' in profileData) payload.cuisine_preferences = profileData.cuisinePreferences ?? [];
+  if ('dietaryRestrictions' in profileData) payload.dietary_restrictions = profileData.dietaryRestrictions ?? [];
+  if ('dislikedIngredients' in profileData) payload.disliked_ingredients = profileData.dislikedIngredients ?? [];
+  if ('preferredMealTimes' in profileData) payload.preferred_meal_times = profileData.preferredMealTimes ?? {};
+  if ('maxCalories' in profileData) payload.max_calories = profileData.maxCalories ?? null;
+  if ('householdSize' in profileData) payload.household_size = profileData.householdSize ?? 1;
+  if ('onboardingCompletedAt' in profileData) payload.onboarding_completed_at = profileData.onboardingCompletedAt ?? null;
+  if ('objectives' in profileData) payload.objectives = ensureObjectives(profileData.objectives ?? null);
+  if ('cookingSkillLevel' in profileData) payload.cooking_skill_level = profileData.cookingSkillLevel ?? null;
+  if ('dietary_preference' in profileData) payload.dietary_preference = profileData.dietary_preference ?? null;
+  if ('difficulty_preference' in profileData) payload.difficulty_preference = profileData.difficulty_preference ?? null;
+  if ('max_prep_time' in profileData) payload.max_prep_time = profileData.max_prep_time ?? null;
+  if ('allergies_restrictions' in profileData) payload.allergies_restrictions = profileData.allergies_restrictions ?? null;
+  if ('excludedIngredients' in profileData) payload.excluded_ingredients = profileData.excludedIngredients ?? [];
+  if ('excluded_ingredients' in profileData) payload.excluded_ingredients = profileData.excluded_ingredients ?? [];
+  if ('availableEquipment' in profileData) payload.available_equipment = profileData.availableEquipment ?? [];
+  if ('available_equipment' in profileData) payload.available_equipment = profileData.available_equipment ?? [];
+
+  if (Object.keys(payload).length === 0) {
+    return true;
+  }
+
+  try {
+    const { error } = await supabase
       .from('profiles')
-      .update(updateData)
-      .eq('id', userId); // Usar el userId del parámetro
+      .update(payload)
+      .eq('id', userId);
 
-    if (updateError) {
-      console.error(`Error updating profile for user ${userId}:`, updateError);
+    if (error) {
+      console.error(`Error updating profile for user ${userId}:`, error);
       return false;
     }
 
-    console.log(`Profile updated successfully for user ${userId}:`, updateData);
     return true;
-
-  } catch (error) {
-    console.error(`Unexpected error updating user profile for user ${userId}:`, error);
+  } catch (err) {
+    console.error(`Unexpected error updating user profile for user ${userId}:`, err);
     return false;
   }
 }
 
-/**
- * Sube un nuevo archivo de avatar para el usuario actual a Supabase Storage.
- * Genera un nombre de archivo único y actualiza la `avatar_url` en el perfil del usuario.
- * @async
- * @function uploadAvatar
- * @param {File} file - El archivo de imagen a subir (jpeg, png, webp). Se recomienda validar tipo/tamaño antes de llamar.
- * @returns {Promise<string | null>} La URL pública del avatar subido o null si falla.
- * @throws {Error} Si el usuario no está autenticado o si falla la subida o la obtención de la URL pública.
- */
 export async function uploadAvatar(file: File): Promise<string | null> {
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -132,52 +183,37 @@ export async function uploadAvatar(file: File): Promise<string | null> {
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`; 
+    const filePath = `${fileName}`;
 
-    // Subir archivo
     const { error: uploadError } = await supabase.storage
       .from(AVATAR_BUCKET)
       .upload(filePath, file, {
-        cacheControl: '3600', 
-        upsert: true, 
+        cacheControl: '3600',
+        upsert: true
       });
 
     if (uploadError) {
       console.error('Error uploading avatar:', uploadError);
-      throw uploadError; // Lanzar error para manejo externo
+      throw uploadError;
     }
 
-    // Obtener URL pública
-     const { data: urlData } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from(AVATAR_BUCKET)
       .getPublicUrl(filePath);
 
     if (!urlData?.publicUrl) {
-       console.error('Could not get public URL for uploaded avatar');
-       // Considerar eliminar el archivo subido si no se obtiene URL
-       // await supabase.storage.from(AVATAR_BUCKET).remove([filePath]); 
-       throw new Error('No se pudo obtener la URL pública del avatar.');
+      throw new Error('No se pudo obtener la URL pública del avatar.');
     }
-    
-    const publicUrl = urlData.publicUrl;
 
-    // Actualizar perfil
-    // Pasar userId a updateUserProfile
-    const profileUpdated = await updateUserProfile(user.id, { avatar_url: publicUrl });
+    const profileUpdated = await updateUserProfile(user.id, { avatarUrl: urlData.publicUrl });
 
     if (!profileUpdated) {
-      console.warn('Avatar uploaded but failed to update profile URL.');
-      // Considerar eliminar el archivo subido si falla la actualización del perfil
-      // await supabase.storage.from(AVATAR_BUCKET).remove([filePath]);
       throw new Error('Avatar subido, pero no se pudo actualizar el perfil.');
     }
 
-    console.log('Avatar uploaded and profile updated:', publicUrl);
-    return publicUrl;
-
+    return urlData.publicUrl;
   } catch (error) {
     console.error('Error in uploadAvatar process:', error);
-    // Devolver null para indicar fallo al llamador
-    return null; 
+    return null;
   }
 }

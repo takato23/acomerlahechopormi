@@ -1,6 +1,6 @@
 // import { ShoppingItem } from '../components/ShoppingListItem'; // Eliminado, no parece usarse
 import { cleanIngredientText } from '@/lib/ingredientUtils'; // Corregido para apuntar al archivo copiado
-import { toast } from 'sonner';
+import { notifyError } from '@/lib/notifications';
 
 // Interfaces
 export interface Store {
@@ -137,7 +137,7 @@ export const preciosClarosService = {
       storesCache.set(cacheKey, stores);
       return stores;
     } catch (error) {
-      toast.error('Error obteniendo tiendas cercanas');
+      notifyError('Error obteniendo tiendas cercanas');
       return [];
     }
   },
@@ -152,7 +152,7 @@ export const preciosClarosService = {
       const data = await makeRequest<{ productos: Product[] }>(`${BASE_URL}/productos?${params}`);
       return data.productos;
     } catch (error) {
-      toast.error('Error buscando productos');
+      notifyError('Error buscando productos');
       return [];
     }
   },
@@ -166,7 +166,7 @@ export const preciosClarosService = {
       const data = await makeRequest<{ precios: ProductPrice[] }>(`${BASE_URL}/productos/precios?${params}`);
       return data.precios;
     } catch (error) {
-      toast.error('Error obteniendo precios del producto');
+      notifyError('Error obteniendo precios del producto');
       return [];
     }
   },

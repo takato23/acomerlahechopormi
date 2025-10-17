@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { PantryItem } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Importar CardFooter
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, Star, Package } from 'lucide-react'; // Importar Package
+import { Pencil, Trash2, Star, Package, AlertTriangle, CheckCircle } from 'lucide-react'; // Importar Package y nuevos iconos
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getLucideIcon, DefaultIcon } from '@/lib/iconMap'; // Importar getLucideIcon y DefaultIcon
@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"; // Importar Tooltip
+import { differenceInDays, isPast, parseISO, isValid } from 'date-fns';
 
 interface PantryItemCardProps {
   item: PantryItem;
@@ -32,10 +33,6 @@ export function PantryItemCard({
   onSelectItem,
   onToggleFavorite
 }: PantryItemCardProps) {
-
-  useEffect(() => {
-    // console.log('[PantryItemCard] Rendering. onToggleFavorite type:', typeof onToggleFavorite); // Log opcional
-  }, [onToggleFavorite]);
 
   const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -77,6 +74,103 @@ export function PantryItemCard({
     // Prioridad 3: Icono por defecto
     return <DefaultIcon className="w-6 h-6 text-muted-foreground mr-2 flex-shrink-0" />; // Ajustar margen
   }, [item.ingredient?.image_url, item.ingredient?.name, item.category?.icon_name]);
+
+  // Procesar información de vencimiento
+  const expiryInfo = useMemo(() => {
+    if (!item.expiry_date) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    try {
+      const parsedDate = typeof item.expiry_date === 'string' ? parseISO(item.expiry_date) : item.expiry_date;
+      if (!(parsedDate instanceof Date) || !isValid(parsedDate)) return null;
+
+      const expiryDate = new Date(parsedDate);
+      expiryDate.setHours(0, 0, 0, 0);
+
+      const isExpired = isPast(expiryDate);
+      const daysUntilExpiry = differenceInDays(expiryDate, today);
+
+      let status: 'expired' | 'urgent' | 'warning' | 'good' = 'good';
+      let message = '';
+
+      if (isExpired) {
+        status = 'expired';
+        message = 'Vencido';
+      } else if (daysUntilExpiry <= 1) {
+        status = 'urgent';
+        message = `Vence ${daysUntilExpiry === 0 ? 'hoy' : 'mañana'}`;
+      } else if (daysUntilExpiry <= 3) {
+        status = 'warning';
+        message = `Vence en ${daysUntilExpiry} días`;
+      } else {
+        status = 'good';
+        message = expiryDate.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short'
+        });
+      }
+
+      return { status, message, daysUntilExpiry };
+    } catch {
+      return null;
+    }
+  }, [item.expiry_date]);
+
+  // Componente visual para el estado de vencimiento
+  const ExpiryIndicator = useMemo(() => {
+    if (!expiryInfo) return null;
+
+    const { status, message } = expiryInfo;
+
+    const getStatusConfig = () => {
+      switch (status) {
+        case 'expired':
+          return {
+            bgColor: 'bg-red-100 dark:bg-red-900/20',
+            textColor: 'text-red-700 dark:text-red-400',
+            icon: AlertTriangle,
+            iconColor: 'text-red-500'
+          };
+        case 'urgent':
+          return {
+            bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+            textColor: 'text-orange-700 dark:text-orange-400',
+            icon: AlertTriangle,
+            iconColor: 'text-orange-500'
+          };
+        case 'warning':
+          return {
+            bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
+            textColor: 'text-yellow-700 dark:text-yellow-400',
+            icon: AlertTriangle,
+            iconColor: 'text-yellow-500'
+          };
+        case 'good':
+          return {
+            bgColor: 'bg-green-100 dark:bg-green-900/20',
+            textColor: 'text-green-700 dark:text-green-400',
+            icon: CheckCircle,
+            iconColor: 'text-green-500'
+          };
+      }
+    };
+
+    const config = getStatusConfig();
+    const Icon = config.icon;
+
+    return (
+      <div className={cn(
+        'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
+        config.bgColor,
+        config.textColor
+      )}>
+        <Icon className={cn('h-3 w-3', config.iconColor)} />
+        {message}
+      </div>
+    );
+  }, [expiryInfo]);
 
   return (
     <TooltipProvider> {/* Necesario para que funcionen los Tooltips internos */}
@@ -169,14 +263,12 @@ export function PantryItemCard({
         </CardHeader>
 
         <CardContent className="p-3 pt-1 text-sm">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="flex items-center gap-1">
               <span className="font-medium">{item.quantity ?? '-'}</span>
               <span className="text-muted-foreground">{item.unit || ''}</span>
             </div>
-            {item.expiry_date && (
-              <p className="text-xs text-muted-foreground">Vence: {item.expiry_date}</p>
-            )}
+            {ExpiryIndicator}
           </div>
         </CardContent>
 

@@ -9,7 +9,7 @@ const mockedPantryService = pantryService as jest.Mocked<typeof pantryService>;
 // Mock de datos
 const mockItem1 = { id: 'p1', name: 'Milk', quantity: 1, unit: 'L', created_at: '2023-01-01T10:00:00Z', ingredient_id: 'ing1', user_id: 'u1' };
 const mockItem2 = { id: 'p2', name: 'Eggs', quantity: 12, unit: 'unit', created_at: '2023-01-02T10:00:00Z', ingredient_id: 'ing2', user_id: 'u1' };
-const mockLowStockItem = { id: 'p3', name: 'Salt', quantity: 0, unit: 'kg', created_at: '2023-01-03T10:00:00Z', ingredient_id: 'ing3', user_id: 'u1' };
+const mockLowStockItem = { id: 'p3', name: 'Salt', quantity: 0.5, unit: 'kg', created_at: '2023-01-03T10:00:00Z', ingredient_id: 'ing3', user_id: 'u1' };
 const mockNewItemData = { ingredient_name: 'Flour', quantity: 1, unit: 'kg' }; // Usar ingredient_name según CreatePantryItemData
 const mockCreatedItem = { id: 'p-new', ...mockNewItemData, quantity: 1, unit: 'kg', created_at: new Date().toISOString(), ingredient_id: 'ing-flour', user_id: 'u1' };
 
@@ -60,8 +60,13 @@ describe('usePantryStore', () => {
 
   // --- fetchLowStockItems ---
   it('fetchLowStockItems should update lowStockItems state on success', async () => {
-    // mockedPantryService.getLowStockItems.mockResolvedValue([mockLowStockItem]); // TODO: Re-enable/implement getLowStockItems tests
-    
+    usePantryStore.setState({
+      items: [mockItem1, mockLowStockItem],
+      lowStockItems: [],
+      isLoadingLowStock: false,
+      errorLowStock: null,
+    });
+
     await act(async () => {
       await usePantryStore.getState().fetchLowStockItems(1); // Usar threshold explícito
     });
@@ -74,6 +79,12 @@ describe('usePantryStore', () => {
   
   it('fetchLowStockItems should use default threshold if not provided', async () => {
      // mockedPantryService.getLowStockItems.mockResolvedValue([]); // TODO: Re-enable/implement getLowStockItems tests
+     usePantryStore.setState({
+       items: [mockLowStockItem],
+       lowStockItems: [],
+       isLoadingLowStock: false,
+       errorLowStock: null,
+     });
      await act(async () => {
        await usePantryStore.getState().fetchLowStockItems(); // Sin threshold
      });
@@ -81,15 +92,20 @@ describe('usePantryStore', () => {
   });
 
   it('fetchLowStockItems should set errorLowStock state on failure', async () => {
-    const errorMessage = 'Failed to fetch low stock';
-    // mockedPantryService.getLowStockItems.mockRejectedValue(new Error(errorMessage)); // TODO: Re-enable/implement getLowStockItems tests
+    usePantryStore.setState({
+      // Forzamos un estado inválido para provocar error en el cálculo
+      items: null as unknown as any[],
+      lowStockItems: [],
+      isLoadingLowStock: false,
+      errorLowStock: null,
+    });
 
     await act(async () => {
       await usePantryStore.getState().fetchLowStockItems();
     });
 
     expect(usePantryStore.getState().isLoadingLowStock).toBe(false);
-    expect(usePantryStore.getState().errorLowStock).toBe(errorMessage);
+    expect(usePantryStore.getState().errorLowStock).toBe("Cannot read properties of null (reading 'filter')");
     expect(usePantryStore.getState().lowStockItems).toEqual([]);
   });
   
