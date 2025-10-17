@@ -109,6 +109,7 @@ export type Database = {
           created_at: string | null
           custom_meal_name: string | null
           id: string
+          meal_plan_id: string | null
           meal_type: string
           notes: string | null
           plan_date: string
@@ -121,6 +122,7 @@ export type Database = {
           created_at?: string | null
           custom_meal_name?: string | null
           id?: string
+          meal_plan_id?: string | null
           meal_type: string
           notes?: string | null
           plan_date: string
@@ -133,6 +135,7 @@ export type Database = {
           created_at?: string | null
           custom_meal_name?: string | null
           id?: string
+          meal_plan_id?: string | null
           meal_type?: string
           notes?: string | null
           plan_date?: string
@@ -147,6 +150,13 @@ export type Database = {
             columns: ["recipe_id"]
             isOneToOne: false
             referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_plan_entries_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -178,6 +188,36 @@ export type Database = {
           start_date?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      measurement_units: {
+        Row: {
+          abbreviation: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          unit_group: string
+          updated_at: string
+        }
+        Insert: {
+          abbreviation: string
+          created_at?: string
+          description?: string | null
+          id: string
+          name: string
+          unit_group: string
+          updated_at?: string
+        }
+        Update: {
+          abbreviation?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          unit_group?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -708,13 +748,15 @@ export type Database = {
       shopping_list_items: {
         Row: {
           brand: string | null
-          category: string | null
+          category_id: string | null
           created_at: string
           id: string
+          ingredient_id: string | null
           ingredient_name: string
           is_checked: boolean
           notes: string | null
           quantity: number | null
+          recipe_id: string | null
           recipe_source: string | null
           unit: string | null
           updated_at: string
@@ -722,13 +764,15 @@ export type Database = {
         }
         Insert: {
           brand?: string | null
-          category?: string | null
+          category_id?: string | null
           created_at?: string
           id?: string
+          ingredient_id?: string | null
           ingredient_name: string
           is_checked?: boolean
           notes?: string | null
           quantity?: number | null
+          recipe_id?: string | null
           recipe_source?: string | null
           unit?: string | null
           updated_at?: string
@@ -736,19 +780,43 @@ export type Database = {
         }
         Update: {
           brand?: string | null
-          category?: string | null
+          category_id?: string | null
           created_at?: string
           id?: string
+          ingredient_id?: string | null
           ingredient_name?: string
           is_checked?: boolean
           notes?: string | null
           quantity?: number | null
+          recipe_id?: string | null
           recipe_source?: string | null
           unit?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shopping_suggestions: {
         Row: {
@@ -782,6 +850,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          cooking_time_limit: number | null
+          created_at: string
+          dietary_preferences: string[]
+          disliked_ingredients: string[]
+          id: string
+          metadata: Json
+          preferred_cuisines: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cooking_time_limit?: number | null
+          created_at?: string
+          dietary_preferences?: string[]
+          disliked_ingredients?: string[]
+          id?: string
+          metadata?: Json
+          preferred_cuisines?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cooking_time_limit?: number | null
+          created_at?: string
+          dietary_preferences?: string[]
+          disliked_ingredients?: string[]
+          id?: string
+          metadata?: Json
+          preferred_cuisines?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_category_corrections: {
         Row: {
