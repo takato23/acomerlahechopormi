@@ -18,9 +18,27 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Poppins',
-                    ...defaultTheme.fontFamily.sans
-                ]
+  				'Inter',
+  				'Manrope',
+          ...defaultTheme.fontFamily.sans
+        ],
+  			display: [
+  				'Playfair Display',
+  				'Fraunces',
+  				'Inter',
+  				'system-ui',
+  				'sans-serif'
+  			],
+        serif: [
+          'Playfair Display',
+          'Fraunces',
+          'serif'
+        ],
+  			mono: [
+  				'JetBrains Mono',
+  				'Fira Code',
+  				'monospace'
+  			]
   		},
   		colors: {
   			border: 'hsl(var(--border))',
@@ -52,9 +70,45 @@ export default {
   				DEFAULT: 'hsl(var(--popover))',
   				foreground: 'hsl(var(--popover-foreground))'
   			},
-  			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
+ 			card: {
+ 				DEFAULT: 'hsl(var(--card))',
+ 				foreground: 'hsl(var(--card-foreground))'
+ 			},
+        studio: {
+          crudo: 'hsl(var(--brand-crudo-claro))',
+          paprika: 'hsl(var(--brand-paprika))',
+          merlot: 'hsl(var(--brand-merlot))',
+          salvia: 'hsl(var(--brand-salvia))',
+          trufa: 'hsl(var(--brand-trufa))',
+          neblina: 'hsl(var(--brand-neblina))',
+          miel: 'hsl(var(--brand-miel))'
+        },
+ 			// Paleta Pastel Dashboard
+ 			surface: {
+  				pearl: 'hsl(var(--surface-pearl))',
+  				cream: 'hsl(var(--surface-cream))',
+  				lavender: 'hsl(var(--surface-lavender))',
+  				mint: 'hsl(var(--surface-mint))',
+  				blush: 'hsl(var(--surface-blush))'
+  			},
+  			pastel: {
+  				mint: {
+  					primary: 'hsl(var(--mint-primary))',
+  					secondary: 'hsl(var(--mint-secondary))',
+  					light: 'hsl(var(--mint-light))'
+  				},
+  				lavender: {
+  					primary: 'hsl(var(--lavender-primary))',
+  					secondary: 'hsl(var(--lavender-secondary))'
+  				},
+  				blush: {
+  					primary: 'hsl(var(--blush-primary))',
+  					secondary: 'hsl(var(--blush-secondary))'
+  				},
+  				cream: {
+  					primary: 'hsl(var(--cream-primary))',
+  					secondary: 'hsl(var(--cream-secondary))'
+  				}
   			}
   		},
   		borderRadius: {

@@ -1,76 +1,146 @@
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, PlayCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Función helper para scroll suave (duplicada aquí por simplicidad, idealmente iría en utils)
+const DESCRIPTORS = [
+  "colecciones editoriales",
+  "experiencias de degustación",
+  "operaciones gastronómicas",
+  "activaciones omnicanal",
+];
+
+const HERO_METRICS = [
+  { value: "12h", label: "mise en place ahorradas por semana", note: "Hipótesis pendiente de validación" },
+  { value: "3x", label: "curadurías generadas por brief", note: "Hipótesis pendiente de validación" },
+  { value: "92%", label: "retención clientes premium", note: "Hipótesis pendiente de validación" },
+];
+
 const scrollToSection = (id: string) => {
-  const section = document.getElementById(id.substring(1)); // Quita el '#'
-  section?.scrollIntoView({ behavior: 'smooth' });
+  const section = document.getElementById(id.substring(1));
+  section?.scrollIntoView({ behavior: "smooth" });
 };
 
 const Hero = () => {
+  const [descriptorIndex, setDescriptorIndex] = useState(0);
+  const currentDescriptor = DESCRIPTORS[descriptorIndex];
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setDescriptorIndex((prev) => (prev + 1) % DESCRIPTORS.length);
+    }, 3200);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const gradientOverlay = useMemo(
+    () => ({
+      background:
+        "linear-gradient(152deg, rgba(46,27,23,0.65) 0%, rgba(93,42,66,0.35) 58%, rgba(254,248,243,0.1) 100%)",
+    }),
+    []
+  );
+
   return (
-    <div className="relative isolate">
-      {/* Fondo con gradiente */}
-      <div className="absolute inset-x-0 top-0 -z-10 h-[500px] bg-gradient-to-b from-muted/50 via-muted/20 to-background/0" />
+    <section id="hero" className="relative overflow-hidden bg-gradient-primary/40">
+      <div className="absolute inset-0 pointer-events-none">
+        <motion.div
+          className="absolute -left-24 top-12 h-64 w-64 rounded-full bg-studio-miel/30 blur-3xl"
+          animate={{ y: [0, 30, -20], opacity: [0.45, 0.7, 0.45] }}
+          transition={{ repeat: Infinity, duration: 14, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute right-[-5%] top-1/3 h-72 w-72 rounded-full bg-studio-salvia/30 blur-3xl"
+          animate={{ y: [0, -40, 40], opacity: [0.6, 0.35, 0.6] }}
+          transition={{ repeat: Infinity, duration: 18, ease: "easeInOut" }}
+        />
+      </div>
 
-      <div className="container mx-auto px-4 py-24 sm:py-32">
-        <div className="grid grid-cols-1 gap-8 lg:gap-16 items-center">
-          {/* Contenido textual */}
-          <div className="max-w-3xl mx-auto text-center lg:col-span-2">
-            <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl text-foreground">
-              ¿Qué comemos{" "}
-              <span className="text-primary">hoy</span>?
-            </h1>
-            <p className="mt-6 text-lg md:text-xl lg:text-2xl text-muted-foreground">
-              Deja que 'A Comerla' use inteligencia artificial para sugerirte recetas deliciosas según lo que tienes en la nevera y tu presupuesto.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-              {/* Quitar asChild, usar onClick */}
-              <Button
-                size="lg"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform duration-200 hover:scale-105" // Añadir efecto hover
-                onClick={() => scrollToSection('#footer')}
-              >
-                Probar gratis
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="transition-transform duration-200 hover:scale-105" // Añadir efecto hover
-                onClick={() => scrollToSection('#preview')}
-              >
-                Ver demo
-              </Button>
-            </div>
-
-            <dl className="mt-16 grid grid-cols-2 gap-8 sm:grid-cols-4 text-center">
-              {[
-                ["1000+", "Recetas"],
-                ["IA", "Sugerencias"],
-                ["0€", "Para Empezar"],
-                ["24/7", "Disponible"],
-              ].map(([stat, label]) => (
-                <div key={label}>
-                  <dt className="text-base text-muted-foreground">{label}</dt>
-                  <dd className="text-2xl font-bold tracking-tight text-foreground">{stat}</dd>
-                </div>
-              ))}
-            </dl>
+      <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-16 px-4 py-24 sm:px-6 lg:flex-row lg:items-center lg:py-32">
+        <div className="max-w-2xl space-y-8 text-pretty">
+          <span className="inline-flex items-center gap-2 rounded-full border border-studio-neblina/60 bg-studio-crudo/60 px-4 py-2 text-sm font-medium text-studio-trufa shadow-sm backdrop-blur">
+            Food studio-as-a-service
+          </span>
+          <h1 className="font-display text-4xl leading-[1.05] text-studio-trufa sm:text-5xl lg:text-6xl">
+            Curamos{" "}
+            <span className="relative inline-block text-transparent">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={currentDescriptor}
+                  className="bg-gradient-to-r from-studio-paprika via-studio-miel to-studio-merlot bg-clip-text text-transparent"
+                  initial={{ y: "100%", opacity: 0 }}
+                  animate={{ y: "0%", opacity: 1 }}
+                  exit={{ y: "-120%", opacity: 0 }}
+                  transition={{ duration: 0.75, ease: "easeOut" }}
+                >
+                  {currentDescriptor}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+            {" "}listas para cautivar a tus clientes.
+          </h1>
+          <p className="text-lg text-studio-trufa/80 sm:text-xl">
+            A Comerla evoluciona a estudio gastronómico digital: diseño de colecciones, operación con IA y analítica accionable, todo en un solo SaaS.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              size="lg"
+              variant="studio"
+              onClick={() => scrollToSection("#demo")}
+              className="min-w-[220px]"
+            >
+              Solicitar degustación guiada
+              <ArrowRight className="h-5 w-5" />
+            </Button>
+            <Button
+              size="lg"
+              variant="glass"
+              className="min-w-[220px] border-studio-neblina/70 text-studio-trufa hover:bg-studio-crudo/60"
+              onClick={() => scrollToSection("#demo")}
+            >
+              Recorrer demo interactiva
+              <PlayCircle className="h-5 w-5" />
+            </Button>
           </div>
+          <div className="grid gap-6 pt-6 sm:grid-cols-3">
+            {HERO_METRICS.map((metric) => (
+              <div key={metric.label} className="rounded-[18px] border border-studio-neblina/70 bg-studio-crudo/70 p-4 shadow-sm backdrop-blur">
+                <div className="text-3xl font-semibold text-studio-merlot">{metric.value}</div>
+                <p className="mt-2 text-sm font-medium text-studio-trufa/80">{metric.label}</p>
+                <p className="mt-1 text-xs text-studio-trufa/60">{metric.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          {/* Imagen/Ilustración - Comentada temporalmente
-          <div className="lg:ml-auto">
-            <div className="relative mx-auto w-full max-w-xl lg:max-w-none aspect-square rounded-2xl bg-muted/30 p-4">
-              <div className="h-full w-full rounded-xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center text-primary/40">
-                <span className="text-lg">Imagen Placeholder</span>
+        <motion.div
+          className="relative w-full max-w-xl self-center rounded-[24px] shadow-[0_32px_90px_rgba(45,27,23,0.28)]"
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          viewport={{ once: true, amount: 0.4 }}
+        >
+          <div className="relative overflow-hidden rounded-[24px] border border-studio-neblina/70 bg-studio-trufa/10">
+            <img
+              src="/branding/hero-chef-aurora.webp"
+              alt="Chef Aurora Food Studio"
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+            <div className="absolute inset-0" style={gradientOverlay} />
+            <div className="absolute bottom-6 left-6 right-6 rounded-2xl border border-white/20 bg-white/12 p-4 text-white backdrop-blur-xl">
+              <span className="text-xs uppercase tracking-[0.2em] text-white/70">Chef Aurora Studio</span>
+              <p className="mt-2 font-display text-xl leading-tight">
+                Curaduría fotográfica + IA de operaciones para marcas gastronómicas premium.
+              </p>
+              <div className="mt-3 flex items-center justify-between text-sm text-white/80">
+                <span>Set editorial otoño</span>
+                <span>Hipótesis de impacto 3.2x</span>
               </div>
             </div>
           </div>
-           */}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </section>
   );
 };
 
