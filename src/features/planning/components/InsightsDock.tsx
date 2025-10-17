@@ -24,6 +24,8 @@ interface InsightsDockProps {
   goalProgress?: GoalComparison | null;
   weeklyReport?: WeeklyReport | null;
   visionContent?: ReactNode;
+  onOpenSettings: () => void;
+  onOpenStats: () => void;
 }
 
 const getGoalBadge = (goal?: GoalComparison | null) => {
@@ -66,6 +68,8 @@ export function InsightsDock({
   goalProgress,
   weeklyReport,
   visionContent,
+  onOpenSettings,
+  onOpenStats,
 }: InsightsDockProps) {
 
   const hasWeeklyReport = Boolean(

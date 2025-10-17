@@ -697,6 +697,8 @@ function PlanningPage() {
             goalProgress={goalProgress}
             weeklyReport={weeklyReport}
             visionContent={visionSection}
+            onOpenSettings={handleShowSettings}
+            onOpenStats={handleShowStats}
           />
         )}
       </div>
