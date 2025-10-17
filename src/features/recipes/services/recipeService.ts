@@ -1,11 +1,12 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { 
-  Recipe, 
-  RecipeIngredient, 
+import type {
+  Recipe,
+  RecipeIngredient,
   RecipeInstructions,
   RecipeFilters,
 } from '@/types/recipeTypes';
 import { findOrCreateIngredient } from '@/features/ingredients/ingredientService';
+import { normalizeQuantity, normalizeUnit, parseIntegerOrNull } from '@/utils/units';
 
 // Tipo de entrada para añadir/actualizar recetas
 export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredients' | 'instructions'> & {
@@ -71,6 +72,7 @@ const instructionsToArray = (text: string | null): RecipeInstructions => {
 };
 
 function mapDBDataToRecipe(dbData: any): Recipe {
+  const { main_ingredients, mainIngredients, ...rest } = dbData;
   let parsedInstructions: RecipeInstructions = [];
   const rawInstructions = dbData.instructions;
 
@@ -149,12 +151,293 @@ function mapDBDataToRecipe(dbData: any): Recipe {
   }
 
   return {
-    ...dbData,
+    ...rest,
     recipe_ingredients: dbData.recipe_ingredients || [],
-    instructions: parsedInstructions, // Ahora debería ser siempre un array de strings válido
+    instructions: parsedInstructions,
     nutritional_info: dbData.nutritional_info || null,
-  };
+    mainIngredients: Array.isArray(mainIngredients)
+      ? mainIngredients
+      : Array.isArray(main_ingredients)
+        ? main_ingredients
+        : [],
+    is_archived: dbData.is_archived ?? false,
+    archived_at: dbData.archived_at ?? null,
+  } as Recipe;
 }
+
+type PersistenceIngredient = {
+  ingredient_id: string;
+  ingredient_name: string;
+  quantity: number | null;
+  unit: string | null;
+};
+
+const normalizeIngredientsForPersistence = async (
+  ingredients: RecipeInputData['ingredients']
+): Promise<PersistenceIngredient[]> => {
+  return Promise.all(
+    ingredients
+      .filter(ing => ing.name && ing.name.trim().length > 0)
+      .map(async ing => {
+        const normalizedQuantity = normalizeQuantity(ing.quantity);
+        const ingredientRecord = await findOrCreateIngredient(
+          ing.name,
+          normalizedQuantity ?? 1
+        );
+        return {
+          ingredient_id: ingredientRecord.id,
+          ingredient_name: ingredientRecord.name ?? ing.name.trim(),
+          quantity: normalizedQuantity,
+          unit: normalizeUnit(ing.unit),
+        } satisfies PersistenceIngredient;
+      })
+  );
+};
+
+const buildRecipePayload = (recipeInput: RecipeInputData) => {
+  const instructionsArray = Array.isArray(recipeInput.instructions)
+    ? recipeInput.instructions
+    : instructionsToArray(
+        typeof recipeInput.instructions === 'string'
+          ? recipeInput.instructions
+          : null
+      );
+
+  return {
+    title: recipeInput.title,
+    description: recipeInput.description ?? null,
+    instructions: instructionsArray,
+    prep_time_minutes: parseIntegerOrNull(recipeInput.prep_time_minutes),
+    cook_time_minutes: parseIntegerOrNull(recipeInput.cook_time_minutes),
+    servings: parseIntegerOrNull(recipeInput.servings),
+    image_url: recipeInput.image_url ?? null,
+    tags: recipeInput.tags ?? [],
+    main_ingredients: recipeInput.mainIngredients ?? [],
+    is_generated_base: recipeInput.isBaseRecipe ?? false,
+    is_public: recipeInput.is_public ?? false,
+    nutritional_info: recipeInput.nutritional_info ?? null,
+    is_archived: recipeInput.is_archived ?? false,
+  };
+};
+
+const parseRpcRecipe = (rpcData: any): Recipe | null => {
+  if (!rpcData) return null;
+  const rawRecipe = rpcData.recipe ?? rpcData;
+  if (rawRecipe && rawRecipe.id) {
+    return mapDBDataToRecipe({
+      ...rawRecipe,
+      recipe_ingredients: rawRecipe.recipe_ingredients ?? [],
+    });
+  }
+  return null;
+};
+
+const createRecipeWithRpc = async (recipeInput: RecipeInputData): Promise<Recipe> => {
+  const recipePayload = buildRecipePayload(recipeInput);
+  const ingredientsPayload = await normalizeIngredientsForPersistence(recipeInput.ingredients);
+
+  const { data, error } = await supabase.rpc('create_recipe_with_ingredients', {
+    recipe_payload: { ...recipePayload, user_id: recipeInput.user_id },
+    ingredients_payload: ingredientsPayload,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const recipeFromRpc = parseRpcRecipe(data);
+  if (recipeFromRpc) {
+    return recipeFromRpc;
+  }
+
+  const createdId = data?.id ?? data?.recipe_id ?? data?.recipe?.id;
+  if (!createdId) {
+    throw new Error('La transacción no devolvió el identificador de la receta creada.');
+  }
+
+  const createdRecipe = await getRecipeById(createdId);
+  if (!createdRecipe) {
+    throw new Error('No se pudo recuperar la receta creada tras la transacción.');
+  }
+
+  return createdRecipe;
+};
+
+const createRecipeLegacy = async (recipeInput: RecipeInputData): Promise<Recipe> => {
+  const recipePayload = buildRecipePayload(recipeInput);
+
+  const { data: newRecipe, error: recipeError } = await supabase
+    .from('recipes')
+    .insert([
+      {
+        user_id: recipeInput.user_id,
+        title: recipePayload.title,
+        description: recipePayload.description,
+        instructions: instructionsToString(recipePayload.instructions),
+        prep_time_minutes: recipePayload.prep_time_minutes,
+        cook_time_minutes: recipePayload.cook_time_minutes,
+        servings: recipePayload.servings,
+        image_url: recipePayload.image_url,
+        tags: recipePayload.tags,
+        main_ingredients: recipePayload.main_ingredients,
+        is_generated_base: recipePayload.is_generated_base,
+        is_public: recipePayload.is_public,
+        nutritional_info: recipePayload.nutritional_info,
+        is_archived: recipePayload.is_archived,
+      },
+    ])
+    .select('id')
+    .single();
+
+  if (recipeError) throw recipeError;
+  if (!newRecipe) throw new Error('No se pudo crear la receta');
+
+  if (recipeInput.ingredients?.length) {
+    const ingredientsToInsert = await normalizeIngredientsForPersistence(recipeInput.ingredients);
+    const { error: ingredientsError } = await supabase
+      .from('recipe_ingredients')
+      .insert(
+        ingredientsToInsert.map(ing => ({
+          ...ing,
+          recipe_id: newRecipe.id,
+        }))
+      );
+
+    if (ingredientsError) throw ingredientsError;
+  }
+
+  const createdRecipe = await getRecipeById(newRecipe.id);
+  if (!createdRecipe) {
+    throw new Error('No se pudo cargar la receta creada.');
+  }
+
+  return createdRecipe;
+};
+
+const updateRecipeWithRpc = async (
+  recipeId: string,
+  recipeInput: Partial<RecipeInputData>
+): Promise<Recipe> => {
+  const recipePayload = buildUpdatePayload(recipeInput);
+  const ingredientsPayload = recipeInput.ingredients
+    ? await normalizeIngredientsForPersistence(recipeInput.ingredients)
+    : undefined;
+
+  const { data, error } = await supabase.rpc('update_recipe_with_ingredients', {
+    recipe_id: recipeId,
+    recipe_payload: recipePayload,
+    ingredients_payload: ingredientsPayload,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const updatedRecipe = parseRpcRecipe(data);
+  if (updatedRecipe) {
+    return updatedRecipe;
+  }
+
+  const fetched = await getRecipeById(recipeId);
+  if (!fetched) {
+    throw new Error('No se pudo recuperar la receta actualizada.');
+  }
+
+  return fetched;
+};
+
+const updateRecipeLegacy = async (
+  recipeId: string,
+  recipeInput: Partial<RecipeInputData>
+): Promise<Recipe> => {
+  const recipePayload = buildUpdatePayload(recipeInput);
+
+  const { data: updatedRecipe, error: recipeError } = await supabase
+    .from('recipes')
+    .update({
+      ...recipePayload,
+      instructions:
+        recipePayload.instructions !== undefined
+          ? instructionsToString(recipePayload.instructions)
+          : undefined,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', recipeId)
+    .select('id')
+    .single();
+
+  if (recipeError) throw recipeError;
+  if (!updatedRecipe) throw new Error('Receta no encontrada o sin permisos.');
+
+  if (recipeInput.ingredients) {
+    await supabase.from('recipe_ingredients').delete().eq('recipe_id', recipeId);
+
+    if (recipeInput.ingredients.length > 0) {
+      const ingredientsToInsert = await normalizeIngredientsForPersistence(recipeInput.ingredients);
+      const { error: ingredientsError } = await supabase
+        .from('recipe_ingredients')
+        .insert(
+          ingredientsToInsert.map(ing => ({
+            ...ing,
+            recipe_id: recipeId,
+          }))
+        );
+
+      if (ingredientsError) throw ingredientsError;
+    }
+  }
+
+  const fetched = await getRecipeById(recipeId);
+  if (!fetched) {
+    throw new Error('No se pudo recuperar la receta actualizada.');
+  }
+
+  return fetched;
+};
+
+const buildUpdatePayload = (recipeInput: Partial<RecipeInputData>) => {
+  const payload: Record<string, any> = {};
+  if (recipeInput.title !== undefined) payload.title = recipeInput.title;
+  if (recipeInput.description !== undefined) payload.description = recipeInput.description ?? null;
+  if (recipeInput.instructions !== undefined) {
+    payload.instructions = Array.isArray(recipeInput.instructions)
+      ? recipeInput.instructions
+      : instructionsToArray(
+          typeof recipeInput.instructions === 'string' ? recipeInput.instructions : null
+        );
+  }
+  if (recipeInput.prep_time_minutes !== undefined) {
+    payload.prep_time_minutes = parseIntegerOrNull(recipeInput.prep_time_minutes);
+  }
+  if (recipeInput.cook_time_minutes !== undefined) {
+    payload.cook_time_minutes = parseIntegerOrNull(recipeInput.cook_time_minutes);
+  }
+  if (recipeInput.servings !== undefined) {
+    payload.servings = parseIntegerOrNull(recipeInput.servings);
+  }
+  if (recipeInput.image_url !== undefined) {
+    payload.image_url = recipeInput.image_url ?? null;
+  }
+  if (recipeInput.tags !== undefined) {
+    payload.tags = recipeInput.tags ?? [];
+  }
+  if (recipeInput.mainIngredients !== undefined) {
+    payload.main_ingredients = recipeInput.mainIngredients ?? [];
+  }
+  if (recipeInput.isBaseRecipe !== undefined) {
+    payload.is_generated_base = recipeInput.isBaseRecipe ?? false;
+  }
+  if (recipeInput.is_public !== undefined) {
+    payload.is_public = recipeInput.is_public ?? false;
+  }
+  if (recipeInput.nutritional_info !== undefined) {
+    payload.nutritional_info = recipeInput.nutritional_info ?? null;
+  }
+  if (recipeInput.is_archived !== undefined) {
+    payload.is_archived = recipeInput.is_archived ?? false;
+  }
+  return payload;
+};
 
 export const getRecipes = async ({
   userId,
@@ -267,147 +550,114 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe | null> =>
 
 // Función para crear recetas
 export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe> => {
-  console.log('[recipeService] Entrando a createRecipe', { title: recipeInput.title });
   if (!recipeInput.title || !recipeInput.user_id) {
-    throw new Error("El título y user_id son obligatorios.");
+    throw new Error('El título y user_id son obligatorios.');
   }
 
-  // Preparar datos para insertar en la tabla 'recipes'
-  const recipeDataForDB = {
-    user_id: recipeInput.user_id,
-    title: recipeInput.title,
-    description: recipeInput.description,
-    instructions: instructionsToString(recipeInput.instructions),
-    prep_time_minutes: recipeInput.prep_time_minutes,
-    cook_time_minutes: recipeInput.cook_time_minutes,
-    servings: recipeInput.servings,
-    is_generated_base: recipeInput.isBaseRecipe || false,
-    is_favorite: false,
-    is_public: recipeInput.is_public ?? false,
-    tags: recipeInput.tags || [],
-    main_ingredients: recipeInput.mainIngredients || [],
-    image_url: recipeInput.image_url,
-    nutritional_info: recipeInput.nutritional_info || null,
-  };
-
-  console.log('[recipeService] Entrando a createRecipe', recipeDataForDB);
-
-  // Insertar la receta principal
-  const { data: newRecipe, error: recipeError } = await supabase
-    .from('recipes')
-    .insert([recipeDataForDB])
-    .select('*, recipe_ingredients(*)')
-    .single();
-
-  if (recipeError) throw recipeError;
-  if (!newRecipe) throw new Error('No se pudo crear la receta');
-
-  // Insertar ingredientes
-  console.log('[recipeService] Receta base creada, iniciando procesamiento de ingredientes...');
-  if (recipeInput.ingredients?.length) {
-    const ingredientsToInsert = await Promise.all(
-      recipeInput.ingredients.map(async (ing, index) => {
-        console.log(`[recipeService] Procesando ingrediente ${index + 1}: ${ing.name}`);
-        const ingredient = await findOrCreateIngredient(ing.name);
-        return {
-          recipe_id: newRecipe.id,
-          ingredient_id: ingredient.id,
-          ingredient_name: ing.name,
-          quantity: typeof ing.quantity === 'string' ? parseFloat(ing.quantity.replace(',', '.')) : ing.quantity,
-          unit: ing.unit
-        };
-      })
-    );
-
-    // Log del usuario autenticado antes del insert de ingredientes
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    console.log('[recipeService] Usuario actual antes de insertar ingredientes:', userData, userError);
-
-    // Log extra: muestra el JWT para verificar el rol en jwt.io
-    const session = await supabase.auth.getSession();
-    console.log('[recipeService] COPIA ESTE JWT y pégalo en https://jwt.io para ver el claim "role":', session.data?.session?.access_token);
-
-    // Log de los datos que se intentan insertar
-    console.log('[recipeService] Datos que se intentan insertar en recipe_ingredients:', ingredientsToInsert);
-
-    const { error: ingredientsError } = await supabase
-      .from('recipe_ingredients')
-      .insert(ingredientsToInsert);
-
-    // Log del error completo de Supabase
-    if (ingredientsError) {
-      console.error('[recipeService] ERROR al insertar ingredientes en recipe_ingredients:', ingredientsError);
-    }
-
-    if (ingredientsError) throw ingredientsError;
+  try {
+    const recipe = await createRecipeWithRpc(recipeInput);
+    invalidateRecipeCache();
+    return recipe;
+  } catch (rpcError) {
+    console.warn('[recipeService] create_recipe_with_ingredients RPC falló, usando lógica legacy.', rpcError);
+    const recipe = await createRecipeLegacy(recipeInput);
+    invalidateRecipeCache();
+    return recipe;
   }
-
-  // Invalidar caché después de crear una receta
-  invalidateRecipeCache();
-
-  return mapDBDataToRecipe(newRecipe);
 };
 
 // Alias para mantener compatibilidad
 export const addRecipe = createRecipe;
 
-export const updateRecipe = async (recipeId: string, recipeInput: Partial<RecipeInputData>): Promise<Recipe> => {
-  // Obtener usuario actual
-  const { data: { user } } = await supabase.auth.getUser();
+export const updateRecipe = async (
+  recipeId: string,
+  recipeInput: Partial<RecipeInputData>
+): Promise<Recipe> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
-  const { ingredients, instructions, mainIngredients, ...recipeFieldsToUpdate } = recipeInput;
+  try {
+    const recipe = await updateRecipeWithRpc(recipeId, recipeInput);
+    invalidateRecipeCache(recipeId);
+    return recipe;
+  } catch (rpcError) {
+    console.warn('[recipeService] update_recipe_with_ingredients RPC falló, usando lógica legacy.', rpcError);
+    const recipe = await updateRecipeLegacy(recipeId, recipeInput);
+    invalidateRecipeCache(recipeId);
+    return recipe;
+  }
+};
 
-  // 1. Actualizar receta - asegurar que el usuario solo pueda actualizar sus propias recetas
-  const { data: updatedRecipe, error: recipeError } = await supabase
+export const archiveRecipe = async (recipeId: string, archive: boolean): Promise<Recipe> => {
+  const updatePayload: Record<string, any> = {
+    is_archived: archive,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
     .from('recipes')
-    .update({
-      ...recipeFieldsToUpdate,
-      instructions: instructionsToString(instructions),
-      main_ingredients: mainIngredients,
-      updated_at: new Date().toISOString()
-    })
+    .update(updatePayload)
     .eq('id', recipeId)
-    .eq('user_id', user.id) // Agregar filtro de user_id
     .select('*, recipe_ingredients(*)')
     .single();
 
-  if (recipeError) throw recipeError;
-  if (!updatedRecipe) throw new Error('Receta no encontrada o no tienes permisos para editarla');
-
-  // 2. Actualizar ingredientes si se proporcionan
-  if (ingredients) {
-    await supabase
-      .from('recipe_ingredients')
-      .delete()
-      .eq('recipe_id', recipeId);
-
-    if (ingredients.length > 0) {
-      const ingredientsToInsert = await Promise.all(
-        ingredients.map(async (ing) => {
-          const ingredient = await findOrCreateIngredient(ing.name);
-          return {
-            recipe_id: recipeId,
-            ingredient_id: ingredient.id,
-            ingredient_name: ing.name,
-            quantity: typeof ing.quantity === 'string' ? parseFloat(ing.quantity.replace(',', '.')) : ing.quantity,
-            unit: ing.unit
-          };
-        })
-      );
-
-      const { error: ingredientsError } = await supabase
-        .from('recipe_ingredients')
-        .insert(ingredientsToInsert);
-
-      if (ingredientsError) throw ingredientsError;
-    }
+  if (error) {
+    throw error;
   }
 
-  // Invalidar caché después de actualizar una receta
   invalidateRecipeCache(recipeId);
+  return mapDBDataToRecipe(data);
+};
 
-  return mapDBDataToRecipe(updatedRecipe);
+export const duplicateRecipe = async (
+  recipeId: string,
+  overrides: Partial<RecipeInputData> = {}
+): Promise<Recipe> => {
+  const original = await getRecipeById(recipeId);
+  if (!original) {
+    throw new Error('Receta original no encontrada.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Usuario no autenticado');
+  }
+
+  const overrideIngredients = overrides.ingredients?.map(ing => ({
+    name: 'name' in ing ? ing.name : (ing as any).ingredient_name,
+    quantity: 'quantity' in ing ? (ing.quantity ?? null) : null,
+    unit: 'unit' in ing ? (ing.unit ?? null) : null,
+  }));
+
+  const duplicatedInput: RecipeInputData = {
+    user_id: user.id,
+    title: overrides.title ?? `${original.title} (Copia)`,
+    description: overrides.description ?? original.description ?? null,
+    instructions: overrides.instructions ?? original.instructions,
+    prep_time_minutes: overrides.prep_time_minutes ?? original.prep_time_minutes ?? null,
+    cook_time_minutes: overrides.cook_time_minutes ?? original.cook_time_minutes ?? null,
+    servings: overrides.servings ?? original.servings ?? null,
+    image_url: overrides.image_url ?? original.image_url ?? null,
+    tags: overrides.tags ?? original.tags ?? [],
+    mainIngredients: overrides.mainIngredients ?? original.mainIngredients ?? [],
+    nutritional_info: overrides.nutritional_info ?? original.nutritional_info ?? null,
+    is_public: overrides.is_public ?? original.is_public ?? false,
+    isBaseRecipe: overrides.isBaseRecipe ?? false,
+    is_archived: false,
+    ingredients:
+      overrideIngredients ??
+      original.recipe_ingredients.map(ing => ({
+        name: ing.ingredient_name,
+        quantity: ing.quantity ?? null,
+        unit: ing.unit ?? null,
+      })),
+  };
+
+  return createRecipe(duplicatedInput);
 };
 
 export const deleteRecipe = async (recipeId: string): Promise<void> => {
