@@ -17,4 +17,6 @@ export const LazyLandingComponents = {};
 export const LazyAuth = {
   Login: lazy(() => import('@/features/auth/Login')),
   Signup: lazy(() => import('@/features/auth/Signup')),
+  ForgotPassword: lazy(() => import('@/features/auth/ForgotPassword')),
+  ResetPassword: lazy(() => import('@/features/auth/ResetPassword')),
 };
