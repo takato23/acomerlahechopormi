@@ -5,6 +5,8 @@ export {
   createRecipe,
   addRecipe,
   updateRecipe,
+  archiveRecipe,
+  duplicateRecipe,
   deleteRecipe,
   type RecipeIngredient
 } from './recipeService';
