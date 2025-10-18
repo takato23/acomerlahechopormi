@@ -1,0 +1,54 @@
+export const themeTokens = {
+  colors: {
+    border: 'hsl(var(--border))',
+    input: 'hsl(var(--input))',
+    ring: 'hsl(var(--ring))',
+    background: 'hsl(var(--background))',
+    foreground: 'hsl(var(--foreground))',
+    muted: {
+      DEFAULT: 'hsl(var(--muted))',
+      foreground: 'hsl(var(--muted-foreground))',
+    },
+    popover: {
+      DEFAULT: 'hsl(var(--popover))',
+      foreground: 'hsl(var(--popover-foreground))',
+    },
+    card: {
+      DEFAULT: 'hsl(var(--card))',
+      foreground: 'hsl(var(--card-foreground))',
+    },
+    primary: {
+      DEFAULT: 'hsl(var(--primary))',
+      foreground: 'hsl(var(--primary-foreground))',
+    },
+    secondary: {
+      DEFAULT: 'hsl(var(--secondary))',
+      foreground: 'hsl(var(--secondary-foreground))',
+    },
+    destructive: {
+      DEFAULT: 'hsl(var(--destructive))',
+      foreground: 'hsl(var(--destructive-foreground))',
+    },
+    accent: {
+      DEFAULT: 'hsl(var(--accent))',
+      foreground: 'hsl(var(--accent-foreground))',
+    },
+  },
+  spacing: {
+    'page-inline': 'var(--spacing-page-inline)',
+    'page-block': 'var(--spacing-page-block)',
+    section: 'var(--spacing-section)',
+    'section-sm': 'var(--spacing-section-sm)',
+    'section-lg': 'var(--spacing-section-lg)',
+  },
+  radii: {
+    base: 'var(--radius)',
+    lg: 'calc(var(--radius) + 4px)',
+  },
+  maxWidth: {
+    page: 'var(--max-width-page)',
+    content: 'var(--max-width-content)',
+  },
+};
+
+export default themeTokens;
