@@ -1,12 +1,404 @@
 import { supabase } from '@/lib/supabaseClient';
 import { ShoppingListItem } from '@/types/shoppingListTypes';
 import { Recipe } from '@/types/recipeTypes';
-import { 
-  normalizeUnit, 
-  parseQuantity, 
-  convertUnits,
-  normalizeIngredientName 
-} from '@/lib/ingredientUtils';
+import { normalizeUnit, normalizeIngredientName } from '@/lib/ingredientUtils';
+import { getPlannedMeals } from '@/features/planning/planningService';
+import type { PlannedMeal } from '@/features/planning/types';
+import { getCategoryForItem, mapLabelToCategoryKey } from '../utils/categorization';
+import type { Database } from '@/lib/database.types';
+
+type ShoppingListInsert = Database['public']['Tables']['shopping_list_items']['Insert'];
+
+type AggregatedRequirement = {
+  key: string;
+  ingredientId: string | null;
+  ingredientName: string;
+  nameKey: string;
+  totalQuantity: number | null;
+  unit: string | null;
+  recipeTitles: Set<string>;
+  category: string | null;
+};
+
+type PantryStockEntry = {
+  key: string;
+  nameKey: string;
+  quantity: number | null;
+  unit: string | null;
+  category: string | null;
+};
+
+const UNIT_CONVERSIONS: Record<string, Record<string, number>> = {
+  kg: { g: 1000 },
+  g: { kg: 0.001 },
+  l: { ml: 1000 },
+  ml: { l: 0.001 },
+};
+
+const buildNameKey = (name: string | null | undefined): string => {
+  if (!name) return '';
+  return normalizeIngredientName(name).toLowerCase();
+};
+
+const buildIngredientKey = (ingredientId: string | null | undefined, nameKey: string): string => {
+  return ingredientId ? `id:${ingredientId}` : `name:${nameKey}`;
+};
+
+const tryConvertQuantity = (
+  amount: number | null | undefined,
+  fromUnit: string | null | undefined,
+  toUnit: string | null | undefined
+): number | null => {
+  if (amount === null || amount === undefined) return null;
+  if (!fromUnit || !toUnit) return amount;
+
+  const normalizedFrom = normalizeUnit(fromUnit);
+  const normalizedTo = normalizeUnit(toUnit);
+
+  if (normalizedFrom === normalizedTo) {
+    return amount;
+  }
+
+  if (normalizedFrom === 'un' || normalizedTo === 'un') {
+    return amount;
+  }
+
+  const conversion = UNIT_CONVERSIONS[normalizedFrom]?.[normalizedTo];
+  if (conversion !== undefined) {
+    return amount * conversion;
+  }
+
+  const inverse = UNIT_CONVERSIONS[normalizedTo]?.[normalizedFrom];
+  if (inverse !== undefined) {
+    return amount / inverse;
+  }
+
+  return null;
+};
+
+const formatMissingQuantity = (quantity: number | null): number | null => {
+  if (quantity === null) return null;
+  const rounded = Number(quantity.toFixed(3));
+  return rounded <= 0 ? 0 : rounded;
+};
+
+const aggregateRecipeIngredients = (
+  plannedMeals: PlannedMeal[],
+  ingredients: Array<{ recipe_id: string; ingredient_id: string | null; ingredient_name: string | null; quantity: number | null; unit: string | null; }>
+): Map<string, AggregatedRequirement> => {
+  const recipeTitleMap = new Map<string, string>();
+  plannedMeals.forEach(meal => {
+    if (meal.recipe_id) {
+      const title = meal.recipes?.title || meal.custom_meal_name || 'Receta sin título';
+      recipeTitleMap.set(meal.recipe_id, title);
+    }
+  });
+
+  const aggregated = new Map<string, AggregatedRequirement>();
+
+  for (const ingredient of ingredients) {
+    const ingredientName = ingredient.ingredient_name?.trim();
+    if (!ingredientName) continue;
+
+    const nameKey = buildNameKey(ingredientName);
+    const key = buildIngredientKey(ingredient.ingredient_id, nameKey);
+    const normalizedUnit = ingredient.unit ? normalizeUnit(ingredient.unit) : null;
+    const quantity = typeof ingredient.quantity === 'number' ? ingredient.quantity : null;
+    const recipeTitle = ingredient.recipe_id ? recipeTitleMap.get(ingredient.recipe_id) : undefined;
+
+    let entry = aggregated.get(key);
+    if (!entry) {
+      entry = {
+        key,
+        ingredientId: ingredient.ingredient_id,
+        ingredientName,
+        nameKey,
+        totalQuantity: quantity,
+        unit: normalizedUnit,
+        recipeTitles: new Set<string>(),
+        category: getCategoryForItem(ingredientName)
+      };
+      aggregated.set(key, entry);
+    } else {
+      if (entry.totalQuantity === null || quantity === null) {
+        entry.totalQuantity = null;
+      } else if (entry.unit && normalizedUnit && entry.unit !== normalizedUnit) {
+        const converted = tryConvertQuantity(quantity, normalizedUnit, entry.unit);
+        if (converted === null) {
+          entry.totalQuantity = null;
+        } else {
+          entry.totalQuantity += converted;
+        }
+      } else {
+        entry.totalQuantity = (entry.totalQuantity ?? 0) + quantity;
+        if (!entry.unit && normalizedUnit) {
+          entry.unit = normalizedUnit;
+        }
+      }
+
+      if (!entry.unit && normalizedUnit) {
+        entry.unit = normalizedUnit;
+      }
+    }
+
+    if (recipeTitle) {
+      entry.recipeTitles.add(recipeTitle);
+    }
+  }
+
+  return aggregated;
+};
+
+const buildPantryStockMaps = (
+  pantryItems: Array<{ ingredient_id: string | null; name: string | null; quantity: number | null; unit: string | null; categories?: { name: string | null } | null; }>
+): { byKey: Map<string, PantryStockEntry>; byName: Map<string, PantryStockEntry> } => {
+  const byKey = new Map<string, PantryStockEntry>();
+  const byName = new Map<string, PantryStockEntry>();
+
+  pantryItems.forEach(item => {
+    const ingredientName = item.name?.trim();
+    if (!ingredientName) return;
+
+    const nameKey = buildNameKey(ingredientName);
+    const key = buildIngredientKey(item.ingredient_id, nameKey);
+    const normalizedUnit = item.unit ? normalizeUnit(item.unit) : null;
+    const categoryName = item.categories?.name ?? null;
+    const categoryKey = categoryName ? mapLabelToCategoryKey(categoryName) ?? categoryName : null;
+
+    const entry = byKey.get(key) || byName.get(nameKey);
+    if (entry) {
+      if (entry.quantity === null || item.quantity === null) {
+        entry.quantity = null;
+      } else if (entry.unit && normalizedUnit && entry.unit !== normalizedUnit) {
+        const converted = tryConvertQuantity(item.quantity, normalizedUnit, entry.unit);
+        if (converted === null) {
+          entry.quantity = null;
+        } else {
+          entry.quantity += converted;
+        }
+      } else {
+        entry.quantity = (entry.quantity ?? 0) + (item.quantity ?? 0);
+        if (!entry.unit && normalizedUnit) {
+          entry.unit = normalizedUnit;
+        }
+      }
+
+      if (!entry.unit && normalizedUnit) {
+        entry.unit = normalizedUnit;
+      }
+
+      if (!entry.category && categoryKey) {
+        entry.category = categoryKey;
+      }
+    } else {
+      const stockEntry: PantryStockEntry = {
+        key,
+        nameKey,
+        quantity: item.quantity,
+        unit: normalizedUnit,
+        category: categoryKey
+      };
+      byKey.set(key, stockEntry);
+      byName.set(nameKey, stockEntry);
+    }
+  });
+
+  return { byKey, byName };
+};
+
+export async function generateShoppingListFromPlanning(startDate: string, endDate: string): Promise<ShoppingListItem[]> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError) {
+    console.error('[shoppingListService] Error obteniendo usuario:', userError);
+    throw new Error('Error de autenticación');
+  }
+
+  if (!user) {
+    throw new Error('Usuario no autenticado');
+  }
+
+  const plannedMeals = await getPlannedMeals(startDate, endDate);
+  if (plannedMeals.length === 0) {
+    console.info('[shoppingListService] No hay comidas planificadas en el rango proporcionado.');
+    return getShoppingListItems();
+  }
+
+  const recipeIds = Array.from(new Set(
+    plannedMeals
+      .map(meal => meal.recipe_id)
+      .filter((id): id is string => Boolean(id))
+  ));
+
+  if (recipeIds.length === 0) {
+    console.info('[shoppingListService] No se encontraron recetas asociadas a las comidas planificadas.');
+    return getShoppingListItems();
+  }
+
+  const { data: recipeIngredients, error: ingredientsError } = await supabase
+    .from('recipe_ingredients')
+    .select('recipe_id, ingredient_id, ingredient_name, quantity, unit')
+    .in('recipe_id', recipeIds);
+
+  if (ingredientsError) {
+    console.error('[shoppingListService] Error al obtener ingredientes de recetas:', ingredientsError);
+    throw new Error('No se pudieron obtener los ingredientes de las recetas planificadas.');
+  }
+
+  if (!recipeIngredients || recipeIngredients.length === 0) {
+    console.warn('[shoppingListService] Las recetas planificadas no poseen ingredientes.');
+    return getShoppingListItems();
+  }
+
+  const aggregated = aggregateRecipeIngredients(plannedMeals, recipeIngredients);
+
+  const { data: pantryItems, error: pantryError } = await supabase
+    .from('pantry_items')
+    .select('ingredient_id, name, quantity, unit, categories(name)')
+    .eq('user_id', user.id);
+
+  if (pantryError) {
+    console.error('[shoppingListService] Error al obtener la despensa:', pantryError);
+    throw new Error('No se pudieron obtener los items de la despensa.');
+  }
+
+  const { byKey: pantryByKey, byName: pantryByName } = buildPantryStockMaps(pantryItems || []);
+
+  const missingItems = Array.from(aggregated.values()).map(entry => {
+    const pantryEntry = entry.ingredientId ? pantryByKey.get(entry.key) : pantryByName.get(entry.nameKey) || pantryByKey.get(entry.key);
+
+    let availableQuantity = 0;
+    if (pantryEntry && pantryEntry.quantity !== null && entry.totalQuantity !== null) {
+      const converted = tryConvertQuantity(pantryEntry.quantity, pantryEntry.unit, entry.unit);
+      if (converted === null) {
+        availableQuantity = 0;
+      } else {
+        availableQuantity = converted;
+      }
+    }
+
+    const requiredQuantity = entry.totalQuantity;
+    const missingQuantity = requiredQuantity !== null ? formatMissingQuantity(requiredQuantity - availableQuantity) : null;
+
+    const needsPurchase = missingQuantity === null || missingQuantity > 0;
+
+    if (!needsPurchase) {
+      return null;
+    }
+
+    const recipeSource = entry.recipeTitles.size > 0 ? Array.from(entry.recipeTitles).join(', ') : null;
+    const category = entry.category || pantryEntry?.category || null;
+
+    return {
+      ingredient_name: entry.ingredientName,
+      quantity: missingQuantity,
+      unit: entry.unit,
+      category,
+      notes: recipeSource ? `Recetas: ${recipeSource}` : null,
+      recipe_source: recipeSource
+    };
+  }).filter((item): item is {
+    ingredient_name: string;
+    quantity: number | null;
+    unit: string | null;
+    category: string | null;
+    notes: string | null;
+    recipe_source: string | null;
+  } => Boolean(item));
+
+  const { data: existingItems, error: existingError } = await supabase
+    .from('shopping_list_items')
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (existingError) {
+    console.error('[shoppingListService] Error al obtener lista existente:', existingError);
+    throw new Error('No se pudo obtener la lista de compras existente.');
+  }
+
+  const existingByName = new Map<string, ShoppingListItem>();
+  (existingItems || []).forEach(item => {
+    existingByName.set(buildNameKey(item.ingredient_name), item);
+  });
+
+  const now = new Date().toISOString();
+  const inserts: ShoppingListInsert[] = [];
+  const updates: Array<{ id: string; values: Partial<ShoppingListItem> }> = [];
+
+  missingItems.forEach(item => {
+    const nameKey = buildNameKey(item.ingredient_name);
+    const existing = existingByName.get(nameKey);
+
+    if (existing) {
+      updates.push({
+        id: existing.id,
+        values: {
+          quantity: item.quantity,
+          unit: item.unit,
+          category: item.category ?? existing.category ?? null,
+          notes: item.notes ?? existing.notes ?? null,
+          recipe_source: item.recipe_source ?? existing.recipe_source ?? null,
+          is_checked: false,
+          updated_at: now,
+        }
+      });
+    } else {
+      inserts.push({
+        user_id: user.id,
+        ingredient_name: item.ingredient_name,
+        quantity: item.quantity,
+        unit: item.unit,
+        category: item.category,
+        notes: item.notes,
+        recipe_source: item.recipe_source,
+        is_checked: false,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  });
+
+  if (updates.length > 0) {
+    const updatePromises = updates.map(update =>
+      supabase
+        .from('shopping_list_items')
+        .update(update.values)
+        .eq('id', update.id)
+        .eq('user_id', user.id)
+    );
+
+    const updateResults = await Promise.all(updatePromises);
+    const updateError = updateResults.find(result => result.error);
+    if (updateError && updateError.error) {
+      console.error('[shoppingListService] Error al actualizar ítems existentes:', updateError.error);
+      throw new Error('No se pudieron actualizar los ítems existentes de la lista de compras.');
+    }
+  }
+
+  if (inserts.length > 0) {
+    const { error: insertError } = await supabase
+      .from('shopping_list_items')
+      .insert(inserts);
+
+    if (insertError) {
+      console.error('[shoppingListService] Error al insertar ítems faltantes:', insertError);
+      throw new Error('No se pudieron guardar los nuevos ítems de la lista de compras.');
+    }
+  }
+
+  const { data: refreshedItems, error: refreshError } = await supabase
+    .from('shopping_list_items')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (refreshError) {
+    console.error('[shoppingListService] Error al refrescar la lista:', refreshError);
+    throw new Error('No se pudo recuperar la lista de compras actualizada.');
+  }
+
+  return refreshedItems || [];
+}
 
 export async function getShoppingListItems(): Promise<ShoppingListItem[]> {
   try {
@@ -101,9 +493,14 @@ export async function updateShoppingListItem(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
+  const payload = {
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+
   const { data, error } = await supabase
     .from('shopping_list_items')
-    .update(updates)
+    .update(payload)
     .eq('id', id)
     .eq('user_id', user.id)
     .select()

@@ -20,7 +20,7 @@ import { AddItemForm } from './components/AddItemForm'; // Recuperado
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'; // Añadir CardFooter
 import type { ShoppingListItem as UIShoppingListItem } from './types'; // Renombrar para claridad (UI vs DB)
 import type { Category } from '@/features/pantry/types'; // Importar Category de pantry
-import { generateShoppingList } from './shoppingListService'; // Servicio para generar
+import { generateShoppingListFromPlanning } from './services/shoppingListService'; // Servicio renovado para generar
 import { useShoppingListStore } from '@/stores/shoppingListStore'; // Importar store
 import type { Database } from '@/lib/database.types'; // Importar tipos DB
 import { format, startOfWeek, endOfWeek } from 'date-fns';
@@ -29,7 +29,8 @@ import { ListChecks, ListPlus, Trash2, XCircle, Search } from 'lucide-react'; //
 import { parseShoppingInput, ParsedShoppingInput } from './lib/inputParser'; // Importar parser
 import { supabase } from '@/lib/supabaseClient'; // Importar supabase directamente
 import ResponsiveLayout from './components/Layout/ResponsiveLayout'; // IMPORTAR RESPONSIVE LAYOUT
-import { getDisplayCategory } from './utils/categorization'; // Importar la función de display
+import { getCategoryMetadata, getDisplayCategory, mapLabelToCategoryKey } from './utils/categorization'; // Importar utilidades de categorías
+import ShoppingListToolbar from './components/ShoppingListToolbar';
 // --- NUEVO: Importar componentes de Tabs ---
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from '@/lib/utils'; // Importar la función de utilidades
@@ -99,6 +100,9 @@ export function ShoppingListPage() {
   const [storeFilter, setStoreFilter] = useState<string>('all'); // <-- ESTADO PARA FILTRO DE TIENDAS
   const [availableCategories, setAvailableCategories] = useState<CategoryRow[]>([]); // <-- NUEVO ESTADO para categorías
   const [isLoadingAvailCategories, setIsLoadingAvailCategories] = useState(true); // <-- NUEVO ESTADO de carga
+  const [isGeneratingList, setIsGeneratingList] = useState(false);
+  const [isClearingPurchased, setIsClearingPurchased] = useState(false);
+  const [isClearingAll, setIsClearingAll] = useState(false);
 
    // Obtener user para pasar ID a generateShoppingList
    const { user } = useAuth(); // Asumiendo que useAuth está disponible
@@ -205,8 +209,9 @@ export function ShoppingListPage() {
     const endDateStr = format(weekEnd, 'yyyy-MM-dd');
 
     try {
-      // Llamar a generateShoppingList (que ahora guarda en DB)
-      await generateShoppingList(startDateStr, endDateStr, user.id); // Pasar userId
+      // Generar lista de compras combinando planificación y despensa
+      setIsGeneratingList(true);
+      await generateShoppingListFromPlanning(startDateStr, endDateStr);
       // Refrescar la lista desde la DB usando el store
       await fetchItems();
       setGeneratedRange({ start: startDateStr, end: endDateStr });
@@ -215,6 +220,8 @@ export function ShoppingListPage() {
       console.error("Error generating shopping list:", err);
       toast.error(err.message || "Error inesperado al generar la lista.");
       // El error se maneja en el store, no necesitamos setError local
+    } finally {
+      setIsGeneratingList(false);
     }
     // isLoading se maneja en el store
   }, [weekStart, weekEnd, user, fetchItems]); // Añadir dependencias
@@ -246,9 +253,9 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // Función para añadir ítem directamente a Supabase (MODIFICADA)
   const handleAddItemSubmit = useCallback(async (
-    // Ajustar tipo para incluir categoryId opcional
-    parsedItem: ParsedShoppingInput & { categoryId?: string | null }
-  ): Promise<boolean> => { 
+    // Ajustar tipo para incluir category opcional
+    parsedItem: ParsedShoppingInput & { categoryKey?: string | null }
+  ): Promise<boolean> => {
     const itemName = parsedItem.name;
     if (!itemName) {
       toast.error("No se pudo identificar el nombre del ítem.");
@@ -268,7 +275,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
         ingredient_name: itemName.trim(),
         quantity: parsedItem.quantity,
         unit: parsedItem.unit,
-        category: parsedItem.categoryId // <-- CAMBIAR A 'category'
+        category: parsedItem.categoryKey ?? null // <-- usar slug/nombre amigable
       });
 
       if (newItem) {
@@ -293,6 +300,61 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
     setSearchTerm(value);
     // El tracking de 'search_initiated' se hace en el useEffect basado en el cambio de estado
   };
+
+  const handleClearPurchasedList = useCallback(async () => {
+    if (isClearingPurchased) return;
+    setIsClearingPurchased(true);
+    try {
+      const success = await clearPurchased();
+      if (success) {
+        toast.success('Ítems comprados eliminados.');
+      } else {
+        toast.error('No se pudieron eliminar los ítems comprados.');
+      }
+    } catch (error) {
+      console.error('Error al limpiar ítems comprados:', error);
+      toast.error('Error al limpiar ítems comprados.');
+    } finally {
+      setIsClearingPurchased(false);
+    }
+  }, [clearPurchased, isClearingPurchased]);
+
+  const handleClearAllList = useCallback(async () => {
+    if (isClearingAll) return;
+    setIsClearingAll(true);
+    try {
+      const success = await clearAll();
+      if (success) {
+        toast.success('Lista de compras vaciada.');
+      } else {
+        toast.error('No se pudo limpiar la lista de compras.');
+      }
+    } catch (error) {
+      console.error('Error al limpiar la lista de compras:', error);
+      toast.error('Error al limpiar la lista de compras.');
+    } finally {
+      setIsClearingAll(false);
+    }
+  }, [clearAll, isClearingAll]);
+
+  const resolveCategoryLabel = useCallback((categoryValue: string | null | undefined) => {
+    if (!categoryValue) {
+      return getDisplayCategory(null);
+    }
+
+    const normalizedValue = mapLabelToCategoryKey(categoryValue) || categoryValue;
+    const matchedCategory = availableCategories.find(cat => {
+      const catKey = mapLabelToCategoryKey(cat.name);
+      return cat.id === categoryValue || cat.name === categoryValue || (catKey && catKey === normalizedValue);
+    });
+
+    if (matchedCategory) {
+      const icon = matchedCategory.icon_name || getCategoryMetadata(normalizedValue).icon;
+      return `${icon} ${matchedCategory.name}`;
+    }
+
+    return getDisplayCategory(categoryValue);
+  }, [availableCategories]);
 
   // Handler para seleccionar/deseleccionar tienda favorita (Recuperado)
   const handleToggleFavoriteStore = (storeId: string) => {
@@ -457,10 +519,19 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // Función para renderizar el contenido principal (MODIFICADA para pasar categorías)
   const renderShoppingListContent = () => (
-    <div className="flex flex-col h-full flex-grow">
-      <div className="p-4 pb-2 flex-shrink-0"> {/* Reducir padding inferior, evitar encogimiento */}
-        <AddItemForm 
-          onAddItem={async (parsedItem) => { 
+    <div className="flex flex-col h-full flex-grow"> 
+      <div className="p-4 pb-2 flex-shrink-0 flex flex-col gap-3"> {/* Reducir padding inferior, evitar encogimiento */}
+        <ShoppingListToolbar
+          items={listItems}
+          onGeneratePlanning={handleGenerateList}
+          onClearPurchased={handleClearPurchasedList}
+          onClearAll={handleClearAllList}
+          isGenerating={isGeneratingList}
+          isClearingPurchased={isClearingPurchased}
+          isClearingAll={isClearingAll}
+        />
+        <AddItemForm
+          onAddItem={async (parsedItem) => {
              const success = await handleAddItemSubmit(parsedItem);
              if (success) {
                setSearchTerm(''); // <-- Limpiar el input/búsqueda SOLO si tuvo éxito
@@ -472,7 +543,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
           currentSearchTerm={searchTerm}
           availableCategories={availableCategories} // <-- PASAR CATEGORÍAS AL FORM
           isLoadingCategories={isLoadingAvailCategories} // <-- PASAR ESTADO DE CARGA
-        /> 
+        />
       </div>
 
       {/* --- NUEVO: Contenedor de Tabs --- */}
@@ -510,7 +581,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
                  Object.entries(groupedAndSortedItems).map(([category, itemsInCategory]) => (
                    <div key={category} className="mb-1">
                      <h3 className="bg-muted text-muted-foreground px-4 py-1.5 text-sm font-semibold sticky top-0 z-10 border-b flex items-center gap-2">
-                       {getDisplayCategory(category)}
+                       {resolveCategoryLabel(category)}
                        <span className="text-xs font-normal">({itemsInCategory.length})</span>
                      </h3>
                      <ul className="divide-y divide-border">

@@ -41,12 +41,12 @@ export function getCategoryForItem(itemName: string): string | null {
 }
 
 // --- NUEVO: Mapeo para mostrar categorías ---
-const categoryDisplayNames: { [key: string]: { name: string; icon: string } } = {
+export const CATEGORY_METADATA: { [key: string]: { name: string; icon: string } } = {
   'produce': { name: "Frutas y Verduras", icon: "🍎" },
   'dairy': { name: "Lácteos y Huevos", icon: "🥛" },
   'meat': { name: "Carnes", icon: "🥩" },
-  'fish': { name: "Pescados", icon: "🐟" },
-  'pantry': { name: "Almacén", icon: "🥫" },
+  'fish': { name: "Pescados y Mariscos", icon: "🐟" },
+  'pantry': { name: "Despensa", icon: "🥫" },
   'beverages': { name: "Bebidas", icon: "🥤" },
   'frozen': { name: "Congelados", icon: "❄️" },
   'bakery': { name: "Panadería", icon: "🍞" },
@@ -55,15 +55,48 @@ const categoryDisplayNames: { [key: string]: { name: string; icon: string } } = 
   'Sin Categoría': { name: "Sin Categoría", icon: "❓" }, // Para los ítems agrupados como 'Sin Categoría'
 };
 
-// --- NUEVO: Función para obtener el nombre e icono para mostrar ---
-export function getDisplayCategory(internalCategoryName: string | null | undefined): string {
-  const key = internalCategoryName || 'Sin Categoría'; // Usar 'Sin Categoría' si es null o undefined
-  const displayInfo = categoryDisplayNames[key];
+const normalizeLabel = (label: string) =>
+  label
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim();
 
-  if (displayInfo) {
-    return `${displayInfo.icon} ${displayInfo.name}`;
+export function mapLabelToCategoryKey(label: string | null | undefined): string | null {
+  if (!label) return null;
+  const normalizedLabel = normalizeLabel(label);
+
+  for (const [key, meta] of Object.entries(CATEGORY_METADATA)) {
+    if (normalizeLabel(key) === normalizedLabel) {
+      return key;
+    }
+    if (normalizeLabel(meta.name) === normalizedLabel) {
+      return key;
+    }
+  }
+
+  return null;
+}
+
+export function getCategoryMetadata(categoryKey: string | null | undefined): { key: string; name: string; icon: string } {
+  if (!categoryKey) {
+    const meta = CATEGORY_METADATA['Sin Categoría'];
+    return { key: 'Sin Categoría', name: meta.name, icon: meta.icon };
+  }
+
+  const normalizedKey = mapLabelToCategoryKey(categoryKey) || categoryKey;
+  const meta = CATEGORY_METADATA[normalizedKey];
+
+  if (meta) {
+    return { key: normalizedKey, name: meta.name, icon: meta.icon };
   }
 
   // Fallback por si llega una categoría inesperada
-  return `❓ ${key}`; 
+  return { key: normalizedKey, name: categoryKey, icon: '🛒' };
+}
+
+// --- NUEVO: Función para obtener el nombre e icono para mostrar ---
+export function getDisplayCategory(internalCategoryName: string | null | undefined): string {
+  const meta = getCategoryMetadata(internalCategoryName);
+  return `${meta.icon} ${meta.name}`;
 }
