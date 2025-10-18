@@ -146,6 +146,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "meal_plan_entries_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_meal_plan_recipes"
             columns: ["recipe_id"]
             isOneToOne: false

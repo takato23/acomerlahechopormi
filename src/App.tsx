@@ -84,11 +84,13 @@ function App() {
         setInitializingCategories(true);
         console.log('[App] User logged in, initializing category system...');
         await initializeCategories();
-        console.log('[App] Category system initialized successfully');
+        console.log('[App] Category system initialization completed');
+        // Always mark as initialized, even if categories failed to load
         setCategorySystemInitialized(true);
       } catch (error) {
-        console.error('[App] Failed to initialize category system:', error);
-        // No establecer categorySystemInitialized como true si hay un error
+        console.error('[App] Unexpected error during system initialization:', error);
+        // Still mark as initialized to prevent infinite loading
+        setCategorySystemInitialized(true);
       } finally {
         setInitializingCategories(false);
       }

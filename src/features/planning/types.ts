@@ -1,5 +1,7 @@
 // src/features/planning/types.ts
 
+import type { RecipeIngredient } from '@/types/recipeTypes';
+
 // Usar los valores exactos del enum de Supabase
 export type MealType = 'Desayuno' | 'Almuerzo' | 'Merienda' | 'Cena';
 
@@ -7,6 +9,7 @@ export type MealType = 'Desayuno' | 'Almuerzo' | 'Merienda' | 'Cena';
 export interface PlannedMeal {
   id: string; // UUID
   user_id: string; // UUID del usuario
+  meal_plan_id?: string | null; // Referencia al plan semanal
   plan_date: string; // Fecha en formato YYYY-MM-DD (coincide con DB)
   meal_type: MealType;
   recipe_id: string | null; // UUID de la receta (si aplica)
@@ -20,6 +23,7 @@ export interface PlannedMeal {
     title: string;
     description: string | null;
     image_url: string | null;
+    ingredients?: RecipeIngredient[];
   } | null;
 }
 
@@ -30,6 +34,26 @@ export interface UpsertPlannedMealData {
   recipe_id?: string | null;
   custom_meal_name?: string | null;
   notes?: string | null; // Añadido para guardar descripción de receta generada
+  meal_plan_id?: string | null; // Opcional para operaciones directas sobre un plan específico
+}
+
+export interface MealPlan {
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealPlanSummary extends MealPlan {
+  meal_count: number;
+}
+
+export interface MealPlanWithEntries {
+  plan: MealPlan;
+  meals: PlannedMeal[];
 }
 
 // --- Tipos para Sugerencias de Alternativas ---

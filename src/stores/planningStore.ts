@@ -4,7 +4,8 @@ import {
   PlannedMeal,
   UpsertPlannedMealData,
   MealType,
-  PlanningTemplate
+  PlanningTemplate,
+  MealPlanSummary,
 } from '@/features/planning/types';
 import { RecipeSuggestion, SuggestionResponse, SuggestionRequest } from '@/features/suggestions/types';
 import { getSuggestions } from '@/features/suggestions/suggestionService';
@@ -77,10 +78,15 @@ interface PlanningState {
   // Control de rango de fechas activo
   currentStartDate: string | null;
   currentEndDate: string | null;
+  currentMealPlanId: string | null;
   // Estado para plantillas
   templates: PlanningTemplate[];
   isLoadingTemplates: boolean;
   templateError: string | null;
+  // Historial de planes
+  mealPlanHistory: MealPlanSummary[];
+  isLoadingHistory: boolean;
+  historyError: string | null;
 
   // Acciones para sugerencias
   fetchSuggestions: (date: string, mealType: MealType) => Promise<void>;
@@ -107,6 +113,8 @@ interface PlanningState {
   applyTemplateToCurrentWeek: (templateId: string, startDate: string) => Promise<void>;
   deleteTemplate: (templateId: string) => Promise<void>;
   clearWeek: (startDate: string, endDate: string) => Promise<void>;
+  fetchMealPlanHistory: (limit?: number) => Promise<void>;
+  duplicateMealPlanFromHistory: (planId: string) => Promise<void>;
 }
 
 export const usePlanningStore = create<PlanningState>((set, get) => ({
@@ -123,31 +131,44 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   isAutocompleting: false,
   currentStartDate: null,
   currentEndDate: null,
+  currentMealPlanId: null,
   templates: [],
   isLoadingTemplates: false,
   templateError: null,
+  mealPlanHistory: [],
+  isLoadingHistory: false,
+  historyError: null,
 
   loadPlannedMeals: async (startDate: string, endDate: string) => {
-    const { currentStartDate, currentEndDate } = get();
-    // if (startDate === currentStartDate && endDate === currentEndDate) {
-    //   return;
-    // }
-    set({ isLoading: true, error: null, currentStartDate: startDate, currentEndDate: endDate });
+    set({
+      isLoading: true,
+      error: null,
+      currentStartDate: startDate,
+      currentEndDate: endDate,
+    });
     try {
-      const meals = await planningService.getPlannedMeals(startDate, endDate);
+      const board = await planningService.getMealPlanWithEntries(startDate, endDate);
       set({
-        plannedMeals: meals as PlannedMealWithRecipe[],
-        isLoading: false
+        plannedMeals: board.meals as PlannedMealWithRecipe[],
+        currentMealPlanId: board.plan.id,
+        isLoading: false,
       });
+      void get().fetchMealPlanHistory();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load planned meals';
-      set({ error: errorMessage, isLoading: false });
+      set({
+        error: errorMessage,
+        isLoading: false,
+        currentMealPlanId: null,
+      });
+      toast.error(errorMessage);
     }
   },
 
   addPlannedMeal: async (mealData: UpsertPlannedMealData) => {
     try {
-      const newMeal = await planningService.upsertPlannedMeal(mealData);
+      const { currentMealPlanId } = get();
+      const newMeal = await planningService.upsertPlannedMeal(mealData, undefined, currentMealPlanId);
       if (newMeal) {
         set((state) => ({
           plannedMeals: [...state.plannedMeals, newMeal as PlannedMealWithRecipe].sort((a, b) =>
@@ -165,7 +186,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   updatePlannedMeal: async (mealId: string, mealData: UpsertPlannedMealData) => {
     try {
-      const updatedMeal = await planningService.upsertPlannedMeal(mealData, mealId);
+      const { currentMealPlanId } = get();
+      const updatedMeal = await planningService.upsertPlannedMeal(mealData, mealId, currentMealPlanId);
       if (updatedMeal) {
         set((state) => ({
           plannedMeals: state.plannedMeals.map((meal) =>
@@ -566,22 +588,59 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   clearWeek: async (startDate: string, endDate: string) => {
     const originalMeals = get().plannedMeals;
-    set({ isLoading: true, error: null });
-    set((state) => ({
-      plannedMeals: state.plannedMeals.filter(meal =>
-        meal.plan_date < startDate || meal.plan_date > endDate
-      ),
-    }));
+    set({ plannedMeals: [], isLoading: true, error: null });
     try {
       console.log(`[PlanningStore] Clearing week from ${startDate} to ${endDate}`);
       await planningService.deletePlannedMealsInRange(startDate, endDate);
-      toast.success("Planificación de la semana eliminada.");
+      toast.success('Planificación de la semana eliminada.');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to clear week';
       set({ plannedMeals: originalMeals, error: errorMessage });
-      toast.error("Error al limpiar la semana.");
+      toast.error('Error al limpiar la semana.');
     } finally {
-     set({ isLoading: false });
+      set({ isLoading: false });
+    }
+  },
+
+  fetchMealPlanHistory: async (limit = 6) => {
+    const { currentStartDate, currentEndDate } = get();
+    if (!currentStartDate || !currentEndDate) {
+      return;
+    }
+
+    set({ isLoadingHistory: true, historyError: null });
+    try {
+      const history = await planningService.getMealPlanHistory(limit, {
+        startDate: currentStartDate,
+        endDate: currentEndDate,
+      });
+      set({ mealPlanHistory: history, isLoadingHistory: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'No se pudo obtener el historial';
+      set({ historyError: errorMessage, isLoadingHistory: false });
+      toast.error(errorMessage);
+    }
+  },
+
+  duplicateMealPlanFromHistory: async (planId: string) => {
+    const { currentStartDate, currentEndDate } = get();
+    if (!currentStartDate || !currentEndDate) {
+      toast.error('Selecciona una semana antes de duplicar.');
+      return;
+    }
+
+    set({ isLoading: true, error: null });
+    try {
+      const meals = await planningService.duplicateMealPlanToRange(planId, currentStartDate, currentEndDate);
+      set({
+        plannedMeals: meals as PlannedMealWithRecipe[],
+        isLoading: false,
+      });
+      toast.success('Semana duplicada correctamente.');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'No se pudo duplicar la semana seleccionada';
+      set({ error: errorMessage, isLoading: false });
+      toast.error(errorMessage);
     }
   },
 
