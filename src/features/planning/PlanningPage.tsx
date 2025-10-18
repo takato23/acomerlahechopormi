@@ -1,44 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
-import type { PlannedMeal, MealType, UpsertPlannedMealData, MealAlternativeRequestContext, MealAlternative } from './types';
+import type { MealType, UpsertPlannedMealData } from './types';
 import { AutocompleteConfigDialog, AutocompleteConfig } from './components/AutocompleteConfigDialog';
 import { PlannedMealWithRecipe } from './components/MealCard';
-import type { Recipe } from '@/types/recipeTypes';
+import { PlanningBoard } from './components/PlanningBoard';
+import { PlanningHistory } from './components/PlanningHistory';
 import { usePlanningStore } from '@/stores/planningStore';
-import { Calendar, Copy, Eraser } from 'lucide-react';
 import { useRecipeStore } from '@/stores/recipeStore';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { generateRecipeForSlot } from '../recipes/generationService';
-import { getMealAlternatives } from '../suggestions/suggestionService';
 import { useAuth } from '@/features/auth/AuthContext';
-import { getUserProfile } from '@/features/user/userService';
-import type { UserProfile } from '@/features/user/userTypes';
-import { ListPlus } from 'lucide-react';
-import { Sparkles, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isToday } from 'date-fns';
 import { MealFormModal } from './components/MealFormModal';
-import { WeekDaySelector } from './components/WeekDaySelector';
-import { PlanningDayView } from './components/PlanningDayView';
-import { MealCard } from './components/MealCard';
-import { useShoppingListStore } from '@/stores/shoppingListStore';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import useBreakpoint from '@/hooks/useBreakpoint';
+import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { toast } from 'sonner';
-import { PageLayout } from '@/components/layout/PageLayout';
-import { PageSection } from '@/components/ui/PageSection';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Sparkles, ChevronLeft, ChevronRight, Eraser } from 'lucide-react';
 
 const getWeekInterval = (date: Date): { start: Date; end: Date } => {
   const start = startOfWeek(date, { weekStartsOn: 1 });
@@ -49,17 +24,13 @@ const getWeekInterval = (date: Date): { start: Date; end: Date } => {
 const PlanningPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
   const [editingMeal, setEditingMeal] = useState<PlannedMealWithRecipe | null>(null);
-  const [isCopyingDay, setIsCopyingDay] = useState(false);
   const [showAutocompleteConfig, setShowAutocompleteConfig] = useState(false);
   const [isGeneratingList, setIsGeneratingList] = useState(false);
 
   const { user } = useAuth();
-  const breakpoint = useBreakpoint();
-  const isDesktop = breakpoint !== 'mobile';
 
   const {
     plannedMeals,
@@ -69,12 +40,6 @@ const PlanningPage: React.FC = () => {
     addPlannedMeal,
     updatePlannedMeal,
     deletePlannedMeal,
-    setCopiedMeal,
-    setCopiedDayMeals,
-    pasteCopiedMeal,
-    pasteCopiedDayMeals,
-    copiedMeal,
-    copiedDayMeals,
     clearWeek,
     handleAutocompleteWeek
   } = usePlanningStore();
@@ -98,39 +63,11 @@ const PlanningPage: React.FC = () => {
   const { start: weekStart, end: weekEnd } = useMemo(() => getWeekInterval(currentDate), [currentDate]);
   const weekStartStr = useMemo(() => format(weekStart, 'yyyy-MM-dd'), [weekStart]);
   const weekEndStr = useMemo(() => format(weekEnd, 'yyyy-MM-dd'), [weekEnd]);
-  const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
   const mealTypes: MealType[] = useMemo(() => ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'], []);
   const weekRangeLabel = useMemo(
     () => `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM yyyy', { locale: es })}`,
     [weekStart, weekEnd],
   );
-
-  // 2. Memorizar la función de organizar comidas
-  // La función en sí ya está en useCallback, pero la hacemos más específica
-  const organizeMealsByType = useCallback((meals: PlannedMeal[], dateStr: string) => {
-    // console.log(`[PlanningPage] Organizing meals for date: ${dateStr}`); // Log si es necesario depurar
-    const mealsForDay = meals.filter(meal => meal.plan_date === dateStr);
-    const result: { [key in MealType]?: PlannedMealWithRecipe[] } = {};
-    mealTypes.forEach(type => {
-      result[type] = mealsForDay
-        .filter(meal => meal.meal_type === type)
-        .map(meal => meal as PlannedMealWithRecipe);
-    });
-    return result;
-  }, [mealTypes]); // Dependencia estable
-
-  // 3. Memorizar los datos de las comidas organizadas para cada día
-  // Esto es crucial para que PlanningDayView no se renderice innecesariamente
-  const organizedMealsByDay = useMemo(() => {
-    // console.log('[PlanningPage] Recalculating organizedMealsByDay'); // Log si es necesario depurar
-    const organized: { [dateStr: string]: { [key in MealType]?: PlannedMealWithRecipe[] } } = {};
-    weekDays.forEach(day => {
-      const dateStr = format(day, 'yyyy-MM-dd');
-      organized[dateStr] = organizeMealsByType(plannedMeals, dateStr);
-    });
-    return organized;
-    // Depender directamente de plannedMeals (referencia) y organizeMealsByType
-  }, [plannedMeals, weekDays, organizeMealsByType]); 
 
   // --- FIN MEMORIZACIÓN ---
 
@@ -251,73 +188,25 @@ const PlanningPage: React.FC = () => {
     </div>
   );
 
-  return (
-    <>
-      <PageLayout
-        title="Planificación semanal"
-        description="Organiza tus comidas de la semana y mantén tu menú al día."
-        icon={<CalendarDays className="h-6 w-6" />}
-        actions={headerActions}
-        maxWidth="page"
-      >
-        <PageSection padded>
-          {isLoading ? (
-            <div className="flex h-64 w-full items-center justify-center">
-              <Spinner size="lg" />
-            </div>
-          ) : (
-            <>
-              {!isDesktop && (
-                <div className="w-full max-w-md">
-                  <WeekDaySelector
-                    days={weekDays}
-                    selectedDay={selectedDate}
-                    onDaySelect={setSelectedDate}
-                  />
-                  <div className="mt-section-sm">
-                    <PlanningDayView
-                      date={selectedDate}
-                      mealsByType={organizedMealsByDay[format(selectedDate, 'yyyy-MM-dd')] || {}}
-                      mealTypes={mealTypes}
-                      onAddClick={handleOpenAddModal}
-                      onEditClick={handleOpenEditModal}
-                      onDeleteClick={(mealId) => deletePlannedMeal(mealId)}
-                      onCopyClick={(meal) => setCopiedMeal(meal)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {isDesktop && (
-                <div className="grid w-full gap-section-sm md:grid-cols-7">
-                  {weekDays.map(day => {
-                    const dateStr = format(day, 'yyyy-MM-dd');
-                    return (
-                      <div key={dateStr} className="flex flex-col">
-                        <PlanningDayView
-                          date={day}
-                          mealsByType={organizedMealsByDay[dateStr] || {}}
-                          mealTypes={mealTypes}
-                          onAddClick={handleOpenAddModal}
-                          onEditClick={handleOpenEditModal}
-                          onDeleteClick={(mealId) => deletePlannedMeal(mealId)}
-                          onCopyClick={(meal) => setCopiedMeal(meal)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </PageSection>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </PageLayout>
+      {/* Content */}
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Spinner size="lg" />
+        </div>
+      ) : (
+        <div className="w-full max-w-[1200px] space-y-6">
+          <PlanningBoard
+            weekStart={weekStart}
+            weekEnd={weekEnd}
+            mealTypes={mealTypes}
+            meals={plannedMeals as PlannedMealWithRecipe[]}
+            onAddMeal={handleOpenAddModal}
+            onEditMeal={handleOpenEditModal}
+            onDeleteMeal={(mealId) => deletePlannedMeal(mealId)}
+          />
+          <PlanningHistory />
+        </div>
+      )}
 
       <MealFormModal
         isOpen={showModal}
