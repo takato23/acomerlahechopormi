@@ -109,6 +109,7 @@ export type Database = {
           created_at: string | null
           custom_meal_name: string | null
           id: string
+          meal_plan_id: string | null
           meal_type: string
           notes: string | null
           plan_date: string
@@ -121,6 +122,7 @@ export type Database = {
           created_at?: string | null
           custom_meal_name?: string | null
           id?: string
+          meal_plan_id?: string | null
           meal_type: string
           notes?: string | null
           plan_date: string
@@ -133,6 +135,7 @@ export type Database = {
           created_at?: string | null
           custom_meal_name?: string | null
           id?: string
+          meal_plan_id?: string | null
           meal_type?: string
           notes?: string | null
           plan_date?: string
@@ -142,6 +145,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meal_plan_entries_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_meal_plan_recipes"
             columns: ["recipe_id"]
