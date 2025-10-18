@@ -14,10 +14,10 @@ import {
 import type { Category } from '@/types/categoryTypes';
 import VoiceInput from '@/features/pantry/components/voice/VoiceInput';
 import { toast } from 'sonner';
-import { getCategoryForItem } from '../utils/categorization';
+import { getCategoryForItem, mapLabelToCategoryKey } from '../utils/categorization';
 
 interface AddItemFormProps {
-  onAddItem: (parsedItem: ParsedShoppingInput & { categoryId?: string | null }) => Promise<boolean>;
+  onAddItem: (parsedItem: ParsedShoppingInput & { categoryKey?: string | null }) => Promise<boolean>;
   isAdding?: boolean;
   onSearchChange?: (value: string) => void;
   currentSearchTerm?: string;
@@ -36,7 +36,7 @@ export function AddItemForm({
   const isControlled = currentSearchTerm !== undefined;
   const [internalItemName, setInternalItemName] = useState('');
   const itemName = isControlled ? currentSearchTerm : internalItemName;
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [localIsAdding, setLocalIsAdding] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   
@@ -44,7 +44,7 @@ export function AddItemForm({
 
   useEffect(() => {
     if (isControlled && !itemName) {
-      setSelectedCategoryId(null);
+      setSelectedCategoryKey(null);
     }
   }, [itemName, isControlled]);
 
@@ -60,7 +60,7 @@ export function AddItemForm({
   };
 
   const handleCategoryChange = (value: string) => {
-    setSelectedCategoryId(value === 'none' ? null : value);
+    setSelectedCategoryKey(value === 'none' ? null : value);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -73,22 +73,19 @@ export function AddItemForm({
     try {
       const parsedInput = parseShoppingInput(trimmedName); 
       
-      let finalCategoryId = selectedCategoryId;
-      if (!finalCategoryId && parsedInput.name) {
+      let finalCategoryKey = selectedCategoryKey;
+      if (!finalCategoryKey && parsedInput.name) {
            const autoCategory = getCategoryForItem(parsedInput.name);
-           const matchedCategory = availableCategories.find(cat => cat.name.toLowerCase() === autoCategory?.toLowerCase());
-           if (matchedCategory) {
-              finalCategoryId = matchedCategory.id;
-              console.log(`[AddItemForm] Auto-categoría asignada: ${matchedCategory.name} (ID: ${finalCategoryId})`);
-           } else if (autoCategory) {
-             console.log(`[AddItemForm] Auto-categoría detectada (${autoCategory}) pero no encontrada en disponibles.`);
+           if (autoCategory) {
+             finalCategoryKey = autoCategory;
+             console.log(`[AddItemForm] Auto-categoría asignada automáticamente: ${autoCategory}`);
            }
       }
 
-      const success = await onAddItem({ 
-        ...parsedInput, 
-        categoryId: finalCategoryId
-      }); 
+      const success = await onAddItem({
+        ...parsedInput,
+        categoryKey: finalCategoryKey
+      });
       
       if (success) {
         toast.success(`\"${parsedInput.name || trimmedName}\" añadido.`);
@@ -109,28 +106,25 @@ export function AddItemForm({
     setIsProcessingVoice(true);
     setInternalItemName(text);
     if (onSearchChange) onSearchChange(text);
-    setSelectedCategoryId(null);
+    setSelectedCategoryKey(null);
 
     console.log(`[AddItemForm] Processing voice input: \"${text}\"`);
 
     try {
         const parsedInput = parseShoppingInput(text);
         
-        let finalCategoryId: string | null = null;
+        let finalCategoryKey: string | null = null;
         if (parsedInput.name) {
            const autoCategory = getCategoryForItem(parsedInput.name);
-           const matchedCategory = availableCategories.find(cat => cat.name.toLowerCase() === autoCategory?.toLowerCase());
-           if (matchedCategory) {
-              finalCategoryId = matchedCategory.id;
-              console.log(`[AddItemForm][Voice] Auto-categoría asignada: ${matchedCategory.name} (ID: ${finalCategoryId})`);
-           } else if(autoCategory) {
-              console.log(`[AddItemForm][Voice] Auto-categoría detectada (${autoCategory}) pero no encontrada en disponibles.`);
+           if (autoCategory) {
+              finalCategoryKey = autoCategory;
+              console.log(`[AddItemForm][Voice] Auto-categoría asignada automáticamente: ${autoCategory}`);
            }
         }
 
         const success = await onAddItem({
            ...parsedInput,
-           categoryId: finalCategoryId
+           categoryKey: finalCategoryKey
         });
 
         if (success) {
@@ -177,22 +171,25 @@ export function AddItemForm({
           {adding && !isProcessingVoice ? <Spinner size="sm" className="text-white"/> : <Plus className="h-4 w-4" />}
         </Button>
       </form>
-      {itemName.trim() && !isProcessingVoice && ( 
+      {itemName.trim() && !isProcessingVoice && (
          <div className="flex items-center gap-2 pl-1">
            <span className="text-xs text-slate-500">Categoría:</span>
-           <Select 
-             value={selectedCategoryId ?? 'none'} 
-             onValueChange={handleCategoryChange}
-             disabled={adding || isLoadingCategories}
+           <Select
+            value={selectedCategoryKey ?? 'none'}
+            onValueChange={handleCategoryChange}
+            disabled={adding || isLoadingCategories}
            >
              <SelectTrigger className="w-[180px] h-7 text-xs border-slate-300">
                <SelectValue placeholder={isLoadingCategories ? "Cargando..." : "Seleccionar"} />
              </SelectTrigger>
              <SelectContent>
                <SelectItem value="none">Sin Categoría</SelectItem>
-               {availableCategories.map(cat => (
-                 <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-               ))}
+               {availableCategories.map(cat => {
+                 const categoryKey = mapLabelToCategoryKey(cat.name) ?? cat.id;
+                 return (
+                   <SelectItem key={cat.id} value={categoryKey}>{cat.name}</SelectItem>
+                 );
+               })}
              </SelectContent>
            </Select>
          </div>

@@ -48,6 +48,7 @@
     "express": "^5.1.0",
     "framer-motion": "^12.6.3",
     "leaflet": "^1.9.4",
+    "localforage": "^1.10.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.320.0",
     "posthog-js": "^1.276.0",
