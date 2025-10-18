@@ -184,7 +184,27 @@ export async function getSimpleShoppingItems(): Promise<SimpleShoppingItem[]> {
     }
 
     const remoteItems = data ?? [];
-    await writeOfflineItems(remoteItems.map(toOfflineSynced));
+
+    // Separate synced items from pending ones to preserve offline changes that failed to sync
+    const successfullySyncedItems = syncedItems.filter(item => item.status === 'synced');
+    const pendingItems = syncedItems.filter(item => item.status !== 'synced');
+
+    // Create a map of remote items for quick lookup
+    const remoteItemsMap = new Map(remoteItems.map(item => [item.id, item]));
+
+    // Merge remote items with successfully synced local changes
+    const mergedItems: OfflineSimpleShoppingItem[] = remoteItems.map(remoteItem => {
+      const syncedVersion = successfullySyncedItems.find(item => item.remoteId === remoteItem.id);
+      return syncedVersion || toOfflineSynced(remoteItem);
+    });
+
+    // Add any pending items that don't exist remotely (new items that failed to sync)
+    const pendingNewItems = pendingItems.filter(item =>
+      item.status === 'pending-add' && !remoteItemsMap.has(item.remoteId || '')
+    );
+    mergedItems.push(...pendingNewItems);
+
+    await writeOfflineItems(mergedItems);
     return remoteItems;
   } catch (error) {
     console.error('[simpleShoppingService] Error inesperado:', error);
