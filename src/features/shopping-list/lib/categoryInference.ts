@@ -139,7 +139,9 @@ export async function reloadKeywords(): Promise<void> {
  * Inicializa el sistema de inferencia.
  */
 export async function initializeCategories(): Promise<void> {
+  console.log('[categoryInference] initializeCategories() called');
   try {
+    console.log('[categoryInference] About to call loadKeywords()');
     await loadKeywords();
     console.log('[categoryInference] Category system initialized successfully');
   } catch (error) {

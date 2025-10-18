@@ -83,6 +83,7 @@ function App() {
       try {
         setInitializingCategories(true);
         console.log('[App] User logged in, initializing category system...');
+        console.log('[App] About to call initializeCategories()');
         await initializeCategories();
         console.log('[App] Category system initialization completed');
         // Always mark as initialized, even if categories failed to load
