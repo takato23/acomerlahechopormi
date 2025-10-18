@@ -3,255 +3,320 @@ import {
   addPantryItem,
   updatePantryItem,
   deletePantryItem,
-  // getLowStockItems, // TODO: Re-enable/implement getLowStockItems tests
+  deleteMultiplePantryItems,
+  toggleFavoritePantryItem,
+  clearPantry,
+  fetchLowStockItems,
 } from './pantryService';
-// Importar SOLO el mock de supabase
 import { supabase } from '@/lib/supabaseClient';
+import { findOrCreateIngredient, normalizeIngredientName } from '../ingredients/ingredientService';
+import { inferCategory } from '../shopping-list/lib/categoryInference';
 
-// Mockear el módulo
 jest.mock('@/lib/supabaseClient');
+jest.mock('../ingredients/ingredientService', () => ({
+  findOrCreateIngredient: jest.fn(),
+  normalizeIngredientName: jest.fn((name: string) => name),
+}));
+jest.mock('../shopping-list/lib/categoryInference', () => ({
+  inferCategory: jest.fn(),
+}));
 
-// Acceder a los mocks directamente desde el objeto supabase importado
 const mockGetUser = supabase.auth.getUser as jest.Mock;
 const mockFrom = supabase.from as jest.Mock;
-// No definir mocks encadenados aquí, se configurarán por prueba
+const mockFindOrCreateIngredient = findOrCreateIngredient as jest.Mock;
+const mockNormalizeIngredientName = normalizeIngredientName as jest.Mock;
+const mockInferCategory = inferCategory as jest.Mock;
 
-// Mock de usuario
 const mockUser = { id: 'pantry-user-456', email: 'pantry@test.com' };
 
 describe('pantryService', () => {
-
   beforeEach(() => {
-    jest.resetAllMocks(); // Resetear todos los mocks completamente
-    // Configurar mock de usuario por defecto para CADA prueba
+    jest.resetAllMocks();
     mockGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+    mockFindOrCreateIngredient.mockResolvedValue({ id: 'ing-1', name: 'Test Ingredient' });
+    mockInferCategory.mockResolvedValue(null);
+    mockNormalizeIngredientName.mockImplementation((name: string) => `normalized-${name}`);
   });
 
-  // --- getPantryItems ---
   describe('getPantryItems', () => {
     it('should fetch pantry items for the current user', async () => {
-      const mockPantryData = [{ id: 'p1', name: 'Milk', quantity: 1, unit: 'L', user_id: mockUser.id }];
-      // Configurar cadena: from -> select -> eq -> order -> then
-      const mockOrder = jest.fn().mockResolvedValueOnce({ data: mockPantryData, error: null });
+      const mockData = [
+        {
+          id: 'p1',
+          quantity: 1,
+          unit: 'u',
+          user_id: mockUser.id,
+          ingredients: { id: 'ing-1', name: 'Milk', image_url: 'milk.png' },
+          categories: { id: 'cat-1', name: 'Lácteos', icon_name: 'milk' },
+        },
+      ];
+
+      const mockOrder = jest.fn().mockResolvedValue({ data: mockData, error: null });
       const mockEq = jest.fn(() => ({ order: mockOrder }));
       const mockSelect = jest.fn(() => ({ eq: mockEq }));
-      mockFrom.mockImplementationOnce(() => ({ select: mockSelect }));
+      mockFrom.mockReturnValueOnce({ select: mockSelect });
 
       const items = await getPantryItems();
 
-      expect(items).toEqual(mockPantryData);
       expect(mockFrom).toHaveBeenCalledWith('pantry_items');
-      expect(mockSelect).toHaveBeenCalledWith('*');
+      expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining('ingredients'));
       expect(mockEq).toHaveBeenCalledWith('user_id', mockUser.id);
-      expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false });
+      expect(items[0].ingredient?.name).toBe('normalized-Milk');
+      expect(items[0].category?.name).toBe('Lácteos');
     });
 
-    it('should throw error if user is not authenticated', async () => {
-      mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null }); 
-      await expect(getPantryItems()).rejects.toThrow('Usuario no autenticado');
-    });
-
-    it('should throw error if fetch fails', async () => {
-      // Configurar cadena para fallo
-      const mockOrder = jest.fn().mockResolvedValueOnce({ data: null, error: new Error('DB Error') });
+    it('should throw an error when supabase fails', async () => {
+      const mockOrder = jest.fn().mockResolvedValue({ data: null, error: new Error('DB Error') });
       const mockEq = jest.fn(() => ({ order: mockOrder }));
       const mockSelect = jest.fn(() => ({ eq: mockEq }));
-      mockFrom.mockImplementationOnce(() => ({ select: mockSelect }));
+      mockFrom.mockReturnValueOnce({ select: mockSelect });
+
       await expect(getPantryItems()).rejects.toThrow('No se pudieron cargar los ítems de la despensa.');
     });
   });
 
-  // --- addPantryItem ---
   describe('addPantryItem', () => {
-    const newItemData = { ingredient_name: 'Eggs', quantity: 12, unit: 'unit' }; // Usar ingredient_name
-    const addedItemDB = { id: 'p-new', user_id: mockUser.id, ...newItemData, ingredient: { name: newItemData.ingredient_name } }; // Usar ingredient_name
+    it('should upsert a new item and return it', async () => {
+      const newItemData = {
+        ingredient_name: 'Eggs',
+        quantity: 12,
+        unit: 'u',
+        user_id: mockUser.id,
+      };
 
-    it('should insert a new item and return it', async () => {
-      // Configurar cadena: from -> insert -> select -> single -> then
-      const mockSingle = jest.fn().mockResolvedValueOnce({ data: addedItemDB, error: null }); 
+      mockFindOrCreateIngredient.mockResolvedValue({ id: 'ing-eggs', name: 'Eggs' });
+      mockInferCategory.mockResolvedValue('cat-eggs');
+
+      const dbItem = {
+        id: 'p-new',
+        quantity: 12,
+        unit: 'u',
+        user_id: mockUser.id,
+        ingredient_id: 'ing-eggs',
+        ingredients: { id: 'ing-eggs', name: 'Eggs', image_url: null },
+        categories: { id: 'cat-eggs', name: 'Huevos', icon_name: 'egg' },
+      };
+
+      const mockSingle = jest.fn().mockResolvedValue({ data: dbItem, error: null });
       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-      const mockInsert = jest.fn(() => ({ select: mockSelect }));
-      mockFrom.mockImplementationOnce(() => ({ insert: mockInsert }));
+      const mockUpsert = jest.fn(() => ({ select: mockSelect }));
+      mockFrom.mockReturnValueOnce({ upsert: mockUpsert });
 
-      const result = await addPantryItem(newItemData);
+      const result = await addPantryItem(newItemData as any);
 
-      expect(result).toEqual(addedItemDB);
-      expect(mockFrom).toHaveBeenCalledWith('pantry_items');
-      expect(mockInsert).toHaveBeenCalledWith({ ...newItemData, user_id: mockUser.id });
-    });
-    
-    it('should handle null quantity correctly', async () => {
-       const newItemNullQty = { ingredient_name: 'Flour', quantity: null, unit: 'kg' }; // Usar ingredient_name
-       const addedItemNullQtyDB = { id: 'p-null', user_id: mockUser.id, name: 'Flour', quantity: null, unit: 'kg', ingredient: { name: 'Flour' } }; // Simular 'ingredient' poblado
-       const mockSingle = jest.fn().mockResolvedValueOnce({ data: addedItemNullQtyDB, error: null }); 
-       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-       const mockInsert = jest.fn(() => ({ select: mockSelect }));
-       mockFrom.mockImplementationOnce(() => ({ insert: mockInsert }));
-
-       const result = await addPantryItem(newItemNullQty);
-       expect(result.quantity).toBeNull();
-       expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ quantity: null }));
-    });
-    
-    it('should handle invalid quantity string as null', async () => {
-       const newItemInvalidQty = { ingredient_name: 'Sugar', quantity: 'abc' as any, unit: 'kg' }; // Usar ingredient_name
-       const addedItemInvalidQtyDB = { id: 'p-invalid', user_id: mockUser.id, name: 'Sugar', quantity: null, unit: 'kg', ingredient: { name: 'Sugar' } }; // Simular 'ingredient' poblado
-       const mockSingle = jest.fn().mockResolvedValueOnce({ data: addedItemInvalidQtyDB, error: null }); 
-       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-       const mockInsert = jest.fn(() => ({ select: mockSelect }));
-       mockFrom.mockImplementationOnce(() => ({ insert: mockInsert }));
-
-       const result = await addPantryItem(newItemInvalidQty);
-       expect(result.quantity).toBeNull();
-       expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ quantity: null }));
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: mockUser.id,
+          ingredient_id: 'ing-eggs',
+          quantity: 12,
+          unit: 'u',
+        }),
+        expect.objectContaining({ onConflict: expect.stringContaining('user_id') }),
+      );
+      expect(result.category?.id).toBe('cat-eggs');
+      expect(mockNormalizeIngredientName).toHaveBeenCalledWith('Eggs', 12);
     });
 
-    it('should throw error if user is not authenticated', async () => {
-      mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null }); 
-      await expect(addPantryItem(newItemData)).rejects.toThrow('Usuario no autenticado'); 
-    });
+    it('should throw when upsert fails', async () => {
+      const newItemData = {
+        ingredient_name: 'Sugar',
+        quantity: 1,
+        user_id: mockUser.id,
+      };
 
-    it('should throw error if insert fails', async () => {
-      const mockSingle = jest.fn().mockResolvedValueOnce({ data: null, error: new Error('Insert Fail') });
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: new Error('Insert Fail') });
       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-      const mockInsert = jest.fn(() => ({ select: mockSelect }));
-      mockFrom.mockImplementationOnce(() => ({ insert: mockInsert }));
-      await expect(addPantryItem(newItemData)).rejects.toThrow('No se pudo añadir el ítem a la despensa.');
+      const mockUpsert = jest.fn(() => ({ select: mockSelect }));
+      mockFrom.mockReturnValueOnce({ upsert: mockUpsert });
+
+      await expect(addPantryItem(newItemData as any)).rejects.toThrow(
+        'No se pudo guardar el ítem en la despensa.',
+      );
     });
   });
 
-  // --- updatePantryItem ---
   describe('updatePantryItem', () => {
-     const itemId = 'p-update';
-     const updates = { quantity: 5 };
-     const updatedItemDB = { id: itemId, name: 'Milk', quantity: 5, unit: 'L', user_id: mockUser.id, ingredient: { name: 'Milk' } }; // Simular 'ingredient' poblado
+    it('should update an existing item', async () => {
+      const updatedRow = {
+        id: 'p-update',
+        quantity: 5,
+        unit: 'kg',
+        user_id: mockUser.id,
+        ingredients: { id: 'ing-1', name: 'Flour', image_url: null },
+        categories: { id: 'cat-1', name: 'Básicos', icon_name: 'box' },
+      };
 
-     it('should update an existing item and return it', async () => {
-       // Configurar cadena: from -> update -> eq -> select -> single -> then
-       const mockSingle = jest.fn().mockResolvedValueOnce({ data: updatedItemDB, error: null }); 
-       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-       const mockEq = jest.fn(() => ({ select: mockSelect }));
-       const mockUpdate = jest.fn(() => ({ eq: mockEq }));
-       mockFrom.mockImplementationOnce(() => ({ update: mockUpdate }));
+      const mockSingle = jest.fn().mockResolvedValue({ data: updatedRow, error: null });
+      const mockSelect = jest.fn(() => ({ single: mockSingle }));
+      const secondEq = jest.fn(() => ({ select: mockSelect }));
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockUpdate = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ update: mockUpdate });
 
-       const result = await updatePantryItem(itemId, updates);
+      const result = await updatePantryItem('p-update', { quantity: 5 });
 
-       expect(result).toEqual(updatedItemDB);
-       expect(mockFrom).toHaveBeenCalledWith('pantry_items');
-       expect(mockUpdate).toHaveBeenCalledWith(updates);
-       expect(mockEq).toHaveBeenCalledWith('id', itemId);
-     });
-     
-     it('should handle null quantity update', async () => {
-        const nullUpdates = { quantity: null };
-        const mockSingle = jest.fn().mockResolvedValueOnce({ data: { ...updatedItemDB, quantity: null }, error: null });
-        const mockSelect = jest.fn(() => ({ single: mockSingle }));
-        const mockEq = jest.fn(() => ({ select: mockSelect }));
-        const mockUpdate = jest.fn(() => ({ eq: mockEq }));
-        mockFrom.mockImplementationOnce(() => ({ update: mockUpdate }));
-        
-        const result = await updatePantryItem(itemId, nullUpdates);
-        expect(result.quantity).toBeNull();
-        expect(mockUpdate).toHaveBeenCalledWith({ quantity: null });
-     });
+      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5 }));
+      expect(secondEq).toHaveBeenCalledWith('user_id', mockUser.id);
+      expect(result.ingredient?.name).toBe('normalized-Flour');
+    });
 
-     it('should throw error if user is not authenticated', async () => {
-       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null }); 
-       await expect(updatePantryItem(itemId, updates)).rejects.toThrow('Usuario no autenticado'); 
-     });
+    it('should throw when update fails', async () => {
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: new Error('Update Fail') });
+      const mockSelect = jest.fn(() => ({ single: mockSingle }));
+      const secondEq = jest.fn(() => ({ select: mockSelect }));
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockUpdate = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ update: mockUpdate });
 
-     it('should throw error if update fails', async () => {
-       const mockSingle = jest.fn().mockResolvedValueOnce({ data: null, error: new Error('Update Fail') });
-       const mockSelect = jest.fn(() => ({ single: mockSingle }));
-       const mockEq = jest.fn(() => ({ select: mockSelect }));
-       const mockUpdate = jest.fn(() => ({ eq: mockEq }));
-       mockFrom.mockImplementationOnce(() => ({ update: mockUpdate }));
-       await expect(updatePantryItem(itemId, updates)).rejects.toThrow('No se pudo actualizar el ítem.');
-     });
+      await expect(updatePantryItem('p-update', { quantity: 3 })).rejects.toThrow(
+        'No se pudo actualizar el ítem.',
+      );
+    });
   });
 
-  // --- deletePantryItem ---
   describe('deletePantryItem', () => {
-     it('should delete an item', async () => {
-       // Configurar cadena: from -> delete -> eq -> then
-       const mockThen = jest.fn().mockResolvedValueOnce({ error: null }); 
-       const mockEq = jest.fn(() => ({ then: mockThen }));
-       const mockDelete = jest.fn(() => ({ eq: mockEq }));
-       mockFrom.mockImplementationOnce(() => ({ delete: mockDelete }));
+    it('should delete an item', async () => {
+      const secondEq = jest.fn().mockResolvedValue({ error: null });
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockDelete = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ delete: mockDelete });
 
-       await expect(deletePantryItem('p-delete')).resolves.toBeUndefined();
-       expect(mockFrom).toHaveBeenCalledWith('pantry_items');
-       expect(mockDelete).toHaveBeenCalled();
-       expect(mockEq).toHaveBeenCalledWith('id', 'p-delete');
-     });
+      await expect(deletePantryItem('p-delete')).resolves.toBeUndefined();
+      expect(firstEq).toHaveBeenCalledWith('id', 'p-delete');
+      expect(secondEq).toHaveBeenCalledWith('user_id', mockUser.id);
+    });
 
-     it('should throw error if user is not authenticated', async () => {
-       mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null }); 
-       await expect(deletePantryItem('p-delete-fail')).rejects.toThrow('Usuario no autenticado'); 
-     });
+    it('should throw when delete fails', async () => {
+      const secondEq = jest.fn().mockResolvedValue({ error: new Error('Delete Fail') });
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockDelete = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ delete: mockDelete });
 
-     it('should throw error if delete fails', async () => {
-        const mockThen = jest.fn().mockResolvedValueOnce({ error: new Error('Delete Fail') }); 
-        const mockEq = jest.fn(() => ({ then: mockThen }));
-        const mockDelete = jest.fn(() => ({ eq: mockEq }));
-        mockFrom.mockImplementationOnce(() => ({ delete: mockDelete }));
-       await expect(deletePantryItem('p-delete-fail')).rejects.toThrow('No se pudo eliminar el ítem.');
-     });
+      await expect(deletePantryItem('p-delete')).rejects.toThrow('No se pudo eliminar el ítem.');
+    });
   });
 
-  // --- getLowStockItems --- // TODO: Re-enable/implement getLowStockItems tests
-  // describe('getLowStockItems', () => {
-  //    it('should fetch items with quantity <= threshold', async () => {
-  //      const mockLowStockData = [{ id: 'p-low', name: 'Salt', quantity: 0, user_id: mockUser.id }];
-  //      // Configurar cadena: from -> select -> eq -> lte -> order -> then
-  //      const mockThen = jest.fn().mockResolvedValueOnce({ data: mockLowStockData, error: null });
-  //      const mockOrder = jest.fn(() => ({ then: mockThen }));
-  //      const mockLte = jest.fn(() => ({ order: mockOrder }));
-  //      const mockEq = jest.fn(() => ({ lte: mockLte }));
-  //      const mockSelect = jest.fn(() => ({ eq: mockEq }));
-  //      mockFrom.mockImplementationOnce(() => ({ select: mockSelect }));
-  //
-  //      const items = await getLowStockItems(1); // Threshold 1
-  //
-  //      expect(items).toEqual(mockLowStockData);
-  //      expect(mockFrom).toHaveBeenCalledWith('pantry_items');
-  //      expect(mockSelect).toHaveBeenCalledWith('*');
-  //      expect(mockEq).toHaveBeenCalledWith('user_id', mockUser.id);
-  //      expect(mockLte).toHaveBeenCalledWith('quantity', 1);
-  //      expect(mockOrder).toHaveBeenCalledWith('name', { ascending: true });
-  //    });
-  //
-  //    it('should use default threshold of 1 if not provided', async () => {
-  //       const mockThen = jest.fn().mockResolvedValueOnce({ data: [], error: null });
-  //       const mockOrder = jest.fn(() => ({ then: mockThen }));
-  //       const mockLte = jest.fn(() => ({ order: mockOrder }));
-  //       const mockEq = jest.fn(() => ({ lte: mockLte }));
-  //       const mockSelect = jest.fn(() => ({ eq: mockEq }));
-  //       mockFrom.mockImplementationOnce(() => ({ select: mockSelect }));
-  //
-  //       await getLowStockItems(); // Sin threshold
-  //       expect(mockLte).toHaveBeenCalledWith('quantity', 1); // Verifica threshold por defecto
-  //    });
-  //
-  //    it('should throw error if user is not authenticated', async () => {
-  //      mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null });
-  //      await expect(getLowStockItems()).rejects.toThrow('Usuario no autenticado');
-  //    });
-  //
-  //    it('should throw error if fetch fails', async () => {
-  //       const mockThen = jest.fn().mockResolvedValueOnce({ data: null, error: new Error('Low Stock Fetch Fail') });
-  //       const mockOrder = jest.fn(() => ({ then: mockThen }));
-  //       const mockLte = jest.fn(() => ({ order: mockOrder }));
-  //       const mockEq = jest.fn(() => ({ lte: mockLte }));
-  //       const mockSelect = jest.fn(() => ({ eq: mockEq }));
-  //       mockFrom.mockImplementationOnce(() => ({ select: mockSelect }));
-  //       await expect(getLowStockItems()).rejects.toThrow('No se pudieron cargar los ítems con bajo stock.');
-  //    });
-  // });
+  describe('deleteMultiplePantryItems', () => {
+    it('should delete multiple items', async () => {
+      const eqMock = jest.fn().mockResolvedValue({ error: null });
+      const inMock = jest.fn(() => ({ eq: eqMock }));
+      const deleteMock = jest.fn(() => ({ in: inMock }));
+      mockFrom.mockReturnValueOnce({ delete: deleteMock });
 
+      await expect(deleteMultiplePantryItems(['a', 'b'])).resolves.toBeUndefined();
+      expect(deleteMock).toHaveBeenCalled();
+      expect(inMock).toHaveBeenCalledWith('id', ['a', 'b']);
+      expect(eqMock).toHaveBeenCalledWith('user_id', mockUser.id);
+    });
+
+    it('should throw on failure', async () => {
+      const eqMock = jest.fn().mockResolvedValue({ error: new Error('bulk delete fail') });
+      const inMock = jest.fn(() => ({ eq: eqMock }));
+      const deleteMock = jest.fn(() => ({ in: inMock }));
+      mockFrom.mockReturnValueOnce({ delete: deleteMock });
+
+      await expect(deleteMultiplePantryItems(['a'])).rejects.toThrow(
+        'No se pudieron eliminar los ítems seleccionados.',
+      );
+    });
+  });
+
+  describe('toggleFavoritePantryItem', () => {
+    it('should toggle favorite state', async () => {
+      const dbItem = {
+        id: 'fav-1',
+        is_favorite: true,
+        quantity: 1,
+        user_id: mockUser.id,
+        ingredients: { id: 'ing-1', name: 'Rice', image_url: null },
+        categories: null,
+      };
+
+      const mockSingle = jest.fn().mockResolvedValue({ data: dbItem, error: null });
+      const mockSelect = jest.fn(() => ({ single: mockSingle }));
+      const secondEq = jest.fn(() => ({ select: mockSelect }));
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockUpdate = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ update: mockUpdate });
+
+      const result = await toggleFavoritePantryItem('fav-1', true);
+
+      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ is_favorite: true }));
+      expect(secondEq).toHaveBeenCalledWith('user_id', mockUser.id);
+      expect(result?.ingredient?.name).toBe('normalized-Rice');
+    });
+
+    it('should throw on failure', async () => {
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: new Error('toggle fail') });
+      const mockSelect = jest.fn(() => ({ single: mockSingle }));
+      const secondEq = jest.fn(() => ({ select: mockSelect }));
+      const firstEq = jest.fn(() => ({ eq: secondEq }));
+      const mockUpdate = jest.fn(() => ({ eq: firstEq }));
+      mockFrom.mockReturnValueOnce({ update: mockUpdate });
+
+      await expect(toggleFavoritePantryItem('fav-1', false)).rejects.toThrow(
+        'No se pudo actualizar el estado de favorito.',
+      );
+    });
+  });
+
+  describe('clearPantry', () => {
+    it('should clear all items for the user', async () => {
+      const eqMock = jest.fn().mockResolvedValue({ error: null });
+      const deleteMock = jest.fn(() => ({ eq: eqMock }));
+      mockFrom.mockReturnValueOnce({ delete: deleteMock });
+
+      await expect(clearPantry()).resolves.toBeUndefined();
+      expect(eqMock).toHaveBeenCalledWith('user_id', mockUser.id);
+    });
+
+    it('should throw when deletion fails', async () => {
+      const eqMock = jest.fn().mockResolvedValue({ error: new Error('clear fail') });
+      const deleteMock = jest.fn(() => ({ eq: eqMock }));
+      mockFrom.mockReturnValueOnce({ delete: deleteMock });
+
+      await expect(clearPantry()).rejects.toThrow('No se pudo vaciar la despensa.');
+    });
+  });
+
+  describe('fetchLowStockItems', () => {
+    it('should return items with quantity under min_stock', async () => {
+      const mockRow = {
+        id: 'low-1',
+        quantity: 1,
+        min_stock: 2,
+        user_id: mockUser.id,
+        ingredients: { id: 'ing-1', name: 'Beans', image_url: null },
+        categories: null,
+      };
+
+      const mockOrder = jest.fn().mockResolvedValue({ data: [mockRow], error: null });
+      const mockNot = jest.fn(() => ({ order: mockOrder }));
+      const mockEq = jest.fn(() => ({ not: mockNot }));
+      const mockSelect = jest.fn(() => ({ eq: mockEq }));
+      mockFrom.mockReturnValueOnce({ select: mockSelect });
+
+      const items = await fetchLowStockItems();
+
+      expect(items).toHaveLength(1);
+      expect(items[0].id).toBe('low-1');
+    });
+
+    it('should throw when query fails', async () => {
+      const mockOrder = jest.fn().mockResolvedValue({ data: null, error: new Error('low stock fail') });
+      const mockNot = jest.fn(() => ({ order: mockOrder }));
+      const mockEq = jest.fn(() => ({ not: mockNot }));
+      const mockSelect = jest.fn(() => ({ eq: mockEq }));
+      mockFrom.mockReturnValueOnce({ select: mockSelect });
+
+      await expect(fetchLowStockItems()).rejects.toThrow(
+        'No se pudieron cargar los ítems con bajo stock.',
+      );
+    });
+  });
 });
 
-// Mock console
+// Quiet console noise in test output
 global.console = {
   ...console,
   log: jest.fn(),

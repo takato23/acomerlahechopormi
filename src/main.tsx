@@ -8,6 +8,7 @@ import { SettingsProvider } from './context/SettingsContext'; // Importar Settin
 import { ThemeProvider } from './context/ThemeContext';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Importar React Query
+import { initializeAnalytics } from './utils/analytics';
 
 // Crear una instancia de QueryClient
 const queryClient = new QueryClient({
@@ -19,6 +20,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+initializeAnalytics();
 
 // Componente Root que se renderiza dentro de BrowserRouter
 function Root() {

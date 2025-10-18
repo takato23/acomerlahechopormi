@@ -18,16 +18,20 @@ const BarcodeScanner = lazy(() => import('./barcode/BarcodeScanner'));
 // const VoiceInput = lazy(() => import('./voice/VoiceInput')); // Comentado para prueba
 import VoiceInput from './voice/VoiceInput'; // Importación directa para prueba
 
+type UnifiedInputMode = 'pantry' | 'modal';
+
 interface UnifiedPantryInputProps {
   onItemAdded: () => void;
   availableCategories: Array<{ id: string; name: string }>;
   onEditRequest?: (data: CreatePantryItemData) => void;
+  mode?: UnifiedInputMode;
 }
 
 const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
   onItemAdded,
   availableCategories,
   onEditRequest,
+  mode = 'pantry',
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -88,6 +92,20 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
   };
 
   const handleConfirmAdd = async (itemDataFromPreview: CreatePantryItemData, addAnother: boolean) => {
+    if (mode === 'modal') {
+      try {
+        onEditRequest?.(itemDataFromPreview);
+        setParseResultForPreview(null);
+        if (!addAnother) {
+          setInputValue('');
+        }
+      } catch (error) {
+        console.error('[UnifiedPantryInput] Error sending parsed data to modal:', error);
+        toast.error('No se pudo preparar la edición del ítem.');
+      }
+      return;
+    }
+
     if (!user) {
       toast.error("Error: Usuario no autenticado.");
       return;
@@ -107,9 +125,9 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
       onItemAdded();
     } catch (error) {
       console.error("Error adding item from unified input:", error);
-      const errorMessage = (error instanceof Error && error.message) 
-         ? error.message 
-         : (typeof error === 'object' && error !== null && 'message' in error) 
+      const errorMessage = (error instanceof Error && error.message)
+         ? error.message
+         : (typeof error === 'object' && error !== null && 'message' in error)
          ? String(error.message)
          : "Error al añadir el ítem.";
       toast.error(errorMessage);

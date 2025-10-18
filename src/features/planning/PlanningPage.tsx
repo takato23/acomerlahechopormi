@@ -36,6 +36,9 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import useBreakpoint from '@/hooks/useBreakpoint';
 import { toast } from 'sonner';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageSection } from '@/components/ui/PageSection';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const getWeekInterval = (date: Date): { start: Date; end: Date } => {
   const start = startOfWeek(date, { weekStartsOn: 1 });
@@ -97,6 +100,10 @@ const PlanningPage: React.FC = () => {
   const weekEndStr = useMemo(() => format(weekEnd, 'yyyy-MM-dd'), [weekEnd]);
   const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
   const mealTypes: MealType[] = useMemo(() => ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'], []);
+  const weekRangeLabel = useMemo(
+    () => `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM yyyy', { locale: es })}`,
+    [weekStart, weekEnd],
+  );
 
   // 2. Memorizar la función de organizar comidas
   // La función en sí ya está en useCallback, pero la hacemos más específica
@@ -150,6 +157,14 @@ const PlanningPage: React.FC = () => {
     setShowModal(true);
   }, []);
 
+  const goToPreviousWeek = useCallback(() => {
+    setCurrentDate(prevDate => addDays(prevDate, -7));
+  }, []);
+
+  const goToNextWeek = useCallback(() => {
+    setCurrentDate(prevDate => addDays(prevDate, 7));
+  }, []);
+
   // Manejar guardado de comidas
   const handleSaveMeal = useCallback(async (mealData: UpsertPlannedMealData) => {
     try {
@@ -173,10 +188,10 @@ const PlanningPage: React.FC = () => {
       setShowAutocompleteConfig(false);
       setIsGeneratingList(true); // Mostrar indicador de carga
       toast.success("Autocompletando semana...");
-      
+
       // Llamar a la función del store para autocompletar la semana
       await handleAutocompleteWeek(weekStartStr, weekEndStr, config);
-      
+
       toast.success("¡Semana autocompletada con éxito!");
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error desconocido";
@@ -187,96 +202,82 @@ const PlanningPage: React.FC = () => {
     }
   }, [handleAutocompleteWeek, weekStartStr, weekEndStr]);
 
-  return (
-    <div className="flex flex-col items-center w-full h-full px-2 py-3 mx-auto">
-      {/* Header */}
-      <div className="flex flex-col items-center mb-4 w-full max-w-[1200px]">
-        <div className="flex items-center justify-between w-full px-4 py-2 bg-card rounded-lg shadow-sm">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(prevDate => addDays(prevDate, -7))}
-              aria-label="Semana anterior"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <div className="text-lg font-semibold">
-              {format(weekStart, 'd MMM', { locale: es })} - {format(weekEnd, 'd MMM yyyy', { locale: es })}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(prevDate => addDays(prevDate, 7))}
-              aria-label="Semana siguiente"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowAutocompleteConfig(true)}
-            >
-              <Sparkles className="h-4 w-4 mr-1" />
-              Autocompletar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (confirm('¿Estás seguro de que quieres borrar todas las comidas de esta semana?')) {
-                  clearWeek(weekStartStr, weekEndStr);
-                }
-              }}
-            >
-              <Eraser className="h-4 w-4 mr-1" />
-              Limpiar Semana
-            </Button>
-          </div>
-        </div>
+  const handleClearWeek = useCallback(() => {
+    if (typeof window === 'undefined' || window.confirm('¿Estás seguro de que quieres borrar todas las comidas de esta semana?')) {
+      clearWeek(weekStartStr, weekEndStr);
+    }
+  }, [clearWeek, weekStartStr, weekEndStr]);
+
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-section-sm">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-2 py-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToPreviousWeek}
+          aria-label="Semana anterior"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="px-2 text-sm font-medium text-muted-foreground">{weekRangeLabel}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToNextWeek}
+          aria-label="Semana siguiente"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-section-sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAutocompleteConfig(true)}
+          disabled={isGeneratingList}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          Autocompletar
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClearWeek}
+        >
+          <Eraser className="mr-2 h-4 w-4" />
+          Limpiar Semana
+        </Button>
+      </div>
+    </div>
+  );
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Spinner size="lg" />
-        </div>
-      ) : (
-        <>
-          {/* Vista móvil */}
-          {!isDesktop && (
-            <div className="w-full max-w-[600px]">
-              <WeekDaySelector
-                days={weekDays}
-                selectedDay={selectedDate}
-                onDaySelect={setSelectedDate}
-              />
-              <div className="mt-4">
-                <PlanningDayView
-                  date={selectedDate}
-                  mealsByType={organizedMealsByDay[format(selectedDate, 'yyyy-MM-dd')] || {}}
-                  mealTypes={mealTypes}
-                  onAddClick={handleOpenAddModal}
-                  onEditClick={handleOpenEditModal}
-                  onDeleteClick={(mealId) => deletePlannedMeal(mealId)}
-                  onCopyClick={(meal) => setCopiedMeal(meal)}
-                />
-              </div>
+  return (
+    <>
+      <PageLayout
+        title="Planificación semanal"
+        description="Organiza tus comidas de la semana y mantén tu menú al día."
+        icon={<CalendarDays className="h-6 w-6" />}
+        actions={headerActions}
+        maxWidth="page"
+      >
+        <PageSection padded>
+          {isLoading ? (
+            <div className="flex h-64 w-full items-center justify-center">
+              <Spinner size="lg" />
             </div>
-          )}
-
-          {/* Vista de escritorio */}
-          {isDesktop && (
-            <div className="grid grid-cols-7 gap-4 w-full max-w-[1200px]">
-              {weekDays.map(day => {
-                const dateStr = format(day, 'yyyy-MM-dd');
-                return (
-                  <div key={dateStr} className="flex flex-col">
+          ) : (
+            <>
+              {!isDesktop && (
+                <div className="w-full max-w-md">
+                  <WeekDaySelector
+                    days={weekDays}
+                    selectedDay={selectedDate}
+                    onDaySelect={setSelectedDate}
+                  />
+                  <div className="mt-section-sm">
                     <PlanningDayView
-                      date={day}
-                      mealsByType={organizedMealsByDay[dateStr] || {}}
+                      date={selectedDate}
+                      mealsByType={organizedMealsByDay[format(selectedDate, 'yyyy-MM-dd')] || {}}
                       mealTypes={mealTypes}
                       onAddClick={handleOpenAddModal}
                       onEditClick={handleOpenEditModal}
@@ -284,14 +285,40 @@ const PlanningPage: React.FC = () => {
                       onCopyClick={(meal) => setCopiedMeal(meal)}
                     />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                </div>
+              )}
 
-      {/* Modales */}
+              {isDesktop && (
+                <div className="grid w-full gap-section-sm md:grid-cols-7">
+                  {weekDays.map(day => {
+                    const dateStr = format(day, 'yyyy-MM-dd');
+                    return (
+                      <div key={dateStr} className="flex flex-col">
+                        <PlanningDayView
+                          date={day}
+                          mealsByType={organizedMealsByDay[dateStr] || {}}
+                          mealTypes={mealTypes}
+                          onAddClick={handleOpenAddModal}
+                          onEditClick={handleOpenEditModal}
+                          onDeleteClick={(mealId) => deletePlannedMeal(mealId)}
+                          onCopyClick={(meal) => setCopiedMeal(meal)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </PageSection>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </PageLayout>
+
       <MealFormModal
         isOpen={showModal}
         onClose={() => {
@@ -313,13 +340,7 @@ const PlanningPage: React.FC = () => {
         isProcessing={isGeneratingList}
         initialConfig={{}}
       />
-
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 text-red-800 rounded-md">
-          {error}
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 

@@ -8,6 +8,7 @@ import { AppLayout } from './components/layout/AppLayout'
 import { Spinner } from './components/ui/Spinner'
 import { useSettings } from './context/SettingsContext'
 import { LazyLandingComponents, LazyAuth, LazyFeatures } from '@/components/lazyComponents'
+import { featureFlags } from '@/config/featureFlags'
 
 // Componentes no lazy (usados en múltiples rutas o pequeños)
 import Navbar from './components/sections/Navbar'
@@ -140,16 +141,32 @@ function App() {
       <Routes>
         {/* Rutas Públicas */}
         <Route path="/" element={<LandingPage />} />
-        <Route 
-          path="/login" 
+        <Route
+          path="/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Login />
             </Suspense>
-          } 
+          }
         />
-        <Route 
-          path="/signup" 
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ForgotPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ResetPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/signup"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Signup />
@@ -204,6 +221,16 @@ function App() {
               <LazyFeatures.AddEditRecipePage />
             </Suspense>
           } />
+          {featureFlags.aiSuggestions && (
+            <Route
+              path="suggestions"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <LazyFeatures.SuggestionsPage />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="recipes/:recipeId" element={
             <Suspense fallback={<PageLoader />}>
               <LazyFeatures.RecipeDetailPage />

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-and-health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run health check
+        id: health
+        continue-on-error: true
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          HEALTHCHECK_BACKUP_PATH: ${{ secrets.HEALTHCHECK_BACKUP_PATH }}
+        run: |
+          chmod +x ./health_check.sh
+          set +e
+          ./health_check.sh
+          exit_code=$?
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit $exit_code
+
+      - name: Publicar resumen de salud
+        if: always()
+        run: |
+          if [ -f health_reports/latest.md ]; then
+            echo "### Reporte de salud" >> "$GITHUB_STEP_SUMMARY"
+            cat health_reports/latest.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No se generó reporte de salud" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Marcar fallo si el health check detectó errores
+        if: steps.health.outputs.exit_code != '0'
+        run: exit 1
