@@ -64,6 +64,10 @@ const PlanningPage: React.FC = () => {
   const weekStartStr = useMemo(() => format(weekStart, 'yyyy-MM-dd'), [weekStart]);
   const weekEndStr = useMemo(() => format(weekEnd, 'yyyy-MM-dd'), [weekEnd]);
   const mealTypes: MealType[] = useMemo(() => ['Desayuno', 'Almuerzo', 'Merienda', 'Cena'], []);
+  const weekRangeLabel = useMemo(
+    () => `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM yyyy', { locale: es })}`,
+    [weekStart, weekEnd],
+  );
 
   // --- FIN MEMORIZACIÓN ---
 
@@ -90,6 +94,14 @@ const PlanningPage: React.FC = () => {
     setShowModal(true);
   }, []);
 
+  const goToPreviousWeek = useCallback(() => {
+    setCurrentDate(prevDate => addDays(prevDate, -7));
+  }, []);
+
+  const goToNextWeek = useCallback(() => {
+    setCurrentDate(prevDate => addDays(prevDate, 7));
+  }, []);
+
   // Manejar guardado de comidas
   const handleSaveMeal = useCallback(async (mealData: UpsertPlannedMealData) => {
     try {
@@ -113,10 +125,10 @@ const PlanningPage: React.FC = () => {
       setShowAutocompleteConfig(false);
       setIsGeneratingList(true); // Mostrar indicador de carga
       toast.success("Autocompletando semana...");
-      
+
       // Llamar a la función del store para autocompletar la semana
       await handleAutocompleteWeek(weekStartStr, weekEndStr, config);
-      
+
       toast.success("¡Semana autocompletada con éxito!");
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error desconocido";
@@ -127,56 +139,54 @@ const PlanningPage: React.FC = () => {
     }
   }, [handleAutocompleteWeek, weekStartStr, weekEndStr]);
 
-  return (
-    <div className="flex flex-col items-center w-full h-full px-2 py-3 mx-auto">
-      {/* Header */}
-      <div className="flex flex-col items-center mb-4 w-full max-w-[1200px]">
-        <div className="flex items-center justify-between w-full px-4 py-2 bg-card rounded-lg shadow-sm">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(prevDate => addDays(prevDate, -7))}
-              aria-label="Semana anterior"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <div className="text-lg font-semibold">
-              {format(weekStart, 'd MMM', { locale: es })} - {format(weekEnd, 'd MMM yyyy', { locale: es })}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(prevDate => addDays(prevDate, 7))}
-              aria-label="Semana siguiente"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowAutocompleteConfig(true)}
-            >
-              <Sparkles className="h-4 w-4 mr-1" />
-              Autocompletar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (confirm('¿Estás seguro de que quieres borrar todas las comidas de esta semana?')) {
-                  clearWeek(weekStartStr, weekEndStr);
-                }
-              }}
-            >
-              <Eraser className="h-4 w-4 mr-1" />
-              Limpiar Semana
-            </Button>
-          </div>
-        </div>
+  const handleClearWeek = useCallback(() => {
+    if (typeof window === 'undefined' || window.confirm('¿Estás seguro de que quieres borrar todas las comidas de esta semana?')) {
+      clearWeek(weekStartStr, weekEndStr);
+    }
+  }, [clearWeek, weekStartStr, weekEndStr]);
+
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-section-sm">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-2 py-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToPreviousWeek}
+          aria-label="Semana anterior"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="px-2 text-sm font-medium text-muted-foreground">{weekRangeLabel}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToNextWeek}
+          aria-label="Semana siguiente"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-section-sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAutocompleteConfig(true)}
+          disabled={isGeneratingList}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          Autocompletar
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClearWeek}
+        >
+          <Eraser className="mr-2 h-4 w-4" />
+          Limpiar Semana
+        </Button>
+      </div>
+    </div>
+  );
 
       {/* Content */}
       {isLoading ? (
@@ -198,7 +208,6 @@ const PlanningPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modales */}
       <MealFormModal
         isOpen={showModal}
         onClose={() => {
@@ -220,13 +229,7 @@ const PlanningPage: React.FC = () => {
         isProcessing={isGeneratingList}
         initialConfig={{}}
       />
-
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 text-red-800 rounded-md">
-          {error}
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 

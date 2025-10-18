@@ -27,11 +27,11 @@ const mockSelect = jest.fn(() => ({
     lte: mockLte,
     limit: mockLimit 
 }));
-const mockInsert = jest.fn(() => ({ 
-    select: jest.fn(() => ({ single: mockSingle })) 
+const mockInsert = jest.fn(() => ({
+    select: jest.fn(() => ({ single: mockSingle }))
 }));
-const mockUpdate = jest.fn(() => ({ 
-    eq: mockEq 
+const mockUpdate = jest.fn(() => ({
+    eq: mockEq
 }));
 const mockDelete = jest.fn(() => ({ 
     eq: mockEq 
@@ -50,6 +50,7 @@ const mockGetUser = jest.fn();
 const mockAuth = {
   getUser: mockGetUser,
 };
+const mockRpc = jest.fn();
 const mockUpload = jest.fn();
 const mockGetPublicUrl = jest.fn();
 const mockStorageFrom = jest.fn(() => ({
@@ -65,6 +66,7 @@ export const supabase = {
   auth: mockAuth,
   from: mockFrom,
   storage: mockStorage,
+  rpc: mockRpc,
 };
 
 // No exportar mocks individuales ni resetMocks

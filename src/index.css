@@ -61,9 +61,16 @@ body, #root {
   --destructive-foreground: 0 80% 98%; /* Blanco muy claro */
 
   /* Teal más oscuro para focus ring */
-  --ring: 170 50% 40%;       
+  --ring: 170 50% 40%;
 
-  --radius: 0.5rem;          
+  --radius: 0.5rem;
+  --spacing-page-inline: clamp(1.5rem, 4vw, 2.75rem);
+  --spacing-page-block: clamp(1.5rem, 5vw, 3.5rem);
+  --spacing-section-sm: 0.75rem;
+  --spacing-section: 1.5rem;
+  --spacing-section-lg: 2rem;
+  --max-width-page: 1200px;
+  --max-width-content: 1040px;
 }
 
 .dark {
@@ -100,7 +107,15 @@ body, #root {
   --destructive-foreground: 0 80% 98%; /* Blanco muy claro */
 
   /* Teal más claro para focus ring en oscuro */
-  --ring: 170 60% 55%;        
+  --ring: 170 60% 55%;
+
+  --spacing-page-inline: clamp(1.5rem, 4vw, 2.75rem);
+  --spacing-page-block: clamp(1.5rem, 5vw, 3.5rem);
+  --spacing-section-sm: 0.75rem;
+  --spacing-section: 1.5rem;
+  --spacing-section-lg: 2rem;
+  --max-width-page: 1200px;
+  --max-width-content: 1040px;
 }
 
 @layer base {

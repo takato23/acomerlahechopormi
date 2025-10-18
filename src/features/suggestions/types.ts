@@ -14,8 +14,18 @@ export interface SuggestionResponse {
   error?: string;
 }
 
+import type { PantryItem } from '@/features/pantry/types';
+import type { PlannedMeal } from '@/features/planning/types';
+import type { Recipe } from '@/types/recipeTypes';
+
+export interface SuggestionContextSnapshot {
+  pantryItems: PantryItem[];
+  recipes: Recipe[];
+  plannedMeals: PlannedMeal[];
+}
+
 export interface SuggestionRequest {
-  pantryItems: {
+  pantryItems?: {
     name: string;
     quantity: number;
     unit?: string;
@@ -27,6 +37,8 @@ export interface SuggestionRequest {
   };
   maxTime?: number; // en minutos
   mealType?: string; // Tipo de comida (Desayuno, Almuerzo, etc.)
+  targetDate?: string; // Fecha sugerida para la planificación
+  context?: Partial<SuggestionContextSnapshot>;
 }
 
 // Interfaz necesaria para SuggestionsPopover

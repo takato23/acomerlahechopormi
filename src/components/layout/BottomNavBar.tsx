@@ -1,8 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, ShoppingBasket, CalendarDays, ListChecks, BookOpen, Star } from 'lucide-react'; // Añadir Star
+import { Home, ShoppingBasket, CalendarDays, ListChecks, BookOpen, Star, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button'; // Importar Button si se usa como base
+import { featureFlags } from '@/config/featureFlags';
 
 // Definir los items principales para la barra inferior (máximo 5 recomendados)
 const bottomNavigation = [
@@ -11,6 +11,9 @@ const bottomNavigation = [
   { name: 'Plan', href: '/app/planning', icon: CalendarDays },
   { name: 'Lista', href: '/app/shopping-list', icon: ListChecks },
   { name: 'Recetas', href: '/app/recipes', icon: BookOpen },
+  ...(featureFlags.aiSuggestions
+    ? [{ name: 'Ideas', href: '/app/suggestions', icon: Sparkles }]
+    : []),
 ];
 
 interface BottomNavBarProps {

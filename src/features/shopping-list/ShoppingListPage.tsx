@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useAuth } from '@/features/auth/AuthContext'; // Importar useAuth
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/Spinner';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PriceResultsDisplay } from './components/PriceResultsDisplay'; // Recuperado
-import { SearchPanel } from './components/SearchPanel/SearchPanel'; // Recuperado
 import { ShoppingMap } from './components/Map/ShoppingMap'; // Recuperado
 import { FavoriteStoresInfo } from './components/Map/FavoriteStoresInfo'; // Recuperado
 import { searchProducts, BuscaPreciosProduct, SearchProductsResult } from './services/buscaPreciosService'; // Recuperado y añadido SearchProductsResult
@@ -26,7 +25,7 @@ import { useShoppingListStore } from '@/stores/shoppingListStore'; // Importar s
 import type { Database } from '@/lib/database.types'; // Importar tipos DB
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ListChecks, Terminal, Trash2, XCircle, Search } from 'lucide-react'; // Añadir icono Search
+import { ListChecks, ListPlus, Trash2, XCircle, Search } from 'lucide-react'; // Añadir iconos
 import { parseShoppingInput, ParsedShoppingInput } from './lib/inputParser'; // Importar parser
 import { supabase } from '@/lib/supabaseClient'; // Importar supabase directamente
 import ResponsiveLayout from './components/Layout/ResponsiveLayout'; // IMPORTAR RESPONSIVE LAYOUT
@@ -34,6 +33,8 @@ import { getDisplayCategory } from './utils/categorization'; // Importar la func
 // --- NUEVO: Importar componentes de Tabs ---
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from '@/lib/utils'; // Importar la función de utilidades
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageSection } from '@/components/ui/PageSection';
 
 // --- ANALYTICS HELPER ---
 // Función para categorizar el número de resultados (Paso 2.2)
@@ -456,7 +457,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // Función para renderizar el contenido principal (MODIFICADA para pasar categorías)
   const renderShoppingListContent = () => (
-    <div className="flex flex-col h-full flex-grow"> 
+    <div className="flex flex-col h-full flex-grow">
       <div className="p-4 pb-2 flex-shrink-0"> {/* Reducir padding inferior, evitar encogimiento */}
         <AddItemForm 
           onAddItem={async (parsedItem) => { 
@@ -597,14 +598,42 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
   // Bloque eliminado ya que fue movido arriba
 
   // Renderizar el layout según el breakpoint (Recuperado y adaptado)
-  return (
-    <div className="h-screen flex flex-col"> {/* Ocupar toda la altura */}
-      <ResponsiveLayout
-        shoppingList={renderShoppingListContent()} // Pasar el contenido de la lista unificada
-        map={mapContent} // Pasar el contenido del mapa
-        // searchPanel ya no se pasa
-      />
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-section-sm">
+      <Button
+        onClick={handleGenerateList}
+        disabled={isLoading}
+      >
+        <ListPlus className="mr-2 h-4 w-4" />
+        Generar semana
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleSearchAllPrices}
+        disabled={isSearchingPrices || listItems.length === 0}
+      >
+        <Search className="mr-2 h-4 w-4" />
+        Buscar precios
+      </Button>
     </div>
+  );
+
+  return (
+    <PageLayout
+      title="Lista de compras inteligente"
+      description="Centraliza tu lista semanal, resultados de precios y mapa de tiendas favoritas."
+      icon={<ListChecks className="h-6 w-6" />}
+      actions={headerActions}
+      maxWidth="full"
+    >
+      <PageSection padded={false} className="overflow-hidden min-h-[60vh]" contentClassName="p-0">
+        <ResponsiveLayout
+          shoppingList={renderShoppingListContent()}
+          map={mapContent}
+        />
+      </PageSection>
+    </PageLayout>
   );
 }
 
