@@ -8,6 +8,7 @@ import { AppLayout } from './components/layout/AppLayout'
 import { Spinner } from './components/ui/Spinner'
 import { useSettings } from './context/SettingsContext'
 import { LazyLandingComponents, LazyAuth, LazyFeatures } from '@/components/lazyComponents'
+import { featureFlags } from '@/config/featureFlags'
 
 // Componentes no lazy (usados en múltiples rutas o pequeños)
 import Navbar from './components/sections/Navbar'
@@ -204,6 +205,16 @@ function App() {
               <LazyFeatures.AddEditRecipePage />
             </Suspense>
           } />
+          {featureFlags.aiSuggestions && (
+            <Route
+              path="suggestions"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <LazyFeatures.SuggestionsPage />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="recipes/:recipeId" element={
             <Suspense fallback={<PageLoader />}>
               <LazyFeatures.RecipeDetailPage />

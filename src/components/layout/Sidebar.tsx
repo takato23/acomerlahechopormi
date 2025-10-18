@@ -1,10 +1,22 @@
 // src/components/layout/Sidebar.tsx
 import { NavLink, Link } from 'react-router-dom';
 import { Logo } from '@/components/common/Logo';
-import { Home, BookOpen, ShoppingBasket, CalendarDays, User, ListChecks, PanelLeftClose, PanelLeftOpen, Star } from 'lucide-react'; // Añadir Star
+import {
+  Home,
+  BookOpen,
+  ShoppingBasket,
+  CalendarDays,
+  User,
+  ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Star,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { featureFlags } from '@/config/featureFlags';
 
 const navigation = [
   { name: 'Dashboard', href: '/app', icon: Home, exact: true },
@@ -13,6 +25,9 @@ const navigation = [
   { name: 'Planificación', href: '/app/planning', icon: CalendarDays },
   { name: 'Lista Compras', href: '/app/shopping-list', icon: ListChecks },
   { name: 'Perfil', href: '/app/profile', icon: User },
+  ...(featureFlags.aiSuggestions
+    ? [{ name: 'Sugerencias IA', href: '/app/suggestions', icon: Sparkles }]
+    : []),
 ];
 
 interface SidebarProps {

@@ -10,7 +10,8 @@ export const LazyFeatures = {
   ShoppingListPage: lazy(() => import('@/features/shopping-list/ShoppingListPage')),
   RecipeListPage: lazy(() => import('@/features/recipes/pages/RecipeListPage')),
   AddEditRecipePage: lazy(() => import('@/features/recipes/pages/AddEditRecipePage')),
-  RecipeDetailPage: lazy(() => import('@/features/recipes/pages/RecipeDetailPage'))
+  RecipeDetailPage: lazy(() => import('@/features/recipes/pages/RecipeDetailPage')),
+  SuggestionsPage: lazy(() => import('@/features/suggestions/pages/SuggestionsPage')),
 };
 
 export const LazyLandingComponents = {};
