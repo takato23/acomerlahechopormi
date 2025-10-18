@@ -519,7 +519,7 @@ const handleToggleItem = useCallback(async (itemId: string, currentStatus: boole
 
   // Función para renderizar el contenido principal (MODIFICADA para pasar categorías)
   const renderShoppingListContent = () => (
-    <div className="flex flex-col h-full flex-grow"> 
+    <div className="flex flex-col h-full flex-grow">
       <div className="p-4 pb-2 flex-shrink-0 flex flex-col gap-3"> {/* Reducir padding inferior, evitar encogimiento */}
         <ShoppingListToolbar
           items={listItems}

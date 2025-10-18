@@ -22,9 +22,16 @@ async function loadKeywords(): Promise<void> {
   console.log('[categoryInference] Starting to load keywords...');
 
   try {
-    const { data, error } = await supabase
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout: Keywords loading took too long')), 10000);
+    });
+
+    const queryPromise = supabase
       .from('category_keywords')
       .select('keyword, category_id, priority');
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
     if (error) throw error;
     if (!data?.length) throw new Error('No keywords found');
@@ -134,10 +141,11 @@ export async function reloadKeywords(): Promise<void> {
 export async function initializeCategories(): Promise<void> {
   try {
     await loadKeywords();
-    if (!keywordsLoaded) throw new Error('Failed to initialize category system');
+    console.log('[categoryInference] Category system initialized successfully');
   } catch (error) {
-    console.error('[categoryInference] Initialization failed:', error);
-    throw error;
+    console.error('[categoryInference] Category system initialization failed, continuing without it:', error);
+    // Don't throw error - allow app to continue without category system
+    keywordsLoaded = false;
   }
 }
 
