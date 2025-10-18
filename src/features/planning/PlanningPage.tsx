@@ -32,7 +32,6 @@ import { WeekDaySelector } from './components/WeekDaySelector';
 import { PlanningDayView } from './components/PlanningDayView';
 import { MealCard } from './components/MealCard';
 import { useShoppingListStore } from '@/stores/shoppingListStore';
-import { generateShoppingList } from '@/features/shopping-list/shoppingListService';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import useBreakpoint from '@/hooks/useBreakpoint';
