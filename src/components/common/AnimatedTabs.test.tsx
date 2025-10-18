@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AnimatedTabs, TabItem } from './AnimatedTabs';
+import { vi } from 'vitest';
 
 describe('AnimatedTabs', () => {
   const tabs: TabItem[] = [
@@ -9,13 +10,7 @@ describe('AnimatedTabs', () => {
   ];
 
   it('renders all tabs', () => {
-    render(
-      <AnimatedTabs
-        tabs={tabs}
-        activeTabId="tab1"
-        onChange={jest.fn()}
-      />
-    );
+    render(<AnimatedTabs tabs={tabs} activeTabId="tab1" onChange={vi.fn()} />);
 
     tabs.forEach((tab) => {
       expect(screen.getByText(tab.label)).toBeInTheDocument();
@@ -23,27 +18,15 @@ describe('AnimatedTabs', () => {
   });
 
   it('applies active styles to the active tab', () => {
-    render(
-      <AnimatedTabs
-        tabs={tabs}
-        activeTabId="tab2"
-        onChange={jest.fn()}
-      />
-    );
+    render(<AnimatedTabs tabs={tabs} activeTabId="tab2" onChange={vi.fn()} />);
 
     const activeTab = screen.getByText('Tab 2');
     expect(activeTab).toHaveClass('text-slate-900');
   });
 
   it('calls onChange with the correct tab ID when a tab is clicked', () => {
-    const handleChange = jest.fn();
-    render(
-      <AnimatedTabs
-        tabs={tabs}
-        activeTabId="tab1"
-        onChange={handleChange}
-      />
-    );
+    const handleChange = vi.fn();
+    render(<AnimatedTabs tabs={tabs} activeTabId="tab1" onChange={handleChange} />);
 
     const tabToClick = screen.getByText('Tab 3');
     fireEvent.click(tabToClick);

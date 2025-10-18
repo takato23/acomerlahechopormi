@@ -13,6 +13,31 @@ success() { echo -e "${GREEN}[PASS]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[FAIL]${NC} $1"; }
 
+run_ci_suite() {
+  log "Ejecutando suite CI (lint, build y pruebas unitarias)..."
+
+  npm run lint || return 1
+  npm run build || return 1
+  npm run test:ci || return 1
+
+  success "Suite CI completada"
+  return 0
+}
+
+CI_MODE=false
+for arg in "$@"; do
+  case "$arg" in
+    --ci)
+      CI_MODE=true
+      ;;
+  esac
+done
+
+if [ "$CI_MODE" = true ]; then
+  run_ci_suite
+  exit $?
+fi
+
 # Mostrar banner
 show_banner() {
   echo -e "${BLUE}"

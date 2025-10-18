@@ -1,36 +1,45 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi, type Mock } from 'vitest';
 import '@testing-library/jest-dom';
 import UnifiedPantryInput from '../UnifiedPantryInput';
 
-jest.mock('@/features/pantry/lib/pantryParser', () => ({
-  parsePantryInput: jest.fn(),
+vi.mock('@/features/pantry/lib/pantryParser', () => ({
+  parsePantryInput: vi.fn(),
 }));
 
-jest.mock('@/features/pantry/pantryService', () => ({
-  addPantryItem: jest.fn(),
+vi.mock('@/features/pantry/pantryService', () => ({
+  addPantryItem: vi.fn(),
 }));
 
-jest.mock('sonner', () => ({
+vi.mock('sonner', () => ({
   toast: {
-    success: jest.fn(),
-    error: jest.fn(),
-    info: jest.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
-jest.mock('@/features/pantry/components/InteractivePreview', () => ({
+vi.mock('@/features/pantry/components/InteractivePreview', () => ({
   InteractivePreview: (props: any) => (
     <div data-testid="interactive-preview">
-      <button onClick={() => props.onConfirm({ ingredient_name: 'Mock Item' }, false)}>Confirm</button>
+      <button onClick={() => props.onConfirm({ ingredient_name: 'Mock Item' }, false)}>
+        Confirm
+      </button>
       <button onClick={props.onCancel}>Cancel</button>
-      {props.onEditDetails && <button onClick={() => props.onEditDetails({ ingredient_name: 'Mock Item' })}>Edit</button>}
+      {props.onEditDetails && (
+        <button onClick={() => props.onEditDetails({ ingredient_name: 'Mock Item' })}>Edit</button>
+      )}
     </div>
   ),
 }));
 
-jest.mock('@/components/ui/Spinner', () => ({
-  Spinner: () => <div data-testid="spinner">Loading...</div>
+vi.mock('@/components/ui/Spinner', () => ({
+  Spinner: () => <div data-testid="spinner">Loading...</div>,
+}));
+
+vi.mock('@/features/auth/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'test-user' } }),
 }));
 
 import { parsePantryInput } from '@/features/pantry/lib/pantryParser';
@@ -39,15 +48,16 @@ import { toast } from 'sonner';
 const mockCategories = [{ id: 'meat', name: 'Carnes y Pescados' }];
 
 describe('UnifiedPantryInput', () => {
-  let mockOnItemAdded: jest.Mock;
-  let mockOnEditRequest: jest.Mock;
+  let mockOnItemAdded: Mock;
+  let mockOnEditRequest: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockOnItemAdded = jest.fn();
-    mockOnEditRequest = jest.fn();
+    vi.clearAllMocks();
+    mockOnItemAdded = vi.fn();
+    mockOnEditRequest = vi.fn();
 
-    (parsePantryInput as jest.Mock).mockImplementation((text: string) => {
+    const parsePantryInputMock = vi.mocked(parsePantryInput);
+    parsePantryInputMock.mockImplementation((text: string) => {
       if (text === '2 kg harina') {
         return { success: true, data: { quantity: 2, unit: 'kg', ingredientName: 'harina' } };
       } else if (text === 'error input') {
@@ -55,7 +65,11 @@ describe('UnifiedPantryInput', () => {
       } else if (text === '') {
         return { success: false, error: 'empty_input', originalText: text };
       }
-      return { success: true, data: { quantity: 1, unit: 'u', ingredientName: text }, usedFallback: true };
+      return {
+        success: true,
+        data: { quantity: 1, unit: 'u', ingredientName: text },
+        usedFallback: true,
+      };
     });
   });
 
@@ -65,7 +79,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     expect(screen.getByPlaceholderText(/Ej: 2 kg Harina/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Añadir ítem/i })).toBeInTheDocument();
@@ -77,7 +91,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     fireEvent.change(input, { target: { value: 'test input' } });
@@ -90,7 +104,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     const addButton = screen.getByRole('button', { name: /Añadir ítem/i });
@@ -111,7 +125,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     const addButton = screen.getByRole('button', { name: /Añadir ítem/i });
@@ -132,7 +146,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     const addButton = screen.getByRole('button', { name: /Añadir ítem/i });
@@ -153,7 +167,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     const addButton = screen.getByRole('button', { name: /Añadir ítem/i });
@@ -179,7 +193,7 @@ describe('UnifiedPantryInput', () => {
         onItemAdded={mockOnItemAdded}
         availableCategories={mockCategories}
         onEditRequest={mockOnEditRequest}
-      />
+      />,
     );
     const input = screen.getByPlaceholderText(/Ej: 2 kg Harina/i);
     const addButton = screen.getByRole('button', { name: /Añadir ítem/i });

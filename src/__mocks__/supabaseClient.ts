@@ -1,58 +1,59 @@
 // src/__mocks__/supabaseClient.ts
+import { vi, type Mock } from 'vitest';
 
 // --- Mock Functions ---
-const mockSingle = jest.fn();
-const mockThen = jest.fn((callback) => Promise.resolve(callback({ error: null }))); 
+const mockSingle = vi.fn();
+const mockThen = vi.fn((callback) => Promise.resolve(callback({ error: null })));
 // Definir tipos explícitos para romper referencias circulares
-const mockEq: jest.Mock<any, any> = jest.fn(() => ({
-    single: mockSingle,
-    eq: mockEq,
-    order: mockOrder,
-    limit: mockLimit,
-    then: mockThen
+const mockEq: Mock<any, any> = vi.fn(() => ({
+  single: mockSingle,
+  eq: mockEq,
+  order: mockOrder,
+  limit: mockLimit,
+  then: mockThen,
 }));
-const mockOrder: jest.Mock<any, any> = jest.fn(() => ({
-    eq: mockEq, 
-    order: mockOrder, 
-    then: mockThen 
+const mockOrder: Mock<any, any> = vi.fn(() => ({
+  eq: mockEq,
+  order: mockOrder,
+  then: mockThen,
 }));
-const mockGte = jest.fn(() => ({ eq: mockEq })); 
-const mockLte = jest.fn(() => ({ gte: mockGte })); 
-const mockLimit = jest.fn(() => ({ 
-    then: mockThen 
+const mockGte = vi.fn(() => ({ eq: mockEq }));
+const mockLte = vi.fn(() => ({ gte: mockGte }));
+const mockLimit = vi.fn(() => ({
+  then: mockThen,
 }));
-const mockSelect = jest.fn(() => ({ 
-    eq: mockEq, 
-    order: mockOrder, 
-    lte: mockLte,
-    limit: mockLimit 
+const mockSelect = vi.fn(() => ({
+  eq: mockEq,
+  order: mockOrder,
+  lte: mockLte,
+  limit: mockLimit,
 }));
-const mockInsert = jest.fn(() => ({ 
-    select: jest.fn(() => ({ single: mockSingle })) 
+const mockInsert = vi.fn(() => ({
+  select: vi.fn(() => ({ single: mockSingle })),
 }));
-const mockUpdate = jest.fn(() => ({ 
-    eq: mockEq 
+const mockUpdate = vi.fn(() => ({
+  eq: mockEq,
 }));
-const mockDelete = jest.fn(() => ({ 
-    eq: mockEq 
+const mockDelete = vi.fn(() => ({
+  eq: mockEq,
 }));
-const mockUpsert = jest.fn(() => ({ 
-    select: jest.fn(() => ({ single: mockSingle })) 
+const mockUpsert = vi.fn(() => ({
+  select: vi.fn(() => ({ single: mockSingle })),
 }));
-const mockFrom = jest.fn(() => ({
+const mockFrom = vi.fn(() => ({
   select: mockSelect,
   insert: mockInsert,
   update: mockUpdate,
   delete: mockDelete,
   upsert: mockUpsert,
 }));
-const mockGetUser = jest.fn();
+const mockGetUser = vi.fn();
 const mockAuth = {
   getUser: mockGetUser,
 };
-const mockUpload = jest.fn();
-const mockGetPublicUrl = jest.fn();
-const mockStorageFrom = jest.fn(() => ({
+const mockUpload = vi.fn();
+const mockGetPublicUrl = vi.fn();
+const mockStorageFrom = vi.fn(() => ({
   upload: mockUpload,
   getPublicUrl: mockGetPublicUrl,
 }));
