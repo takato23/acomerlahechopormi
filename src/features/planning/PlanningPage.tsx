@@ -224,7 +224,9 @@ const PlanningPage: React.FC = () => {
 
       <AutocompleteConfigDialog
         isOpen={showAutocompleteConfig}
-        onClose={() => setShowAutocompleteConfig(false)}
+        onClose={() => {
+          setShowAutocompleteConfig(false);
+        }}
         onConfirm={handleSubmitAutocomplete}
         isProcessing={isGeneratingList}
         initialConfig={{}}
