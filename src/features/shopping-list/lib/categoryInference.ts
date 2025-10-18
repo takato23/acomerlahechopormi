@@ -139,11 +139,12 @@ export async function reloadKeywords(): Promise<void> {
  * Inicializa el sistema de inferencia.
  */
 export async function initializeCategories(): Promise<void> {
-  console.log('[categoryInference] initializeCategories() called');
+  console.log('[categoryInference] initializeCategories() called - SKIPPING CATEGORY LOADING FOR NOW');
   try {
-    console.log('[categoryInference] About to call loadKeywords()');
-    await loadKeywords();
-    console.log('[categoryInference] Category system initialized successfully');
+    console.log('[categoryInference] Skipping loadKeywords() to test app loading');
+    // Temporarily skip loading keywords to test if app loads
+    // await loadKeywords();
+    console.log('[categoryInference] Category system initialization skipped successfully');
   } catch (error) {
     console.error('[categoryInference] Category system initialization failed, continuing without it:', error);
     // Don't throw error - allow app to continue without category system
