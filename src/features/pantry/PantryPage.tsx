@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { List, LayoutGrid } from 'lucide-react';
+import { List, LayoutGrid, ShoppingBasket } from 'lucide-react';
 import { toast } from 'sonner';
-import { EmptyState } from '@/components/common/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import {
   getPantryItems,
@@ -20,6 +18,8 @@ import PantryFiltersSection from './components/PantryFiltersSection';
 import PantrySelectionControls from './components/PantrySelectionControls';
 import PantryItemsView from './components/PantryItemsView';
 import UnifiedPantryInput from './components/UnifiedPantryInput';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageSection } from '@/components/ui/PageSection';
 
 export function PantryPage() {
   // Estados del componente
@@ -146,14 +146,30 @@ export function PantryPage() {
     }
   }, [pantryItems]); // Depender de pantryItems para tener el currentState correcto
 
+  const handleEnterSelectionMode = useCallback(() => {
+    setIsSelectionMode(true);
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setIsSelectionMode(false);
+    setSelectedItems(new Set());
+  }, []);
+
+  const handleSelectAllItems = useCallback(() => {
+    setSelectedItems(new Set(pantryItems.map(item => item.id)));
+  }, [pantryItems]);
+
+  const handleDeselectAllItems = useCallback(() => {
+    setSelectedItems(new Set());
+  }, []);
+
   const handleDeleteSelected = async () => {
     try {
       const itemIdsArray = Array.from(selectedItems);
       await deleteMultiplePantryItems(itemIdsArray);
       toast.success(`${itemIdsArray.length} items eliminados`);
       await loadData();
-      setIsSelectionMode(false);
-      setSelectedItems(new Set());
+      handleCancelSelection();
     } catch (err) {
       console.error("Error deleting items:", err);
       toast.error("Error al eliminar los items seleccionados");
@@ -214,112 +230,88 @@ export function PantryPage() {
     });
   }, [pantryItems, categories, filters]);
 
-  return (
-    <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8 relative">
-      <Card>
-        <CardHeader className="pb-4">
-          {/* Título y Controles de Selección/Vista */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
-            <CardTitle className="text-2xl font-bold">Mi Despensa</CardTitle>
-            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-              <Suspense fallback={null}>
-                {!isSelectionMode ? (
-                  <>
-                    {isDesktop && (
-                      <>
-                        <Button
-                          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                          size="sm"
-                          onClick={() => setViewMode('list')}
-                        >
-                          <List className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                          size="sm"
-                          onClick={() => setViewMode('grid')}
-                        >
-                          <LayoutGrid className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    <PantrySelectionControls
-                      isSelectionMode={isSelectionMode}
-                      selectedItems={selectedItems}
-                      onSelectAll={() => setSelectedItems(new Set(pantryItems.map(item => item.id)))}
-                      onDeselectAll={() => setSelectedItems(new Set())}
-                      onEnterSelectionMode={() => setIsSelectionMode(true)}
-                      onCancelSelection={() => { /* No necesario si el botón solo aparece en modo selección */ }}
-                      onDeleteSelected={handleDeleteSelected}
-                      totalVisibleItems={pantryItems.length}
-                    />
-                  </>
-                ) : (
-                  <PantrySelectionControls
-                    isSelectionMode={isSelectionMode}
-                    selectedItems={selectedItems}
-                    onSelectAll={() => setSelectedItems(new Set(pantryItems.map(item => item.id)))}
-                    onDeselectAll={() => setSelectedItems(new Set())}
-                    onEnterSelectionMode={() => setIsSelectionMode(true)} // Redundante aquí?
-                    onCancelSelection={() => {
-                      setIsSelectionMode(false);
-                      setSelectedItems(new Set());
-                    }}
-                    onDeleteSelected={handleDeleteSelected}
-                    totalVisibleItems={pantryItems.length}
-                  />
-                )}
-              </Suspense>
-            </div>
-          </div>
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-section-sm">
+      {!isSelectionMode && isDesktop && (
+        <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 p-1">
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            aria-pressed={viewMode === 'list'}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+            aria-pressed={viewMode === 'grid'}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      <PantrySelectionControls
+        isSelectionMode={isSelectionMode}
+        selectedItems={selectedItems}
+        onEnterSelectionMode={handleEnterSelectionMode}
+        onSelectAll={handleSelectAllItems}
+        onDeselectAll={handleDeselectAllItems}
+        onCancelSelection={handleCancelSelection}
+        onDeleteSelected={handleDeleteSelected}
+        totalVisibleItems={pantryItems.length}
+      />
+    </div>
+  );
 
-          {/* Filtros */}
-          <Suspense fallback={null}>
-            <PantryFiltersSection
-              categories={categories}
-              isDesktop={isDesktop}
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              showFiltersSheet={showFiltersSheet} // ¿Se usa?
-              setShowFiltersSheet={setShowFiltersSheet} // ¿Se usa?
-              pantryItems={pantryItems}
-              onClearPantry={handleClearPantry}
+  return (
+    <PageLayout
+      title="Mi Despensa"
+      description="Gestiona tus ingredientes y favoritos desde un único panel."
+      icon={<ShoppingBasket className="h-6 w-6" />}
+      actions={headerActions}
+    >
+      <PageSection padded>
+        <Suspense fallback={null}>
+          <PantryFiltersSection
+            categories={categories}
+            isDesktop={isDesktop}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            showFiltersSheet={showFiltersSheet}
+            setShowFiltersSheet={setShowFiltersSheet}
+            pantryItems={pantryItems}
+            onClearPantry={handleClearPantry}
+          />
+        </Suspense>
+
+        {!isSelectionMode && (
+          <Suspense fallback={<Spinner size="sm" />}>
+            <UnifiedPantryInput
+              onItemAdded={loadData}
+              availableCategories={categories}
+              onEditRequest={handleEditRequestFromUnifiedInput}
             />
           </Suspense>
-        </CardHeader>
-
-        {/* Input Unificado (Movido aquí) */}
-        {!isSelectionMode && (
-          <div className="px-4 md:px-6 lg:px-8 pt-4 pb-2 border-t border-b"> {/* Padding y bordes */}
-            <Suspense fallback={<Spinner size="sm" />}>
-              <UnifiedPantryInput
-                onItemAdded={loadData}
-                availableCategories={categories}
-                onEditRequest={handleEditRequestFromUnifiedInput}
-              />
-            </Suspense>
-          </div>
         )}
 
-        {/* Contenido Principal (Lista/Grid) */}
-        <CardContent className="pt-6 pb-6"> {/* Padding ajustado */}
-          <Suspense fallback={<Spinner />}>
-            <PantryItemsView
-              viewMode={viewMode}
-              processedItems={processedItems}
-              isLoading={isLoading}
-              error={error}
-              isSelectionMode={isSelectionMode}
-              selectedItems={selectedItems}
-              onSelectItem={handleSelectItem}
-              onEditItem={handleEditItem} // Pasar handler de edición
-              onDeleteItem={() => {}} // TODO: Implementar delete individual si es necesario
-              onToggleFavorite={handleToggleFavorite}
-            />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
+        <Suspense fallback={<Spinner />}>
+          <PantryItemsView
+            viewMode={viewMode}
+            processedItems={processedItems}
+            isLoading={isLoading}
+            error={error}
+            isSelectionMode={isSelectionMode}
+            selectedItems={selectedItems}
+            onSelectItem={handleSelectItem}
+            onEditItem={handleEditItem}
+            onDeleteItem={() => {}}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        </Suspense>
+      </PageSection>
+    </PageLayout>
   );
 }
 
