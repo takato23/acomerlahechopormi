@@ -1,26 +1,27 @@
-import { supabase } from '@/lib/supabaseClient';
-import { Category } from '@/types/categoryTypes';
+import type { Category } from '@/types/categoryTypes';
+
+import { supabaseRepository } from './supabaseRepository';
 
 /**
  * Servicio central para funcionalidades compartidas
  * Actúa como punto único de acceso para operaciones comunes
  */
 
-/** 
+const categoriesTable = () => supabaseRepository.getClient().from('categories');
+
+/**
  * Obtiene todas las categorías disponibles
  */
 export async function getCategories(): Promise<Category[]> {
   try {
     console.log('[DataService] Fetching categories...');
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('name');
-
-    if (error) throw error;
+    const data = await supabaseRepository.run<Category[]>(
+      () => categoriesTable().select('*').order('name'),
+      { fallback: [] },
+    );
 
     console.log('[DataService] Categories fetched:', data);
-    return data || [];
+    return data;
   } catch (error) {
     console.error('[DataService] Error fetching categories:', error);
     throw error;
@@ -32,13 +33,11 @@ export async function getCategories(): Promise<Category[]> {
  */
 export async function getCategoryById(id: string): Promise<Category | null> {
   try {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const data = await supabaseRepository.run<Category | null>(
+      () => categoriesTable().select('*').eq('id', id).maybeSingle(),
+      { fallback: null },
+    );
 
-    if (error) throw error;
     return data;
   } catch (error) {
     console.error('[DataService] Error fetching category by id:', error);

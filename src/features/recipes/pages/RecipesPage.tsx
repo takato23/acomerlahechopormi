@@ -5,8 +5,10 @@ import { useRecipeStore } from '@/stores/recipeStore';
 import RecipeGrid from '../components/RecipeGrid';
 import { Recipe } from '@/types/recipeTypes';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageSection } from '@/components/ui/PageSection';
 
 export default function RecipesPage() {
   const navigate = useNavigate();
@@ -21,8 +23,8 @@ export default function RecipesPage() {
   }, [store.filters, loadInitialRecipes]);
 
   const handleLoadMore = () => {
-    store.fetchRecipes({ 
-      page: Math.ceil(store.recipes.length / 12) + 1 
+    store.fetchRecipes({
+      page: Math.ceil(store.recipes.length / 12) + 1,
     });
   };
 
@@ -39,66 +41,64 @@ export default function RecipesPage() {
     navigate(`/recipes/edit/${recipe.id}`);
   };
 
-  if (store.error) {
-    return (
-      <Alert variant="destructive" className="mb-4">
-        <AlertDescription>{store.error}</AlertDescription>
-      </Alert>
-    );
-  }
+  const actions = (
+    <Button onClick={() => navigate('/recipes/new')}>
+      <Plus className="mr-2 h-4 w-4" />
+      Nueva Receta
+    </Button>
+  );
+
+  const isInitialLoading = store.loading && store.recipes.length === 0;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Mis Recetas</h1>
-        <Button onClick={() => navigate('/recipes/new')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Receta
-        </Button>
-      </div>
+    <PageLayout
+      title="Mis Recetas"
+      description="Organiza tus recetas guardadas y añade nuevas creaciones."
+      icon={<BookOpen className="h-6 w-6" />}
+      actions={actions}
+    >
+      {store.error && (
+        <Alert variant="destructive">
+          <AlertDescription>{store.error}</AlertDescription>
+        </Alert>
+      )}
 
-      {store.loading && store.recipes.length === 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="h-48 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          <RecipeGrid
-            recipes={store.recipes}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            onToggleFavorite={store.toggleFavorite}
-          />
-          {store.recipes.length > 0 && (
-            <div className="mt-8 text-center">
-              <Button
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={store.loading}
-              >
+      <PageSection padded>
+        {isInitialLoading && (
+          <div className="grid grid-cols-1 gap-section sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[...Array(8)].map((_, index) => (
+              <div key={index} className="space-y-section-sm">
+                <Skeleton className="h-48 w-full rounded-2xl" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isInitialLoading && store.recipes.length > 0 && (
+          <>
+            <RecipeGrid
+              recipes={store.recipes}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              onToggleFavorite={store.toggleFavorite}
+            />
+            <div className="mt-section flex justify-center">
+              <Button variant="outline" onClick={handleLoadMore} disabled={store.loading}>
                 {store.loading ? 'Cargando...' : 'Cargar más'}
               </Button>
             </div>
-          )}
-        </>
-      )}
+          </>
+        )}
 
-      {!store.loading && store.recipes.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">
-            No hay recetas para mostrar
-          </p>
-          <Button onClick={() => navigate('/recipes/new')}>
-            Crear mi primera receta
-          </Button>
-        </div>
-      )}
-    </div>
+        {!isInitialLoading && store.recipes.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-muted/60 bg-muted/20 px-section py-section text-center">
+            <p className="mb-4 text-muted-foreground">No hay recetas para mostrar</p>
+            <Button onClick={() => navigate('/recipes/new')}>Crear mi primera receta</Button>
+          </div>
+        )}
+      </PageSection>
+    </PageLayout>
   );
 }

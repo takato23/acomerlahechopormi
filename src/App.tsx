@@ -1,18 +1,19 @@
 import { useEffect, Suspense, useCallback, useState } from 'react';
 import { initializeCategories } from './features/shopping-list/lib/categoryInference';
-import { Routes, Route } from 'react-router-dom'
-import { Toaster } from 'sonner'
-import { useAuth } from './features/auth/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
-import { AppLayout } from './components/layout/AppLayout'
-import { Spinner } from './components/ui/Spinner'
-import { useSettings } from './context/SettingsContext'
-import { LazyLandingComponents, LazyAuth, LazyFeatures } from '@/components/lazyComponents'
+import { Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { useAuth } from './features/auth/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AppLayout } from './components/layout/AppLayout';
+import { Spinner } from './components/ui/Spinner';
+import { useSettings } from './context/SettingsContext';
+import { LazyLandingComponents, LazyAuth, LazyFeatures } from '@/components/lazyComponents';
+import { featureFlags } from '@/config/featureFlags';
 
 // Componentes no lazy (usados en múltiples rutas o pequeños)
-import Navbar from './components/sections/Navbar'
-import Footer from './components/sections/Footer'
-import FadeInWhenVisible from './components/FadeInWhenVisible'
+import Navbar from './components/sections/Navbar';
+import Footer from './components/sections/Footer';
+import FadeInWhenVisible from './components/FadeInWhenVisible';
 
 // Loading Fallbacks
 const PageLoader = () => (
@@ -65,11 +66,11 @@ const LandingPage = () => {
       </main>
       <Footer />
     </>
-  )
-}
+  );
+};
 
 function App() {
-  const { loading, user } = useAuth()
+  const { loading, user } = useAuth();
   const [categorySystemInitialized, setCategorySystemInitialized] = useState(false);
   const [initializingCategories, setInitializingCategories] = useState(false);
 
@@ -78,16 +79,18 @@ function App() {
   // Inicializar sistema de categorías cuando el usuario inicia sesión
   const initializeSystem = useCallback(async () => {
     // Evitar múltiples inicializaciones simultáneas o reinicializaciones innecesarias
-    if ((user && !categorySystemInitialized && !initializingCategories)) {
+    if (user && !categorySystemInitialized && !initializingCategories) {
       try {
         setInitializingCategories(true);
         console.log('[App] User logged in, initializing category system...');
         await initializeCategories();
-        console.log('[App] Category system initialized successfully');
+        console.log('[App] Category system initialization completed');
+        // Always mark as initialized, even if categories failed to load
         setCategorySystemInitialized(true);
       } catch (error) {
-        console.error('[App] Failed to initialize category system:', error);
-        // No establecer categorySystemInitialized como true si hay un error
+        console.error('[App] Unexpected error during system initialization:', error);
+        // Still mark as initialized to prevent infinite loading
+        setCategorySystemInitialized(true);
       } finally {
         setInitializingCategories(false);
       }
@@ -104,7 +107,7 @@ function App() {
     const rootElement = document.documentElement;
     const fontSizeClasses = ['text-base', 'text-lg', 'text-xl'];
     rootElement.classList.remove(...fontSizeClasses);
-    
+
     let newClass = '';
     switch (settings.fontSize) {
       case 'large':
@@ -125,108 +128,172 @@ function App() {
 
   return (
     <>
-      <Toaster 
+      <Toaster
         position="top-right"
         theme="system"
         toastOptions={{
-          style: { 
+          style: {
             background: 'hsl(var(--background))',
             color: 'hsl(var(--foreground))',
             border: '1px solid hsl(var(--border))',
           },
-          className: 'text-sm font-medium'
+          className: 'text-sm font-medium',
         }}
       />
       <Routes>
         {/* Rutas Públicas */}
         <Route path="/" element={<LandingPage />} />
-        <Route 
-          path="/login" 
+        <Route
+          path="/login"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Login />
             </Suspense>
-          } 
+          }
         />
-        <Route 
-          path="/signup" 
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ForgotPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LazyAuth.ResetPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/signup"
           element={
             <Suspense fallback={<PageLoader />}>
               <LazyAuth.Signup />
             </Suspense>
-          } 
+          }
         />
 
         {/* Rutas Protegidas */}
-        <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route index element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.DashboardPage />
-            </Suspense>
-          } />
-          <Route path="profile" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.UserProfilePage />
-            </Suspense>
-          } />
-          <Route path="planning" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.PlanningPage />
-            </Suspense>
-          } />
-          <Route path="pantry" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.PantryPage />
-            </Suspense>
-          } />
-          <Route path="shopping-list" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.ShoppingListPage />
-            </Suspense>
-          } />
-          <Route path="simple-shopping" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.SimpleShoppingPage />
-            </Suspense>
-          } />
-          <Route path="recipes" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.RecipeListPage />
-            </Suspense>
-          } />
-          <Route path="recipes/new" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.AddEditRecipePage />
-            </Suspense>
-          } />
-          <Route path="recipes/:recipeId/edit" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.AddEditRecipePage />
-            </Suspense>
-          } />
-          <Route path="recipes/:recipeId" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.RecipeDetailPage />
-            </Suspense>
-          } />
-          <Route path="recipes/import" element={
-            <Suspense fallback={<PageLoader />}>
-              <LazyFeatures.ImportRecipePage />
-            </Suspense>
-          } />
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route
+            index
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.DashboardPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.UserProfilePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="planning"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.PlanningPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="pantry"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.PantryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="shopping-list"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.ShoppingListPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="simple-shopping"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.SimpleShoppingPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="recipes"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.RecipeListPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="recipes/new"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.AddEditRecipePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="recipes/:recipeId/edit"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.AddEditRecipePage />
+              </Suspense>
+            }
+          />
+          {featureFlags.aiSuggestions && (
+            <Route
+              path="suggestions"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <LazyFeatures.SuggestionsPage />
+                </Suspense>
+              }
+            />
+          )}
+          <Route
+            path="recipes/:recipeId"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.RecipeDetailPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="recipes/import"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <LazyFeatures.ImportRecipePage />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* Ruta demo EventBus (solo para pruebas) */}
         <Route path="/demo-eventbus" element={<DemoEventBusPage />} />
         {/* Ruta 404 */}
         <Route path="*" element={<div>Página no encontrada</div>} />
-
       </Routes>
     </>
-  )
+  );
 }
 
 import DemoEventBusPage from './features/dashboard/DemoEventBusPage';
 
 export default App;
-

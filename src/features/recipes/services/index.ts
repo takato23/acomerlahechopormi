@@ -5,14 +5,13 @@ export {
   createRecipe,
   addRecipe,
   updateRecipe,
+  archiveRecipe,
+  duplicateRecipe,
   deleteRecipe,
-  type RecipeIngredient
+  type RecipeIngredient,
 } from './recipeService';
 
 // Re-exportamos las funciones del servicio de categorías
-export {
-  getCategories,
-  getCategoryById
-} from './categoryService';
+export { getCategories, getCategoryById } from './categoryService';
 
 // Nota: Todas las funciones relacionadas con categorías ahora se exportan desde aquí

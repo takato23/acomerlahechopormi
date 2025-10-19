@@ -1,6 +1,6 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import AuthProvider from './features/auth/AuthContext'; // Ruta relativa
@@ -8,6 +8,7 @@ import { SettingsProvider } from './context/SettingsContext'; // Importar Settin
 import { ThemeProvider } from './context/ThemeContext';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Importar React Query
+import { initializeAnalytics } from './utils/analytics';
 
 // Crear una instancia de QueryClient
 const queryClient = new QueryClient({
@@ -20,10 +21,14 @@ const queryClient = new QueryClient({
   },
 });
 
+initializeAnalytics();
+
 // Componente Root que se renderiza dentro de BrowserRouter
 function Root() {
   return (
-    <QueryClientProvider client={queryClient}> {/* Envolver con React Query Provider */}
+    <QueryClientProvider client={queryClient}>
+      {' '}
+      {/* Envolver con React Query Provider */}
       <AuthProvider>
         <SettingsProvider>
           <App />
@@ -41,4 +46,4 @@ createRoot(document.getElementById('root')!).render(
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
-)
+);

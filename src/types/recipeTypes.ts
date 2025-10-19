@@ -34,10 +34,13 @@ export interface Recipe {
   updated_at?: string;
   is_favorite: boolean;
   is_public: boolean;
+  is_archived?: boolean;
+  archived_at?: string | null;
   category_id?: string;
   recipe_ingredients: RecipeIngredient[];
   category?: Category;
   tags?: string[];
+  mainIngredients?: string[];
   nutritional_info?: NutritionalInfo;
   source_api?: string;
   source_id?: string;
@@ -48,7 +51,7 @@ export interface RecipeFilters {
   searchTerm?: string;
   showOnlyFavorites?: boolean;
   showOnlyPublic?: boolean;
-  quickRecipes?: boolean;  // Recetas que se preparan en menos de 30 min
+  quickRecipes?: boolean; // Recetas que se preparan en menos de 30 min
   selectedIngredients?: string[];
   selectedTags?: string[];
   categoryId?: string | null;
@@ -62,7 +65,10 @@ export interface GetRecipesResponse {
   total?: number;
 }
 
-export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredients' | 'instructions'> & {
+export type RecipeInputData = Omit<
+  Recipe,
+  'id' | 'created_at' | 'recipe_ingredients' | 'instructions'
+> & {
   user_id?: string | null;
   ingredients: Array<{
     name: string;
@@ -77,6 +83,7 @@ export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredi
   source_api?: string;
   source_id?: string;
   is_shared?: boolean;
+  is_archived?: boolean;
 };
 
 export type UpdateRecipeData = Partial<RecipeInputData> & {
@@ -112,5 +119,5 @@ export interface GeneratedRecipeData {
   seasonalFlags?: string[];
   equipmentNeeded?: string[];
   source_api?: string; // Añadir para tracking
-  source_id?: string;  // Añadir para tracking
+  source_id?: string; // Añadir para tracking
 }
