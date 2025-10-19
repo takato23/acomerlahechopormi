@@ -22,7 +22,7 @@ import { Pencil, Archive, ArchiveRestore, Copy, Trash2 } from 'lucide-react';
 const mapRecipeToFormDefaults = (recipe: Recipe): RecipeFormSubmit => ({
   title: recipe.title,
   description: recipe.description ?? '',
-  ingredients: recipe.recipe_ingredients.map(ing => ({
+  ingredients: recipe.recipe_ingredients.map((ing) => ({
     name: ing.ingredient_name,
     quantity: ing.quantity ?? null,
     unit: ing.unit ?? null,
@@ -122,7 +122,9 @@ const RecipeDetailPage = () => {
       toast.success(archived.is_archived ? 'Receta archivada.' : 'Receta restaurada.');
     } catch (error) {
       console.error('[RecipeDetailPage] Error archiving recipe', error);
-      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el estado de archivo.');
+      toast.error(
+        error instanceof Error ? error.message : 'No se pudo actualizar el estado de archivo.',
+      );
     } finally {
       setIsArchiving(false);
     }
@@ -190,7 +192,7 @@ const RecipeDetailPage = () => {
           <div>
             <CardTitle className="text-2xl font-bold">{recipe.title}</CardTitle>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {recipe.tags?.map(tag => (
+              {recipe.tags?.map((tag) => (
                 <Badge key={tag} variant="secondary">
                   {tag}
                 </Badge>
@@ -212,12 +214,7 @@ const RecipeDetailPage = () => {
               >
                 <Copy className="mr-2 h-4 w-4" /> Duplicar
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleArchive}
-                disabled={isArchiving}
-              >
+              <Button variant="outline" size="sm" onClick={handleArchive} disabled={isArchiving}>
                 {recipe.is_archived ? (
                   <ArchiveRestore className="mr-2 h-4 w-4" />
                 ) : (
@@ -225,12 +222,7 @@ const RecipeDetailPage = () => {
                 )}
                 {recipe.is_archived ? 'Restaurar' : 'Archivar'}
               </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDelete}
-                disabled={isDeleting}
-              >
+              <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
                 <Trash2 className="mr-2 h-4 w-4" /> Eliminar
               </Button>
             </div>
@@ -240,7 +232,9 @@ const RecipeDetailPage = () => {
           {(recipe.prep_time_minutes || recipe.cook_time_minutes || recipe.servings) && (
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               {recipe.prep_time_minutes ? <span>Prep: {recipe.prep_time_minutes} min</span> : null}
-              {recipe.cook_time_minutes ? <span>Cocción: {recipe.cook_time_minutes} min</span> : null}
+              {recipe.cook_time_minutes ? (
+                <span>Cocción: {recipe.cook_time_minutes} min</span>
+              ) : null}
               {recipe.servings ? <span>Porciones: {recipe.servings}</span> : null}
             </div>
           )}
@@ -256,12 +250,13 @@ const RecipeDetailPage = () => {
                 <p className="text-sm text-muted-foreground">No hay ingredientes registrados.</p>
               ) : (
                 <ul className="list-disc space-y-1 pl-5 text-sm">
-                  {recipe.recipe_ingredients.map(ingredient => (
+                  {recipe.recipe_ingredients.map((ingredient) => (
                     <li key={ingredient.id}>
                       <span className="font-medium">{ingredient.ingredient_name}</span>
                       {ingredient.quantity != null && (
                         <span>
-                          {' '}- {ingredient.quantity}
+                          {' '}
+                          - {ingredient.quantity}
                           {ingredient.unit ? ` ${ingredient.unit}` : ''}
                         </span>
                       )}
@@ -283,7 +278,9 @@ const RecipeDetailPage = () => {
             </TabsContent>
             <TabsContent value="notes" className="space-y-2 pt-4">
               {recipe.description ? (
-                <p className="whitespace-pre-line text-sm text-muted-foreground">{recipe.description}</p>
+                <p className="whitespace-pre-line text-sm text-muted-foreground">
+                  {recipe.description}
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground">No hay notas para esta receta.</p>
               )}

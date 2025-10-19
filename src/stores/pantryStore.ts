@@ -9,7 +9,11 @@ import {
   toggleFavoritePantryItem,
   fetchLowStockItems as fetchLowStockItemsService,
 } from '../features/pantry/services/pantryService';
-import type { PantryItem, CreatePantryItemData, UpdatePantryItemData } from '../features/pantry/types';
+import type {
+  PantryItem,
+  CreatePantryItemData,
+  UpdatePantryItemData,
+} from '../features/pantry/types';
 
 type PantryAlertTag = 'expired' | 'near-expiry' | 'low-stock';
 
@@ -35,7 +39,10 @@ const NEAR_EXPIRY_THRESHOLD_DAYS = 3;
 const ALERT_PRIORITY: PantryAlertTag[] = ['expired', 'near-expiry', 'low-stock'];
 const alertHistory = new Set<string>();
 
-type ExpiryInfo = { status: Extract<PantryAlertTag, 'expired' | 'near-expiry'>; diff: number } | null;
+type ExpiryInfo = {
+  status: Extract<PantryAlertTag, 'expired' | 'near-expiry'>;
+  diff: number;
+} | null;
 
 interface ItemAlertAnalysis {
   tags: PantryAlertTag[];
@@ -102,7 +109,8 @@ const emitAlerts = (item: PantryItem, analysis: ItemAlertAnalysis, activeKeys: S
         days === 0 ? 'Caduca hoy.' : `Caduca en ${days} día${days === 1 ? '' : 's'}.`;
       toast.warning(`${name} caducará pronto.`, { description });
     } else if (tag === 'low-stock') {
-      const quantityText = typeof item.quantity === 'number' ? item.quantity : Number(item.quantity ?? 0);
+      const quantityText =
+        typeof item.quantity === 'number' ? item.quantity : Number(item.quantity ?? 0);
       const description = `Stock actual: ${Number.isFinite(quantityText) ? quantityText : '0'}${
         item.unit ? ` ${item.unit}` : ''
       }.`;
@@ -173,7 +181,9 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     } catch (error) {
       console.error('Error fetching low stock items:', error);
       const errorMessage =
-        error instanceof Error ? error.message : 'Error desconocido al cargar items bajos de stock.';
+        error instanceof Error
+          ? error.message
+          : 'Error desconocido al cargar items bajos de stock.';
       set({ errorLowStock: errorMessage, isLoadingLowStock: false });
     }
   },
@@ -255,9 +265,7 @@ export const usePantryStore = create<PantryState>((set, get) => ({
     const newState = !currentState;
 
     set((state) => {
-      const items = state.items.map((i) =>
-        i.id === itemId ? { ...i, is_favorite: newState } : i,
-      );
+      const items = state.items.map((i) => (i.id === itemId ? { ...i, is_favorite: newState } : i));
       const { alertTags, autoFilters } = calculateAlerts(items);
       return { items, alertTags, autoFilters };
     });

@@ -39,7 +39,7 @@ export default function ProfilePage() {
         return false;
       }
     },
-    [updateProfile]
+    [updateProfile],
   );
 
   const handleAllergiesUpdate = useCallback(
@@ -50,14 +50,12 @@ export default function ProfilePage() {
         return true;
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : 'No se pudieron guardar las restricciones.';
+          error instanceof Error ? error.message : 'No se pudieron guardar las restricciones.';
         toast.error(message);
         return false;
       }
     },
-    [updateProfile]
+    [updateProfile],
   );
 
   const isLoading = authLoading || isHydrating;

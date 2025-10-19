@@ -1,14 +1,6 @@
 import { supabase } from '../../lib/supabaseClient';
-import {
-  PantryItem,
-  CreatePantryItemData,
-  UpdatePantryItemData,
-  Category,
-} from './types';
-import {
-  findOrCreateIngredient,
-  normalizeIngredientName,
-} from '../ingredients/ingredientService';
+import { PantryItem, CreatePantryItemData, UpdatePantryItemData, Category } from './types';
+import { findOrCreateIngredient, normalizeIngredientName } from '../ingredients/ingredientService';
 import { inferCategory } from '../shopping-list/lib/categoryInference';
 
 const PANTRY_SELECT =
@@ -96,10 +88,7 @@ export const getCategories = async (): Promise<Category[]> => {
 export const addPantryItem = async (itemData: CreatePantryItemData): Promise<PantryItem> => {
   const userId = await resolveUserId(itemData.user_id);
 
-  const ingredient = await findOrCreateIngredient(
-    itemData.ingredient_name,
-    itemData.quantity ?? 1,
-  );
+  const ingredient = await findOrCreateIngredient(itemData.ingredient_name, itemData.quantity ?? 1);
 
   let finalCategoryId = itemData.category_id ?? null;
   if (!finalCategoryId && ingredient?.name) {
@@ -242,10 +231,7 @@ export const toggleFavoritePantryItem = async (
 export const clearPantry = async (): Promise<void> => {
   const userId = await getAuthenticatedUserId();
 
-  const { error } = await supabase
-    .from('pantry_items')
-    .delete()
-    .eq('user_id', userId);
+  const { error } = await supabase.from('pantry_items').delete().eq('user_id', userId);
 
   if (error) {
     console.error('[clearPantry] Supabase error:', error);

@@ -63,7 +63,7 @@ const stripOfflineMetadata = (item: OfflineSimpleShoppingItem): SimpleShoppingIt
 });
 
 const getVisibleOfflineItems = (items: OfflineSimpleShoppingItem[]): SimpleShoppingItem[] =>
-  items.filter(item => item.status !== 'pending-delete').map(stripOfflineMetadata);
+  items.filter((item) => item.status !== 'pending-delete').map(stripOfflineMetadata);
 
 const toOfflineSynced = (item: SimpleShoppingItem): OfflineSimpleShoppingItem => ({
   ...item,
@@ -73,9 +73,9 @@ const toOfflineSynced = (item: SimpleShoppingItem): OfflineSimpleShoppingItem =>
 
 const syncOfflineChanges = async (
   userId: string,
-  cachedItems?: OfflineSimpleShoppingItem[]
+  cachedItems?: OfflineSimpleShoppingItem[],
 ): Promise<OfflineSimpleShoppingItem[]> => {
-  const items = cachedItems ?? await readOfflineItems();
+  const items = cachedItems ?? (await readOfflineItems());
   if (!items.length) {
     return items;
   }
@@ -86,10 +86,7 @@ const syncOfflineChanges = async (
     try {
       if (item.status === 'pending-delete') {
         if (item.remoteId) {
-          const { error } = await supabase
-            .from(TABLE_NAME)
-            .delete()
-            .eq('id', item.remoteId);
+          const { error } = await supabase.from(TABLE_NAME).delete().eq('id', item.remoteId);
 
           if (error) {
             console.error('[simpleShoppingService] Error deleting remote item during sync:', error);
@@ -108,11 +105,7 @@ const syncOfflineChanges = async (
           user_id: userId,
         };
 
-        const { data, error } = await supabase
-          .from(TABLE_NAME)
-          .insert(payload)
-          .select()
-          .single();
+        const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select().single();
 
         if (error || !data) {
           console.error('[simpleShoppingService] Error adding remote item during sync:', error);
@@ -186,21 +179,21 @@ export async function getSimpleShoppingItems(): Promise<SimpleShoppingItem[]> {
     const remoteItems = data ?? [];
 
     // Separate synced items from pending ones to preserve offline changes that failed to sync
-    const successfullySyncedItems = syncedItems.filter(item => item.status === 'synced');
-    const pendingItems = syncedItems.filter(item => item.status !== 'synced');
+    const successfullySyncedItems = syncedItems.filter((item) => item.status === 'synced');
+    const pendingItems = syncedItems.filter((item) => item.status !== 'synced');
 
     // Create a map of remote items for quick lookup
-    const remoteItemsMap = new Map(remoteItems.map(item => [item.id, item]));
+    const remoteItemsMap = new Map(remoteItems.map((item) => [item.id, item]));
 
     // Merge remote items with successfully synced local changes
-    const mergedItems: OfflineSimpleShoppingItem[] = remoteItems.map(remoteItem => {
-      const syncedVersion = successfullySyncedItems.find(item => item.remoteId === remoteItem.id);
+    const mergedItems: OfflineSimpleShoppingItem[] = remoteItems.map((remoteItem) => {
+      const syncedVersion = successfullySyncedItems.find((item) => item.remoteId === remoteItem.id);
       return syncedVersion || toOfflineSynced(remoteItem);
     });
 
     // Add any pending items that don't exist remotely (new items that failed to sync)
-    const pendingNewItems = pendingItems.filter(item =>
-      item.status === 'pending-add' && !remoteItemsMap.has(item.remoteId || '')
+    const pendingNewItems = pendingItems.filter(
+      (item) => item.status === 'pending-add' && !remoteItemsMap.has(item.remoteId || ''),
     );
     mergedItems.push(...pendingNewItems);
 
@@ -240,17 +233,16 @@ export async function addSimpleShoppingItem(name: string): Promise<SimpleShoppin
       user_id: user.id,
     };
 
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .insert(payload)
-      .select()
-      .single();
+    const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select().single();
 
     if (error || !data) {
       throw error;
     }
 
-    const updatedOffline = [toOfflineSynced(data), ...offlineItems.filter(item => (item.remoteId ?? item.id) !== data.id)];
+    const updatedOffline = [
+      toOfflineSynced(data),
+      ...offlineItems.filter((item) => (item.remoteId ?? item.id) !== data.id),
+    ];
     await writeOfflineItems(updatedOffline);
     return data;
   } catch (error) {
@@ -268,9 +260,12 @@ export async function addSimpleShoppingItem(name: string): Promise<SimpleShoppin
   }
 }
 
-export async function updateSimpleShoppingItem(id: string, is_checked: boolean): Promise<SimpleShoppingItem | null> {
+export async function updateSimpleShoppingItem(
+  id: string,
+  is_checked: boolean,
+): Promise<SimpleShoppingItem | null> {
   const offlineItems = await readOfflineItems();
-  const index = offlineItems.findIndex(item => item.id === id || item.remoteId === id);
+  const index = offlineItems.findIndex((item) => item.id === id || item.remoteId === id);
   const existingItem = index >= 0 ? offlineItems[index] : null;
 
   const { data: authData } = await supabase.auth.getUser();
@@ -281,7 +276,12 @@ export async function updateSimpleShoppingItem(id: string, is_checked: boolean):
     const updatedLocal: OfflineSimpleShoppingItem = {
       ...existingItem,
       is_checked,
-      status: existingItem.status === 'pending-add' ? 'pending-add' : offlineOnly ? 'pending-update' : existingItem.status,
+      status:
+        existingItem.status === 'pending-add'
+          ? 'pending-add'
+          : offlineOnly
+            ? 'pending-update'
+            : existingItem.status,
     };
     offlineItems[index] = updatedLocal;
     await writeOfflineItems(offlineItems);
@@ -310,19 +310,21 @@ export async function updateSimpleShoppingItem(id: string, is_checked: boolean):
     }
 
     const updatedOffline = existingItem
-      ? offlineItems.map(item => (item === existingItem ? toOfflineSynced(data) : item))
+      ? offlineItems.map((item) => (item === existingItem ? toOfflineSynced(data) : item))
       : [toOfflineSynced(data), ...offlineItems];
     await writeOfflineItems(updatedOffline);
     return data;
   } catch (error) {
     console.error('[simpleShoppingService] Error al actualizar:', error);
-    return existingItem ? stripOfflineMetadata({ ...existingItem, is_checked, status: 'pending-update' }) : null;
+    return existingItem
+      ? stripOfflineMetadata({ ...existingItem, is_checked, status: 'pending-update' })
+      : null;
   }
 }
 
 export async function deleteSimpleShoppingItem(id: string): Promise<boolean> {
   const offlineItems = await readOfflineItems();
-  const index = offlineItems.findIndex(item => item.id === id || item.remoteId === id);
+  const index = offlineItems.findIndex((item) => item.id === id || item.remoteId === id);
   const existingItem = index >= 0 ? offlineItems[index] : null;
 
   const { data: authData } = await supabase.auth.getUser();
@@ -344,16 +346,13 @@ export async function deleteSimpleShoppingItem(id: string): Promise<boolean> {
 
   try {
     const targetId = existingItem.remoteId ?? id;
-    const { error } = await supabase
-      .from(TABLE_NAME)
-      .delete()
-      .eq('id', targetId);
+    const { error } = await supabase.from(TABLE_NAME).delete().eq('id', targetId);
 
     if (error) {
       throw error;
     }
 
-    const cleaned = (await readOfflineItems()).filter(item => item.status !== 'pending-delete');
+    const cleaned = (await readOfflineItems()).filter((item) => item.status !== 'pending-delete');
     await writeOfflineItems(cleaned);
     return true;
   } catch (error) {
@@ -364,17 +363,19 @@ export async function deleteSimpleShoppingItem(id: string): Promise<boolean> {
 
 export async function clearCheckedItems(): Promise<boolean> {
   const offlineItems = await readOfflineItems();
-  const remainingOffline = offlineItems.map(item => {
-    if (!item.is_checked) {
-      return item;
-    }
+  const remainingOffline = offlineItems
+    .map((item) => {
+      if (!item.is_checked) {
+        return item;
+      }
 
-    if (item.status === 'pending-add') {
-      return null;
-    }
+      if (item.status === 'pending-add') {
+        return null;
+      }
 
-    return { ...item, status: 'pending-delete' };
-  }).filter((item): item is OfflineSimpleShoppingItem => Boolean(item));
+      return { ...item, status: 'pending-delete' };
+    })
+    .filter((item): item is OfflineSimpleShoppingItem => Boolean(item));
 
   await writeOfflineItems(remainingOffline);
 
@@ -396,7 +397,7 @@ export async function clearCheckedItems(): Promise<boolean> {
       throw error;
     }
 
-    const cleaned = (await readOfflineItems()).filter(item => item.status !== 'pending-delete');
+    const cleaned = (await readOfflineItems()).filter((item) => item.status !== 'pending-delete');
     await writeOfflineItems(cleaned);
     return true;
   } catch (error) {

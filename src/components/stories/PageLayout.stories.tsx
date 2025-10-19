@@ -38,7 +38,11 @@ export const Default: Story = {
       <PageSection
         title="Actividades recientes"
         description="Últimas acciones registradas en la lista"
-        actions={<Button variant="outline" size="sm">Ver historial</Button>}
+        actions={
+          <Button variant="outline" size="sm">
+            Ver historial
+          </Button>
+        }
       >
         <ul className="space-y-section-sm text-sm text-muted-foreground">
           <li>Se añadió "Tomates" a la despensa hace 2 horas.</li>
@@ -58,7 +62,9 @@ export const FullWidth: Story = {
       icon={<CalendarDays className="h-6 w-6" />}
       actions={
         <div className="flex gap-section-sm">
-          <Button variant="outline" size="sm">Autocompletar</Button>
+          <Button variant="outline" size="sm">
+            Autocompletar
+          </Button>
           <Button size="sm">Generar lista</Button>
         </div>
       }
@@ -67,7 +73,10 @@ export const FullWidth: Story = {
       <PageSection padded={false} className="overflow-hidden" contentClassName="p-0">
         <div className="grid gap-section-sm md:grid-cols-7">
           {[...Array(7)].map((_, index) => (
-            <div key={index} className="rounded-xl border border-dashed border-muted/60 p-section text-sm text-muted-foreground">
+            <div
+              key={index}
+              className="rounded-xl border border-dashed border-muted/60 p-section text-sm text-muted-foreground"
+            >
               Día {index + 1}
             </div>
           ))}

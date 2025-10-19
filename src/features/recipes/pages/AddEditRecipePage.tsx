@@ -8,15 +8,17 @@ import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const normalizeInstructions = (value: Recipe['instructions'] | string | null | undefined): string[] => {
+const normalizeInstructions = (
+  value: Recipe['instructions'] | string | null | undefined,
+): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.filter(step => step && step.trim().length > 0);
+    return value.filter((step) => step && step.trim().length > 0);
   }
   if (typeof value === 'string') {
     return value
       .split('\n')
-      .map(step => step.trim())
+      .map((step) => step.trim())
       .filter(Boolean);
   }
   return [];
@@ -25,7 +27,7 @@ const normalizeInstructions = (value: Recipe['instructions'] | string | null | u
 const mapRecipeToDefaults = (recipe: Recipe): RecipeFormSubmit => ({
   title: recipe.title,
   description: recipe.description ?? '',
-  ingredients: recipe.recipe_ingredients.map(ing => ({
+  ingredients: recipe.recipe_ingredients.map((ing) => ({
     name: ing.ingredient_name,
     quantity: ing.quantity ?? null,
     unit: ing.unit ?? null,
@@ -45,9 +47,10 @@ const mapGeneratedToDefaults = (generated: GeneratedRecipeData): RecipeFormSubmi
   title: generated.title ?? '',
   description: generated.description ?? '',
   ingredients:
-    generated.ingredients?.map(ing => ({
+    generated.ingredients?.map((ing) => ({
       name: ing.name ?? '',
-      quantity: typeof ing.quantity === 'number' || typeof ing.quantity === 'string' ? ing.quantity : null,
+      quantity:
+        typeof ing.quantity === 'number' || typeof ing.quantity === 'string' ? ing.quantity : null,
       unit: ing.unit ?? null,
     })) ?? [],
   instructions: normalizeInstructions(generated.instructions),

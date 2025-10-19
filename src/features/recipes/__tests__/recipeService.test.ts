@@ -1,22 +1,29 @@
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { createRecipe, updateRecipe } from '../services/recipeService';
 import { supabase } from '@/lib/supabaseClient';
 import { findOrCreateIngredient } from '@/features/ingredients/ingredientService';
 import { normalizeQuantity, normalizeUnit } from '@/utils/units';
 
-jest.mock('@/lib/supabaseClient', () => require('@/__mocks__/supabaseClient'));
-jest.mock('@/features/ingredients/ingredientService', () => ({
-  findOrCreateIngredient: jest.fn(),
+vi.mock('@/lib/supabaseClient', async () => {
+  const mockModule = await import('@/__mocks__/supabaseClient');
+  return { supabase: mockModule.supabase };
+});
+
+vi.mock('@/features/ingredients/ingredientService', () => ({
+  findOrCreateIngredient: vi.fn(),
 }));
 
-const supabaseMock = supabase as unknown as {
-  rpc: jest.Mock;
-  auth: { getUser: jest.Mock };
-};
-const findOrCreateIngredientMock = findOrCreateIngredient as jest.Mock;
+interface SupabaseMock {
+  rpc: Mock;
+  auth: { getUser: Mock };
+}
+
+const supabaseMock = supabase as unknown as SupabaseMock;
+const findOrCreateIngredientMock = findOrCreateIngredient as unknown as Mock;
 
 describe('recipeService transactional operations', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-123' } } });
     findOrCreateIngredientMock.mockResolvedValue({ id: 'ingredient-1', name: 'Harina' });
   });
@@ -71,7 +78,7 @@ describe('recipeService transactional operations', () => {
         ingredients_payload: [
           expect.objectContaining({ ingredient_name: 'Harina', quantity: 1.5, unit: 'g' }),
         ],
-      })
+      }),
     );
     expect(created.recipe_ingredients[0].quantity).toBeCloseTo(1.5);
     expect(created.recipe_ingredients[0].unit).toBe('g');
@@ -117,7 +124,7 @@ describe('recipeService transactional operations', () => {
         ingredients_payload: [
           expect.objectContaining({ ingredient_name: 'Azúcar', quantity: 0.5, unit: 'kg' }),
         ],
-      })
+      }),
     );
     expect(updated.recipe_ingredients[0].quantity).toBeCloseTo(0.5);
     expect(updated.recipe_ingredients[0].unit).toBe('kg');

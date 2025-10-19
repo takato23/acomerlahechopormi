@@ -80,9 +80,7 @@ export function RecoveryForm() {
           disabled={isSubmitting}
           {...register('email')}
         />
-        {errors.email ? (
-          <p className="text-sm text-destructive">{errors.email.message}</p>
-        ) : null}
+        {errors.email ? <p className="text-sm text-destructive">{errors.email.message}</p> : null}
       </div>
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>

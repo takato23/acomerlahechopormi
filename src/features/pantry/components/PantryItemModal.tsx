@@ -10,7 +10,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -91,7 +97,10 @@ export const PantryItemModal: React.FC<PantryItemModalProps> = ({
     setFormState((prev) => ({
       ...prev,
       ingredientName: data.ingredient_name ?? prev.ingredientName,
-      quantity: data.quantity !== undefined && data.quantity !== null ? String(data.quantity) : prev.quantity,
+      quantity:
+        data.quantity !== undefined && data.quantity !== null
+          ? String(data.quantity)
+          : prev.quantity,
       unit: data.unit ?? prev.unit,
       categoryId: data.category_id ?? prev.categoryId,
       expiryDate: data.expiry_date ?? prev.expiryDate,
@@ -165,7 +174,8 @@ export const PantryItemModal: React.FC<PantryItemModalProps> = ({
         {mode === 'create' && (
           <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/40 p-3 sm:p-4">
             <p className="text-sm text-muted-foreground mb-2">
-              Usa el campo de entrada rápida para parsear frases como "2 litros de leche" y rellenar el formulario.
+              Usa el campo de entrada rápida para parsear frases como "2 litros de leche" y rellenar
+              el formulario.
             </p>
             <UnifiedPantryInput
               mode="modal"
@@ -267,9 +277,7 @@ export const PantryItemModal: React.FC<PantryItemModalProps> = ({
             <Textarea
               id="pantry-modal-notes"
               value={formState.notes}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, notes: event.target.value }))
-              }
+              onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))}
               placeholder="Información adicional, ubicación, etc."
               rows={3}
             />

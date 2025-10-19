@@ -12,7 +12,7 @@ const formatRange = (start: string, end: string) => {
   try {
     const startDate = parseISO(start);
     const endDate = parseISO(end);
-    return `${format(startDate, "d MMM", { locale: es })} - ${format(endDate, "d MMM", { locale: es })}`;
+    return `${format(startDate, 'd MMM', { locale: es })} - ${format(endDate, 'd MMM', { locale: es })}`;
   } catch (error) {
     return `${start} - ${end}`;
   }
@@ -73,7 +73,7 @@ export function PlanningHistory() {
               Aún no has guardado plantillas semanales.
             </p>
           ) : (
-            templates.map(template => (
+            templates.map((template) => (
               <div
                 key={template.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border/40 px-3 py-2"
@@ -81,7 +81,7 @@ export function PlanningHistory() {
                 <div className="flex flex-col text-sm">
                   <span className="font-medium text-foreground">{template.name}</span>
                   <span className="text-muted-foreground text-xs">
-                    Guardada el {format(parseISO(template.created_at), "d MMM y", { locale: es })}
+                    Guardada el {format(parseISO(template.created_at), 'd MMM y', { locale: es })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -130,7 +130,7 @@ export function PlanningHistory() {
               No encontramos semanas anteriores guardadas todavía.
             </p>
           ) : (
-            mealPlanHistory.map(plan => (
+            mealPlanHistory.map((plan) => (
               <div
                 key={plan.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border/40 px-3 py-2"
@@ -160,4 +160,3 @@ export function PlanningHistory() {
     </div>
   );
 }
-

@@ -125,11 +125,9 @@ export const useUserStore = create<UserState>()(
             let activeSession = data.session ?? null;
 
             // Manejar expiración de token refrescando la sesión si es necesario
-            if (
-              activeSession?.expires_at &&
-              activeSession.expires_at * 1000 <= Date.now()
-            ) {
-              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            if (activeSession?.expires_at && activeSession.expires_at * 1000 <= Date.now()) {
+              const { data: refreshData, error: refreshError } =
+                await supabase.auth.refreshSession();
               if (refreshError) {
                 throw refreshError;
               }
@@ -218,7 +216,7 @@ export const useUserStore = create<UserState>()(
           profile: state.profile,
           userPreferences: state.userPreferences,
         }),
-      }
-    )
-  )
+      },
+    ),
+  ),
 );

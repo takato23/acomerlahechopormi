@@ -64,8 +64,7 @@ export function RegisterForm() {
       toast.success('Revisa tu correo para confirmar tu cuenta.');
       reset({ email: values.email, password: '', confirmPassword: '' });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'No se pudo completar el registro.';
+      const message = error instanceof Error ? error.message : 'No se pudo completar el registro.';
       setServerError(message);
       toast.error(message);
     }
@@ -95,9 +94,7 @@ export function RegisterForm() {
           disabled={isSubmitting}
           {...register('email')}
         />
-        {errors.email ? (
-          <p className="text-sm text-destructive">{errors.email.message}</p>
-        ) : null}
+        {errors.email ? <p className="text-sm text-destructive">{errors.email.message}</p> : null}
       </div>
 
       <div className="space-y-2">

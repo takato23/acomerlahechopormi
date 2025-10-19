@@ -75,7 +75,7 @@ const DraggableMeal = ({
       style={style}
       className={cn(
         'flex items-center justify-between gap-2 px-3 py-2 text-sm shadow-sm border border-border/40',
-        'bg-background hover:bg-muted/60 transition-colors cursor-grab active:cursor-grabbing'
+        'bg-background hover:bg-muted/60 transition-colors cursor-grab active:cursor-grabbing',
       )}
     >
       <button
@@ -134,15 +134,13 @@ const DroppableSlot = ({
       ref={setNodeRef}
       className={cn(
         'rounded-lg border border-dashed border-border/50 bg-card/60 p-3 min-h-[110px] flex flex-col gap-2',
-        isOver && 'border-primary bg-primary/5 shadow-sm'
+        isOver && 'border-primary bg-primary/5 shadow-sm',
       )}
     >
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
         <span>{label}</span>
       </div>
-      <div className="flex flex-col gap-2 flex-1">
-        {children}
-      </div>
+      <div className="flex flex-col gap-2 flex-1">{children}</div>
     </div>
   );
 };
@@ -156,7 +154,7 @@ export function PlanningBoard({
   onEditMeal,
   onDeleteMeal,
 }: PlanningBoardProps) {
-  const updatePlannedMeal = usePlanningStore(state => state.updatePlannedMeal);
+  const updatePlannedMeal = usePlanningStore((state) => state.updatePlannedMeal);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeMealId, setActiveMealId] = useState<string | null>(null);
 
@@ -167,7 +165,7 @@ export function PlanningBoard({
 
   const mealsBySlot = useMemo(() => {
     const grouping = new Map<string, PlannedMealWithRecipe[]>();
-    meals.forEach(meal => {
+    meals.forEach((meal) => {
       const key = slotId(meal.plan_date, meal.meal_type);
       const bucket = grouping.get(key) ?? [];
       bucket.push(meal);
@@ -176,9 +174,7 @@ export function PlanningBoard({
     return grouping;
   }, [meals]);
 
-  const activeMeal = activeMealId
-    ? meals.find(meal => meal.id === activeMealId) ?? null
-    : null;
+  const activeMeal = activeMealId ? (meals.find((meal) => meal.id === activeMealId) ?? null) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveMealId(String(event.active.id));
@@ -190,7 +186,7 @@ export function PlanningBoard({
     if (!over) return;
 
     const mealId = String(active.id);
-    const meal = meals.find(item => item.id === mealId);
+    const meal = meals.find((item) => item.id === mealId);
     if (!meal) return;
 
     const target = parseSlotIdentifier(String(over.id));
@@ -221,7 +217,7 @@ export function PlanningBoard({
       onDragCancel={handleDragCancel}
     >
       <div className="grid gap-4 md:grid-cols-7">
-        {days.map(day => {
+        {days.map((day) => {
           const dateStr = format(day, 'yyyy-MM-dd');
           return (
             <div key={dateStr} className="space-y-3">
@@ -230,16 +226,12 @@ export function PlanningBoard({
                   {format(day, 'EEEE d', { locale: es })}
                 </Badge>
               </div>
-              {mealTypes.map(mealType => {
+              {mealTypes.map((mealType) => {
                 const slotKey = slotId(dateStr, mealType);
                 const mealsForSlot = mealsBySlot.get(slotKey) ?? [];
                 return (
-                  <DroppableSlot
-                    key={slotKey}
-                    id={slotKey}
-                    label={mealType}
-                  >
-                    {mealsForSlot.map(meal => (
+                  <DroppableSlot key={slotKey} id={slotKey} label={mealType}>
+                    {mealsForSlot.map((meal) => (
                       <DraggableMeal
                         key={meal.id}
                         meal={meal}

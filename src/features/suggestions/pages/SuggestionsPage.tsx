@@ -2,11 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { Sparkles, CalendarPlus, BookmarkPlus, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/Spinner';
@@ -51,7 +64,10 @@ const SuggestionsPage = () => {
   const requestSuggestions = useSuggestionStore((state) => state.getSuggestions);
   const clearSuggestionsError = useSuggestionStore((state) => state.clearError);
 
-  const recipesById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
+  const recipesById = useMemo(
+    () => new Map(recipes.map((recipe) => [recipe.id, recipe])),
+    [recipes],
+  );
 
   const weekWindow = useMemo(() => {
     const baseDate = selectedDate ? new Date(selectedDate) : new Date();
@@ -118,54 +134,71 @@ const SuggestionsPage = () => {
         plannedMeals,
       },
     });
-  }, [clearSuggestionsError, maxTime, requestSuggestions, selectedMealType, selectedDate, pantryItems, recipes, plannedMeals]);
+  }, [
+    clearSuggestionsError,
+    maxTime,
+    requestSuggestions,
+    selectedMealType,
+    selectedDate,
+    pantryItems,
+    recipes,
+    plannedMeals,
+  ]);
 
-  const handleAddToPlan = useCallback(async (suggestion: RecipeSuggestion) => {
-    try {
-      const planDate = selectedDate || format(new Date(), 'yyyy-MM-dd');
-      const payload = suggestion.id
-        ? {
-            plan_date: planDate,
-            meal_type: selectedMealType,
-            recipe_id: suggestion.id,
-            notes: suggestion.reason ?? suggestion.description ?? undefined,
-          }
-        : {
-            plan_date: planDate,
-            meal_type: selectedMealType,
-            custom_meal_name: suggestion.title ?? suggestion.name ?? 'Sugerencia IA',
-            notes: suggestion.reason ?? suggestion.description ?? undefined,
-          };
-      const result = await addPlannedMeal(payload);
-      if (result) {
-        toast.success('Sugerencia añadida al plan semanal');
-      } else {
-        toast.error('No se pudo añadir la sugerencia al plan');
+  const handleAddToPlan = useCallback(
+    async (suggestion: RecipeSuggestion) => {
+      try {
+        const planDate = selectedDate || format(new Date(), 'yyyy-MM-dd');
+        const payload = suggestion.id
+          ? {
+              plan_date: planDate,
+              meal_type: selectedMealType,
+              recipe_id: suggestion.id,
+              notes: suggestion.reason ?? suggestion.description ?? undefined,
+            }
+          : {
+              plan_date: planDate,
+              meal_type: selectedMealType,
+              custom_meal_name: suggestion.title ?? suggestion.name ?? 'Sugerencia IA',
+              notes: suggestion.reason ?? suggestion.description ?? undefined,
+            };
+        const result = await addPlannedMeal(payload);
+        if (result) {
+          toast.success('Sugerencia añadida al plan semanal');
+        } else {
+          toast.error('No se pudo añadir la sugerencia al plan');
+        }
+      } catch (error) {
+        console.error('Error añadiendo sugerencia al plan', error);
+        toast.error('Ocurrió un error al añadir la sugerencia');
       }
-    } catch (error) {
-      console.error('Error añadiendo sugerencia al plan', error);
-      toast.error('Ocurrió un error al añadir la sugerencia');
-    }
-  }, [addPlannedMeal, selectedDate, selectedMealType]);
+    },
+    [addPlannedMeal, selectedDate, selectedMealType],
+  );
 
-  const handleToggleFavorite = useCallback(async (suggestion: RecipeSuggestion) => {
-    if (!suggestion.id) {
-      toast.info('Guarda la receta en tu biblioteca para marcarla como favorita.');
-      return;
-    }
-    const recipe = recipesById.get(suggestion.id);
-    if (!recipe) {
-      toast.error('La receta no está disponible en tu biblioteca.');
-      return;
-    }
-    try {
-      await toggleRecipeFavorite(suggestion.id, !recipe.is_favorite);
-      toast.success(!recipe.is_favorite ? 'Receta marcada como favorita' : 'Receta removida de favoritos');
-    } catch (error) {
-      console.error('Error actualizando favorito', error);
-      toast.error('No se pudo actualizar el estado de favorito');
-    }
-  }, [recipesById, toggleRecipeFavorite]);
+  const handleToggleFavorite = useCallback(
+    async (suggestion: RecipeSuggestion) => {
+      if (!suggestion.id) {
+        toast.info('Guarda la receta en tu biblioteca para marcarla como favorita.');
+        return;
+      }
+      const recipe = recipesById.get(suggestion.id);
+      if (!recipe) {
+        toast.error('La receta no está disponible en tu biblioteca.');
+        return;
+      }
+      try {
+        await toggleRecipeFavorite(suggestion.id, !recipe.is_favorite);
+        toast.success(
+          !recipe.is_favorite ? 'Receta marcada como favorita' : 'Receta removida de favoritos',
+        );
+      } catch (error) {
+        console.error('Error actualizando favorito', error);
+        toast.error('No se pudo actualizar el estado de favorito');
+      }
+    },
+    [recipesById, toggleRecipeFavorite],
+  );
 
   if (!featureFlags.aiSuggestions) {
     return (
@@ -178,7 +211,8 @@ const SuggestionsPage = () => {
         <Alert>
           <AlertTitle>Funcionalidad en pruebas</AlertTitle>
           <AlertDescription>
-            El experimento de sugerencias con IA está desactivado. Contacta al equipo de producto para habilitarlo.
+            El experimento de sugerencias con IA está desactivado. Contacta al equipo de producto
+            para habilitarlo.
           </AlertDescription>
         </Alert>
       </div>
@@ -189,7 +223,9 @@ const SuggestionsPage = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[320px] space-y-4">
         <Spinner size="lg" />
-        <p className="text-sm text-muted-foreground">Preparando tu contexto de recetas e inventario…</p>
+        <p className="text-sm text-muted-foreground">
+          Preparando tu contexto de recetas e inventario…
+        </p>
       </div>
     );
   }
@@ -209,7 +245,9 @@ const SuggestionsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Configura tu búsqueda</CardTitle>
-          <CardDescription>Ajusta los parámetros para personalizar las sugerencias generadas.</CardDescription>
+          <CardDescription>
+            Ajusta los parámetros para personalizar las sugerencias generadas.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
@@ -223,7 +261,10 @@ const SuggestionsPage = () => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="meal-type">Tipo de comida</Label>
-            <Select value={selectedMealType} onValueChange={(value) => setSelectedMealType(value as MealType)}>
+            <Select
+              value={selectedMealType}
+              onValueChange={(value) => setSelectedMealType(value as MealType)}
+            >
               <SelectTrigger id="meal-type">
                 <SelectValue placeholder="Selecciona el tipo de comida" />
               </SelectTrigger>
@@ -284,7 +325,10 @@ const SuggestionsPage = () => {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {suggestions.map((suggestion) => (
-          <Card key={suggestion.id ?? suggestion.title ?? suggestion.name} className="h-full flex flex-col">
+          <Card
+            key={suggestion.id ?? suggestion.title ?? suggestion.name}
+            className="h-full flex flex-col"
+          >
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -301,11 +345,15 @@ const SuggestionsPage = () => {
             </CardHeader>
             <CardContent className="flex-1 space-y-4">
               {suggestion.description && (
-                <p className="text-sm leading-relaxed text-muted-foreground">{suggestion.description}</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {suggestion.description}
+                </p>
               )}
               {suggestion.ingredients?.length ? (
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ingredientes clave</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Ingredientes clave
+                  </p>
                   <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                     {suggestion.ingredients.slice(0, 6).map((ingredient) => (
                       <li key={ingredient} className="flex items-center gap-2">

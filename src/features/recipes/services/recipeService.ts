@@ -9,7 +9,10 @@ import { findOrCreateIngredient } from '@/features/ingredients/ingredientService
 import { normalizeQuantity, normalizeUnit, parseIntegerOrNull } from '@/utils/units';
 
 // Tipo de entrada para añadir/actualizar recetas
-export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredients' | 'instructions'> & {
+export type RecipeInputData = Omit<
+  Recipe,
+  'id' | 'created_at' | 'recipe_ingredients' | 'instructions'
+> & {
   user_id?: string | null;
   ingredients: Array<{ name: string; quantity: string | number | null; unit?: string | null }>;
   instructions: RecipeInstructions | string | null;
@@ -46,7 +49,12 @@ const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 const recipeCache: Record<string, RecipeCache> = {};
 
 // Utilidad para generar clave de caché
-const generateCacheKey = (userId: string, filters: RecipeFilters, page: number, limit: number): string => {
+const generateCacheKey = (
+  userId: string,
+  filters: RecipeFilters,
+  page: number,
+  limit: number,
+): string => {
   return `${userId}_${JSON.stringify(filters)}_${page}_${limit}`;
 };
 
@@ -56,9 +64,11 @@ const isCacheValid = (cacheEntry: RecipeCache): boolean => {
 };
 
 // Funciones auxiliares para conversión de instrucciones
-const instructionsToString = (instructions: RecipeInstructions | string | null | undefined): string => {
+const instructionsToString = (
+  instructions: RecipeInstructions | string | null | undefined,
+): string => {
   if (Array.isArray(instructions)) {
-    return instructions.filter(inst => inst && inst.trim() !== '').join('\n');
+    return instructions.filter((inst) => inst && inst.trim() !== '').join('\n');
   }
   if (typeof instructions === 'string') {
     return instructions.trim();
@@ -68,7 +78,7 @@ const instructionsToString = (instructions: RecipeInstructions | string | null |
 
 const instructionsToArray = (text: string | null): RecipeInstructions => {
   if (!text) return [];
-  return text.split('\n').filter(line => line && line.trim() !== '');
+  return text.split('\n').filter((line) => line && line.trim() !== '');
 };
 
 function mapDBDataToRecipe(dbData: any): Recipe {
@@ -76,18 +86,26 @@ function mapDBDataToRecipe(dbData: any): Recipe {
   let parsedInstructions: RecipeInstructions = [];
   const rawInstructions = dbData.instructions;
 
-  console.log('[mapDBDataToRecipe] Raw instructions type:', typeof rawInstructions, 'Value:', rawInstructions);
+  console.log(
+    '[mapDBDataToRecipe] Raw instructions type:',
+    typeof rawInstructions,
+    'Value:',
+    rawInstructions,
+  );
 
   if (Array.isArray(rawInstructions)) {
-    if (rawInstructions.every(item => typeof item === 'string')) {
-        parsedInstructions = rawInstructions.map(s => s.trim()).filter(s => s.length > 0);
-        console.log('[mapDBDataToRecipe] Parsed as direct Array.');
+    if (rawInstructions.every((item) => typeof item === 'string')) {
+      parsedInstructions = rawInstructions.map((s) => s.trim()).filter((s) => s.length > 0);
+      console.log('[mapDBDataToRecipe] Parsed as direct Array.');
     } else {
-        console.warn('[mapDBDataToRecipe] Raw data is array but contains non-string items:', rawInstructions);
-        // Intentar convertir a string si es posible, o filtrar no-strings
-        parsedInstructions = rawInstructions
-            .map(item => String(item).trim())
-            .filter(s => s.length > 0);
+      console.warn(
+        '[mapDBDataToRecipe] Raw data is array but contains non-string items:',
+        rawInstructions,
+      );
+      // Intentar convertir a string si es posible, o filtrar no-strings
+      parsedInstructions = rawInstructions
+        .map((item) => String(item).trim())
+        .filter((s) => s.length > 0);
     }
   } else if (typeof rawInstructions === 'string') {
     const trimmedInstructions = rawInstructions.trim();
@@ -97,24 +115,38 @@ function mapDBDataToRecipe(dbData: any): Recipe {
     if (trimmedInstructions.startsWith('[') && trimmedInstructions.endsWith(']')) {
       try {
         const potentiallyParsed = JSON.parse(trimmedInstructions);
-        if (Array.isArray(potentiallyParsed) && potentiallyParsed.every(item => typeof item === 'string')) {
-            parsedInstructions = potentiallyParsed.map(s => s.trim()).filter(s => s.length > 0);
-            parseSuccess = true;
-            console.log('[mapDBDataToRecipe] Parsed as JSON Array string.');
+        if (
+          Array.isArray(potentiallyParsed) &&
+          potentiallyParsed.every((item) => typeof item === 'string')
+        ) {
+          parsedInstructions = potentiallyParsed.map((s) => s.trim()).filter((s) => s.length > 0);
+          parseSuccess = true;
+          console.log('[mapDBDataToRecipe] Parsed as JSON Array string.');
         }
-      } catch (e) { /* Ignorar error de parseo, intentará otros métodos */ }
-    } 
-    
-    if (!parseSuccess && trimmedInstructions.startsWith('{"[') && trimmedInstructions.endsWith(']"}')) {
-         try {
-            const jsonString = trimmedInstructions.slice(1, -1);
-            const potentiallyParsed = JSON.parse(jsonString);
-             if (Array.isArray(potentiallyParsed) && potentiallyParsed.every(item => typeof item === 'string')) {
-                parsedInstructions = potentiallyParsed.map(s => s.trim()).filter(s => s.length > 0);
-                parseSuccess = true;
-                 console.log('[mapDBDataToRecipe] Parsed as double-escaped JSON Array string.');
-             }
-         } catch (e) { /* Ignorar error de parseo, intentará otros métodos */ }
+      } catch (e) {
+        /* Ignorar error de parseo, intentará otros métodos */
+      }
+    }
+
+    if (
+      !parseSuccess &&
+      trimmedInstructions.startsWith('{"[') &&
+      trimmedInstructions.endsWith(']"}')
+    ) {
+      try {
+        const jsonString = trimmedInstructions.slice(1, -1);
+        const potentiallyParsed = JSON.parse(jsonString);
+        if (
+          Array.isArray(potentiallyParsed) &&
+          potentiallyParsed.every((item) => typeof item === 'string')
+        ) {
+          parsedInstructions = potentiallyParsed.map((s) => s.trim()).filter((s) => s.length > 0);
+          parseSuccess = true;
+          console.log('[mapDBDataToRecipe] Parsed as double-escaped JSON Array string.');
+        }
+      } catch (e) {
+        /* Ignorar error de parseo, intentará otros métodos */
+      }
     }
 
     // 3. Si no se pudo parsear como JSON, tratar como texto simple con saltos de línea
@@ -126,28 +158,48 @@ function mapDBDataToRecipe(dbData: any): Recipe {
     console.warn('[mapDBDataToRecipe] Instructions are an object:', rawInstructions);
     // Acceso seguro y aserción de tipo para linter
     if ('steps' in rawInstructions && Array.isArray((rawInstructions as any).steps)) {
-        const stepsArray = (rawInstructions as { steps: any[] }).steps;
-        if (stepsArray.every((s: any) => typeof s === 'string')) {
-            parsedInstructions = stepsArray.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-            console.log(`[mapDBDataToRecipe] Extracted instructions from object property 'steps'.`);
-        } else {
-            console.warn(`[mapDBDataToRecipe] Object property 'steps' contains non-string elements.`);
-            parsedInstructions = stepsArray.map((item: any) => String(item).trim()).filter((s: string) => s.length > 0);
-        }
+      const stepsArray = (rawInstructions as { steps: any[] }).steps;
+      if (stepsArray.every((s: any) => typeof s === 'string')) {
+        parsedInstructions = stepsArray
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0);
+        console.log(`[mapDBDataToRecipe] Extracted instructions from object property 'steps'.`);
+      } else {
+        console.warn(`[mapDBDataToRecipe] Object property 'steps' contains non-string elements.`);
+        parsedInstructions = stepsArray
+          .map((item: any) => String(item).trim())
+          .filter((s: string) => s.length > 0);
+      }
     } else {
-      console.warn(`[mapDBDataToRecipe] Could not find a valid 'steps' array property in the object. Using empty array.`);
+      console.warn(
+        `[mapDBDataToRecipe] Could not find a valid 'steps' array property in the object. Using empty array.`,
+      );
     }
   } else {
-    console.log('[mapDBDataToRecipe] Instructions are null, undefined, or unexpected type. Using empty array.');
+    console.log(
+      '[mapDBDataToRecipe] Instructions are null, undefined, or unexpected type. Using empty array.',
+    );
   }
 
   // Validación final (más robusta)
   if (!Array.isArray(parsedInstructions)) {
-    console.error('[mapDBDataToRecipe] CRITICAL: parsedInstructions is NOT an array after all parsing attempts! Type:', typeof parsedInstructions, 'Value:', parsedInstructions, 'Falling back to empty array.');
+    console.error(
+      '[mapDBDataToRecipe] CRITICAL: parsedInstructions is NOT an array after all parsing attempts! Type:',
+      typeof parsedInstructions,
+      'Value:',
+      parsedInstructions,
+      'Falling back to empty array.',
+    );
     parsedInstructions = [];
-  } else if (!parsedInstructions.every(item => typeof item === 'string')) {
-     console.warn('[mapDBDataToRecipe] WARNING: parsedInstructions array contains non-string elements:', parsedInstructions, 'Attempting to convert all to strings.');
-     parsedInstructions = parsedInstructions.map(item => String(item).trim()).filter(s => s.length > 0);
+  } else if (!parsedInstructions.every((item) => typeof item === 'string')) {
+    console.warn(
+      '[mapDBDataToRecipe] WARNING: parsedInstructions array contains non-string elements:',
+      parsedInstructions,
+      'Attempting to convert all to strings.',
+    );
+    parsedInstructions = parsedInstructions
+      .map((item) => String(item).trim())
+      .filter((s) => s.length > 0);
   }
 
   return {
@@ -173,24 +225,21 @@ type PersistenceIngredient = {
 };
 
 const normalizeIngredientsForPersistence = async (
-  ingredients: RecipeInputData['ingredients']
+  ingredients: RecipeInputData['ingredients'],
 ): Promise<PersistenceIngredient[]> => {
   return Promise.all(
     ingredients
-      .filter(ing => ing.name && ing.name.trim().length > 0)
-      .map(async ing => {
+      .filter((ing) => ing.name && ing.name.trim().length > 0)
+      .map(async (ing) => {
         const normalizedQuantity = normalizeQuantity(ing.quantity);
-        const ingredientRecord = await findOrCreateIngredient(
-          ing.name,
-          normalizedQuantity ?? 1
-        );
+        const ingredientRecord = await findOrCreateIngredient(ing.name, normalizedQuantity ?? 1);
         return {
           ingredient_id: ingredientRecord.id,
           ingredient_name: ingredientRecord.name ?? ing.name.trim(),
           quantity: normalizedQuantity,
           unit: normalizeUnit(ing.unit),
         } satisfies PersistenceIngredient;
-      })
+      }),
   );
 };
 
@@ -198,9 +247,7 @@ const buildRecipePayload = (recipeInput: RecipeInputData) => {
   const instructionsArray = Array.isArray(recipeInput.instructions)
     ? recipeInput.instructions
     : instructionsToArray(
-        typeof recipeInput.instructions === 'string'
-          ? recipeInput.instructions
-          : null
+        typeof recipeInput.instructions === 'string' ? recipeInput.instructions : null,
       );
 
   return {
@@ -294,14 +341,12 @@ const createRecipeLegacy = async (recipeInput: RecipeInputData): Promise<Recipe>
 
   if (recipeInput.ingredients?.length) {
     const ingredientsToInsert = await normalizeIngredientsForPersistence(recipeInput.ingredients);
-    const { error: ingredientsError } = await supabase
-      .from('recipe_ingredients')
-      .insert(
-        ingredientsToInsert.map(ing => ({
-          ...ing,
-          recipe_id: newRecipe.id,
-        }))
-      );
+    const { error: ingredientsError } = await supabase.from('recipe_ingredients').insert(
+      ingredientsToInsert.map((ing) => ({
+        ...ing,
+        recipe_id: newRecipe.id,
+      })),
+    );
 
     if (ingredientsError) throw ingredientsError;
   }
@@ -316,7 +361,7 @@ const createRecipeLegacy = async (recipeInput: RecipeInputData): Promise<Recipe>
 
 const updateRecipeWithRpc = async (
   recipeId: string,
-  recipeInput: Partial<RecipeInputData>
+  recipeInput: Partial<RecipeInputData>,
 ): Promise<Recipe> => {
   const recipePayload = buildUpdatePayload(recipeInput);
   const ingredientsPayload = recipeInput.ingredients
@@ -348,7 +393,7 @@ const updateRecipeWithRpc = async (
 
 const updateRecipeLegacy = async (
   recipeId: string,
-  recipeInput: Partial<RecipeInputData>
+  recipeInput: Partial<RecipeInputData>,
 ): Promise<Recipe> => {
   const recipePayload = buildUpdatePayload(recipeInput);
 
@@ -374,14 +419,12 @@ const updateRecipeLegacy = async (
 
     if (recipeInput.ingredients.length > 0) {
       const ingredientsToInsert = await normalizeIngredientsForPersistence(recipeInput.ingredients);
-      const { error: ingredientsError } = await supabase
-        .from('recipe_ingredients')
-        .insert(
-          ingredientsToInsert.map(ing => ({
-            ...ing,
-            recipe_id: recipeId,
-          }))
-        );
+      const { error: ingredientsError } = await supabase.from('recipe_ingredients').insert(
+        ingredientsToInsert.map((ing) => ({
+          ...ing,
+          recipe_id: recipeId,
+        })),
+      );
 
       if (ingredientsError) throw ingredientsError;
     }
@@ -403,7 +446,7 @@ const buildUpdatePayload = (recipeInput: Partial<RecipeInputData>) => {
     payload.instructions = Array.isArray(recipeInput.instructions)
       ? recipeInput.instructions
       : instructionsToArray(
-          typeof recipeInput.instructions === 'string' ? recipeInput.instructions : null
+          typeof recipeInput.instructions === 'string' ? recipeInput.instructions : null,
         );
   }
   if (recipeInput.prep_time_minutes !== undefined) {
@@ -443,29 +486,27 @@ export const getRecipes = async ({
   userId,
   filters = {},
   page = 1,
-  limit = 12
+  limit = 12,
 }: GetRecipesParams): Promise<GetRecipesResult> => {
   if (!userId) {
-    console.error("User ID es necesario para obtener recetas.");
+    console.error('User ID es necesario para obtener recetas.');
     return { data: [], hasMore: false };
   }
 
   // Generar clave de caché
   const cacheKey = generateCacheKey(userId, filters, page, limit);
-  
+
   // Verificar si tenemos datos en caché válidos
   if (recipeCache[cacheKey] && isCacheValid(recipeCache[cacheKey])) {
-    console.log("[recipeService] Usando datos en caché para", cacheKey);
+    console.log('[recipeService] Usando datos en caché para', cacheKey);
     const { data, hasMore } = recipeCache[cacheKey];
     return { data, hasMore };
   }
-  
-  console.log("[recipeService] Cargando recetas desde la base de datos");
+
+  console.log('[recipeService] Cargando recetas desde la base de datos');
 
   // Optimización: Consulta separada para recetas personales (siempre mostradas)
-  let query = supabase
-    .from('recipes')
-    .select(`
+  let query = supabase.from('recipes').select(`
       id, user_id, title, description, image_url, prep_time_minutes, cook_time_minutes,
       servings, is_favorite, instructions, created_at, main_ingredients, is_public,
       recipe_ingredients ( id, recipe_id, ingredient_name, quantity, unit, ingredient_id )
@@ -486,7 +527,7 @@ export const getRecipes = async ({
   // Aplicar filtro de recetas rápidas (menos de 30 min total)
   if (filters.quickRecipes) {
     query = query.or('prep_time_minutes.lt.30,cook_time_minutes.lt.30');
-    // También podríamos hacer un filtro más sofisticado con la suma de tiempos, 
+    // También podríamos hacer un filtro más sofisticado con la suma de tiempos,
     // pero requeriría una función o vista SQL personalizada
   }
 
@@ -504,9 +545,7 @@ export const getRecipes = async ({
   // Aplicar paginación
   const from = (page - 1) * limit;
   const to = from + limit - 1;
-  query = query
-    .order('created_at', { ascending: false })
-    .range(from, to);
+  query = query.order('created_at', { ascending: false }).range(from, to);
 
   const { data, error } = await query;
 
@@ -516,27 +555,29 @@ export const getRecipes = async ({
   }
 
   const recipes = (data || []).map(mapDBDataToRecipe);
-  
+
   // Guardar en caché
   recipeCache[cacheKey] = {
     key: cacheKey,
     data: recipes,
     timestamp: Date.now(),
-    hasMore: recipes.length === limit
+    hasMore: recipes.length === limit,
   };
-  
+
   return { data: recipes, hasMore: recipes.length === limit };
 };
 
 export const getRecipeById = async (recipeId: string): Promise<Recipe | null> => {
-  if (!recipeId) throw new Error("Se requiere ID de receta para obtener detalles.");
+  if (!recipeId) throw new Error('Se requiere ID de receta para obtener detalles.');
 
   const { data, error } = await supabase
     .from('recipes')
-    .select(`
+    .select(
+      `
       *, 
       recipe_ingredients(*)
-    `)
+    `,
+    )
     .eq('id', recipeId)
     .single();
 
@@ -559,7 +600,10 @@ export const createRecipe = async (recipeInput: RecipeInputData): Promise<Recipe
     invalidateRecipeCache();
     return recipe;
   } catch (rpcError) {
-    console.warn('[recipeService] create_recipe_with_ingredients RPC falló, usando lógica legacy.', rpcError);
+    console.warn(
+      '[recipeService] create_recipe_with_ingredients RPC falló, usando lógica legacy.',
+      rpcError,
+    );
     const recipe = await createRecipeLegacy(recipeInput);
     invalidateRecipeCache();
     return recipe;
@@ -571,7 +615,7 @@ export const addRecipe = createRecipe;
 
 export const updateRecipe = async (
   recipeId: string,
-  recipeInput: Partial<RecipeInputData>
+  recipeInput: Partial<RecipeInputData>,
 ): Promise<Recipe> => {
   const {
     data: { user },
@@ -583,7 +627,10 @@ export const updateRecipe = async (
     invalidateRecipeCache(recipeId);
     return recipe;
   } catch (rpcError) {
-    console.warn('[recipeService] update_recipe_with_ingredients RPC falló, usando lógica legacy.', rpcError);
+    console.warn(
+      '[recipeService] update_recipe_with_ingredients RPC falló, usando lógica legacy.',
+      rpcError,
+    );
     const recipe = await updateRecipeLegacy(recipeId, recipeInput);
     invalidateRecipeCache(recipeId);
     return recipe;
@@ -613,7 +660,7 @@ export const archiveRecipe = async (recipeId: string, archive: boolean): Promise
 
 export const duplicateRecipe = async (
   recipeId: string,
-  overrides: Partial<RecipeInputData> = {}
+  overrides: Partial<RecipeInputData> = {},
 ): Promise<Recipe> => {
   const original = await getRecipeById(recipeId);
   if (!original) {
@@ -627,7 +674,7 @@ export const duplicateRecipe = async (
     throw new Error('Usuario no autenticado');
   }
 
-  const overrideIngredients = overrides.ingredients?.map(ing => ({
+  const overrideIngredients = overrides.ingredients?.map((ing) => ({
     name: 'name' in ing ? ing.name : (ing as any).ingredient_name,
     quantity: 'quantity' in ing ? (ing.quantity ?? null) : null,
     unit: 'unit' in ing ? (ing.unit ?? null) : null,
@@ -650,7 +697,7 @@ export const duplicateRecipe = async (
     is_archived: false,
     ingredients:
       overrideIngredients ??
-      original.recipe_ingredients.map(ing => ({
+      original.recipe_ingredients.map((ing) => ({
         name: ing.ingredient_name,
         quantity: ing.quantity ?? null,
         unit: ing.unit ?? null,
@@ -661,36 +708,43 @@ export const duplicateRecipe = async (
 };
 
 export const deleteRecipe = async (recipeId: string): Promise<void> => {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
   try {
-    console.log(`[recipeService] Intentando eliminar receta ${recipeId} para usuario ${user.id} usando RPC`);
-    
-    const { error } = await supabase.rpc(
-      'delete_recipe_with_ingredients',
-      { recipe_id_param: recipeId }
+    console.log(
+      `[recipeService] Intentando eliminar receta ${recipeId} para usuario ${user.id} usando RPC`,
     );
+
+    const { error } = await supabase.rpc('delete_recipe_with_ingredients', {
+      recipe_id_param: recipeId,
+    });
 
     // La función SQL ahora termina silenciosamente si no encuentra la receta (NOT FOUND)
     // por lo que solo necesitamos manejar el error P0001 (Permiso Denegado)
     if (error) {
-      console.error('[recipeService] Error al llamar a la función RPC delete_recipe_with_ingredients:', error);
+      console.error(
+        '[recipeService] Error al llamar a la función RPC delete_recipe_with_ingredients:',
+        error,
+      );
       if (error.code === 'P0001') {
         throw new Error('No tienes permiso para eliminar esta receta.');
       }
       // Lanzar cualquier otro error inesperado de la RPC
-      throw new Error(`Error inesperado de RPC: ${error.message || 'Detalles no disponibles'}`); 
+      throw new Error(`Error inesperado de RPC: ${error.message || 'Detalles no disponibles'}`);
     }
-    
-    console.log(`[recipeService] Llamada RPC para eliminar ${recipeId} completada (puede haber terminado silenciosamente si no se encontró)`);
-    
+
+    console.log(
+      `[recipeService] Llamada RPC para eliminar ${recipeId} completada (puede haber terminado silenciosamente si no se encontró)`,
+    );
   } catch (error) {
     console.error('[recipeService] Error en proceso de eliminación vía RPC:', error);
     if (error instanceof Error) {
-        throw error; // Re-lanzar para el store/componente
+      throw error; // Re-lanzar para el store/componente
     } else {
-        throw new Error('Ocurrió un error desconocido durante la eliminación.');
+      throw new Error('Ocurrió un error desconocido durante la eliminación.');
     }
   } finally {
     // Invalidar caché siempre, incluso si falló o no se encontró
@@ -699,8 +753,13 @@ export const deleteRecipe = async (recipeId: string): Promise<void> => {
   }
 };
 
-export const toggleRecipeFavorite = async (recipeId: string, isFavorite: boolean): Promise<Recipe> => {
-  const { data: { user } } = await supabase.auth.getUser();
+export const toggleRecipeFavorite = async (
+  recipeId: string,
+  isFavorite: boolean,
+): Promise<Recipe> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
   const { data, error } = await supabase
@@ -721,7 +780,9 @@ export const toggleRecipeFavorite = async (recipeId: string, isFavorite: boolean
 };
 
 export const toggleRecipePublic = async (recipeId: string, isPublic: boolean): Promise<Recipe> => {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
   const { data, error } = await supabase
@@ -746,17 +807,17 @@ export const toggleRecipePublic = async (recipeId: string, isPublic: boolean): P
 export const invalidateRecipeCache = (recipeId?: string): void => {
   if (recipeId) {
     // Invalidar solo entradas de caché que podrían contener esta receta
-    Object.keys(recipeCache).forEach(key => {
+    Object.keys(recipeCache).forEach((key) => {
       // Si tenemos el ID específico, podríamos verificar si está en la caché
       const cacheEntry = recipeCache[key];
-      const hasRecipe = cacheEntry.data.some(recipe => recipe.id === recipeId);
+      const hasRecipe = cacheEntry.data.some((recipe) => recipe.id === recipeId);
       if (hasRecipe) {
         delete recipeCache[key];
       }
     });
   } else {
     // Invalidar toda la caché
-    Object.keys(recipeCache).forEach(key => {
+    Object.keys(recipeCache).forEach((key) => {
       delete recipeCache[key];
     });
   }

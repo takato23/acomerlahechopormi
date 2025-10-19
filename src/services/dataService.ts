@@ -17,7 +17,7 @@ export async function getCategories(): Promise<Category[]> {
     console.log('[DataService] Fetching categories...');
     const data = await supabaseRepository.run<Category[]>(
       () => categoriesTable().select('*').order('name'),
-      { fallback: [] }
+      { fallback: [] },
     );
 
     console.log('[DataService] Categories fetched:', data);
@@ -35,7 +35,7 @@ export async function getCategoryById(id: string): Promise<Category | null> {
   try {
     const data = await supabaseRepository.run<Category | null>(
       () => categoriesTable().select('*').eq('id', id).maybeSingle(),
-      { fallback: null }
+      { fallback: null },
     );
 
     return data;

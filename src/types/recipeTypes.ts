@@ -51,7 +51,7 @@ export interface RecipeFilters {
   searchTerm?: string;
   showOnlyFavorites?: boolean;
   showOnlyPublic?: boolean;
-  quickRecipes?: boolean;  // Recetas que se preparan en menos de 30 min
+  quickRecipes?: boolean; // Recetas que se preparan en menos de 30 min
   selectedIngredients?: string[];
   selectedTags?: string[];
   categoryId?: string | null;
@@ -65,7 +65,10 @@ export interface GetRecipesResponse {
   total?: number;
 }
 
-export type RecipeInputData = Omit<Recipe, 'id' | 'created_at' | 'recipe_ingredients' | 'instructions'> & {
+export type RecipeInputData = Omit<
+  Recipe,
+  'id' | 'created_at' | 'recipe_ingredients' | 'instructions'
+> & {
   user_id?: string | null;
   ingredients: Array<{
     name: string;
@@ -116,5 +119,5 @@ export interface GeneratedRecipeData {
   seasonalFlags?: string[];
   equipmentNeeded?: string[];
   source_api?: string; // Añadir para tracking
-  source_id?: string;  // Añadir para tracking
+  source_id?: string; // Añadir para tracking
 }

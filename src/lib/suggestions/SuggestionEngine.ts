@@ -2,7 +2,11 @@ import { differenceInCalendarDays } from 'date-fns';
 import type { PantryItem } from '@/features/pantry/types';
 import type { PlannedMeal, MealType } from '@/features/planning/types';
 import type { Recipe, RecipeIngredient } from '@/types/recipeTypes';
-import type { SuggestionRequest, SuggestionResponse, RecipeSuggestion } from '@/features/suggestions/types';
+import type {
+  SuggestionRequest,
+  SuggestionResponse,
+  RecipeSuggestion,
+} from '@/features/suggestions/types';
 import { generateSuggestionsWithFallback } from '@/lib/ai/aiClient';
 
 interface PantrySummaryItem {
@@ -107,8 +111,7 @@ export class SuggestionEngine {
       title: recipe.title,
       description: recipe.description ?? undefined,
       isFavorite: Boolean(recipe.is_favorite),
-      totalTime:
-        (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0) || null,
+      totalTime: (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0) || null,
       tags: recipe.tags ?? undefined,
       mainIngredients: this.extractRecipeIngredients(recipe.recipe_ingredients),
       lastPlannedDate: lastPlannedByRecipe.get(recipe.id) ?? null,
@@ -166,7 +169,9 @@ export class SuggestionEngine {
         if (recipe.tags?.length) details.push(`tags: ${recipe.tags.join(', ')}`);
         if (recipe.totalTime) details.push(`tiempo total: ${recipe.totalTime} min`);
         if (recipe.lastPlannedDate) details.push(`última vez: ${recipe.lastPlannedDate}`);
-        sections.push(`- ${recipe.title}${recipe.isFavorite ? ' ⭐' : ''}${details.length ? ` (${details.join(' | ')})` : ''}`);
+        sections.push(
+          `- ${recipe.title}${recipe.isFavorite ? ' ⭐' : ''}${details.length ? ` (${details.join(' | ')})` : ''}`,
+        );
       }
     }
 
@@ -175,7 +180,9 @@ export class SuggestionEngine {
       sections.push('- No hay comidas planificadas esta semana.');
     } else {
       for (const meal of context.planning) {
-        const label = meal.recipe_id ? `receta ${meal.recipe_id}` : meal.custom_meal_name ?? 'comida personalizada';
+        const label = meal.recipe_id
+          ? `receta ${meal.recipe_id}`
+          : (meal.custom_meal_name ?? 'comida personalizada');
         sections.push(`- ${meal.plan_date} (${meal.meal_type}): ${label}`);
       }
     }
@@ -196,9 +203,7 @@ export class SuggestionEngine {
     }
 
     const pantryNames = new Set(
-      context.pantry
-        .map((item) => item.name?.toLowerCase())
-        .filter(Boolean) as string[],
+      context.pantry.map((item) => item.name?.toLowerCase()).filter(Boolean) as string[],
     );
 
     const ranked = context.recipes
@@ -209,9 +214,7 @@ export class SuggestionEngine {
 
         const totalTime = recipe.totalTime ?? null;
         const withinTime =
-          typeof request.maxTime === 'number' && totalTime
-            ? totalTime <= request.maxTime
-            : true;
+          typeof request.maxTime === 'number' && totalTime ? totalTime <= request.maxTime : true;
 
         const recencyPenalty = this.calculateRecencyPenalty(recipe.lastPlannedDate);
         let score = matchCount * 2 + (recipe.isFavorite ? 1 : 0);
@@ -244,10 +247,7 @@ export class SuggestionEngine {
           reasonParts.push('Es una de tus recetas favoritas');
         }
         if (!recencyPenalty && recipe.lastPlannedDate) {
-          const daysAgo = differenceInCalendarDays(
-            new Date(),
-            new Date(recipe.lastPlannedDate),
-          );
+          const daysAgo = differenceInCalendarDays(new Date(), new Date(recipe.lastPlannedDate));
           if (daysAgo > 7) {
             reasonParts.push(`Hace ${daysAgo} días que no la preparas`);
           }

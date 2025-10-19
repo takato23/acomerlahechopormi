@@ -60,7 +60,12 @@ export const normalizeQuantity = (quantity: string | number | null | undefined):
     const whole = Number.parseFloat(mixedMatch[1]);
     const numerator = Number.parseFloat(mixedMatch[2]);
     const denominator = Number.parseFloat(mixedMatch[3]);
-    if (!Number.isNaN(whole) && !Number.isNaN(numerator) && !Number.isNaN(denominator) && denominator !== 0) {
+    if (
+      !Number.isNaN(whole) &&
+      !Number.isNaN(numerator) &&
+      !Number.isNaN(denominator) &&
+      denominator !== 0
+    ) {
       return whole + numerator / denominator;
     }
   }

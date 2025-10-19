@@ -23,8 +23,8 @@ export default function RecipesPage() {
   }, [store.filters, loadInitialRecipes]);
 
   const handleLoadMore = () => {
-    store.fetchRecipes({ 
-      page: Math.ceil(store.recipes.length / 12) + 1 
+    store.fetchRecipes({
+      page: Math.ceil(store.recipes.length / 12) + 1,
     });
   };
 
@@ -85,11 +85,7 @@ export default function RecipesPage() {
               onToggleFavorite={store.toggleFavorite}
             />
             <div className="mt-section flex justify-center">
-              <Button
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={store.loading}
-              >
+              <Button variant="outline" onClick={handleLoadMore} disabled={store.loading}>
                 {store.loading ? 'Cargando...' : 'Cargar más'}
               </Button>
             </div>
@@ -99,9 +95,7 @@ export default function RecipesPage() {
         {!isInitialLoading && store.recipes.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-muted/60 bg-muted/20 px-section py-section text-center">
             <p className="mb-4 text-muted-foreground">No hay recetas para mostrar</p>
-            <Button onClick={() => navigate('/recipes/new')}>
-              Crear mi primera receta
-            </Button>
+            <Button onClick={() => navigate('/recipes/new')}>Crear mi primera receta</Button>
           </div>
         )}
       </PageSection>

@@ -116,12 +116,18 @@ export class SupabaseRepository {
       return true;
     }
 
-    if (typeof maybePostgrest.status === 'number' && AUTH_ERROR_CODES.has(String(maybePostgrest.status))) {
+    if (
+      typeof maybePostgrest.status === 'number' &&
+      AUTH_ERROR_CODES.has(String(maybePostgrest.status))
+    ) {
       return true;
     }
 
     const maybeAuthError = error as Partial<AuthError>;
-    if (typeof maybeAuthError.status === 'number' && AUTH_ERROR_CODES.has(String(maybeAuthError.status))) {
+    if (
+      typeof maybeAuthError.status === 'number' &&
+      AUTH_ERROR_CODES.has(String(maybeAuthError.status))
+    ) {
       return true;
     }
 

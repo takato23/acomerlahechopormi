@@ -8,7 +8,7 @@ import {
   getCategories,
   deleteMultiplePantryItems,
   toggleFavoritePantryItem,
-  clearPantry
+  clearPantry,
 } from './pantryService';
 import type { PantryItem, Category, CreatePantryItemData } from './types';
 import useBreakpoint from '@/hooks/useBreakpoint';
@@ -32,13 +32,11 @@ export function PantryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false); // ¿Se usa este modal? Revisar si AddPantryItemForm se usa
   const [itemToEdit, setItemToEdit] = useState<PantryItem | null>(null); // ¿Se usa para editar desde Card/Row?
   const [showFiltersSheet, setShowFiltersSheet] = useState(false); // ¿Se usa este sheet?
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() =>
-    isDesktop ? 'list' : 'grid'
-  );
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (isDesktop ? 'list' : 'grid'));
   const [filters, setFilters] = useState({
     searchTerm: '',
     categoryId: 'all',
-    tags: '' // ¿Se usa el filtro de tags?
+    tags: '', // ¿Se usa el filtro de tags?
   });
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
@@ -50,14 +48,14 @@ export function PantryPage() {
     try {
       const [fetchedCategories, fetchedItems] = await Promise.all([
         getCategories(),
-        getPantryItems()
+        getPantryItems(),
       ]);
       console.log('[PantryPage] Fetched Items Sample:', fetchedItems.slice(0, 2)); // DEBUG: Log first 2 items
       setCategories(fetchedCategories);
       setPantryItems(fetchedItems);
     } catch (err) {
-      console.error("Error loading pantry data:", err);
-      setError("No se pudo cargar la despensa. Intenta de nuevo más tarde.");
+      console.error('Error loading pantry data:', err);
+      setError('No se pudo cargar la despensa. Intenta de nuevo más tarde.');
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +71,7 @@ export function PantryPage() {
   }, []);
 
   const handleSelectItem = useCallback((itemId: string) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) {
         next.delete(itemId);
@@ -86,65 +84,69 @@ export function PantryPage() {
 
   const handleEditItem = useCallback((item: PantryItem) => {
     // TODO: Implementar lógica para abrir modal de edición con 'item'
-    console.log("Edit item requested:", item);
+    console.log('Edit item requested:', item);
     setItemToEdit(item); // Guardar item a editar
     // setIsModalOpen(true); // Abrir modal si existe
     toast.info(`Editar ${item.ingredient?.name} (funcionalidad pendiente)`);
   }, []);
 
-  const handleEditRequestFromUnifiedInput = useCallback((data: CreatePantryItemData) => {
-    // Esta función parece diseñada para abrir el modal de edición
-    // con los datos parseados del input unificado.
-    const partialItem: Partial<PantryItem> = {
-      ingredient: { name: data.ingredient_name },
-      quantity: data.quantity,
-      unit: data.unit,
-      category_id: data.category_id,
-      expiry_date: data.expiry_date,
-      notes: data.notes,
-      // Añadir otros campos si existen en CreatePantryItemData y son relevantes
-    };
-    handleEditItem(partialItem as PantryItem); // Llama al handler general de edición
-  }, [handleEditItem]);
+  const handleEditRequestFromUnifiedInput = useCallback(
+    (data: CreatePantryItemData) => {
+      // Esta función parece diseñada para abrir el modal de edición
+      // con los datos parseados del input unificado.
+      const partialItem: Partial<PantryItem> = {
+        ingredient: { name: data.ingredient_name },
+        quantity: data.quantity,
+        unit: data.unit,
+        category_id: data.category_id,
+        expiry_date: data.expiry_date,
+        notes: data.notes,
+        // Añadir otros campos si existen en CreatePantryItemData y son relevantes
+      };
+      handleEditItem(partialItem as PantryItem); // Llama al handler general de edición
+    },
+    [handleEditItem],
+  );
 
-  const handleToggleFavorite = useCallback(async (itemId: string) => {
-    // Encontrar el estado actual antes de la actualización optimista
-    const currentItem = pantryItems.find(item => item.id === itemId);
-    if (!currentItem) return; // No hacer nada si el item no se encuentra
+  const handleToggleFavorite = useCallback(
+    async (itemId: string) => {
+      // Encontrar el estado actual antes de la actualización optimista
+      const currentItem = pantryItems.find((item) => item.id === itemId);
+      if (!currentItem) return; // No hacer nada si el item no se encuentra
 
-    const currentState = Boolean(currentItem.is_favorite);
-    const newState = !currentState;
+      const currentState = Boolean(currentItem.is_favorite);
+      const newState = !currentState;
 
-    // Actualización optimista
-    setPantryItems(prevItems =>
-      prevItems.map(item =>
-        item.id === itemId ? { ...item, is_favorite: newState } : item
-      )
-    );
+      // Actualización optimista
+      setPantryItems((prevItems) =>
+        prevItems.map((item) => (item.id === itemId ? { ...item, is_favorite: newState } : item)),
+      );
 
-    try {
-      const updatedItem = await toggleFavoritePantryItem(itemId, newState);
-      if (!updatedItem) {
-        throw new Error('Failed to update favorite status');
+      try {
+        const updatedItem = await toggleFavoritePantryItem(itemId, newState);
+        if (!updatedItem) {
+          throw new Error('Failed to update favorite status');
+        }
+        toast.success(
+          `${updatedItem.ingredient?.name} ${newState ? 'añadido a' : 'quitado de'} favoritos`,
+        );
+        // Opcional: Sincronizar con el estado devuelto por el servidor si es necesario
+        // setPantryItems(prevItems =>
+        //   prevItems.map(item => (item.id === updatedItem.id ? updatedItem : item))
+        // );
+      } catch (error) {
+        console.error('Error toggling favorite:', error);
+        toast.error('Error al actualizar favorito');
+        // Revertir
+        setPantryItems((prevItems) =>
+          prevItems.map((item) =>
+            item.id === itemId ? { ...item, is_favorite: currentState } : item,
+          ),
+        );
       }
-      toast.success(
-        `${updatedItem.ingredient?.name} ${newState ? 'añadido a' : 'quitado de'} favoritos`
-      );
-      // Opcional: Sincronizar con el estado devuelto por el servidor si es necesario
-      // setPantryItems(prevItems =>
-      //   prevItems.map(item => (item.id === updatedItem.id ? updatedItem : item))
-      // );
-    } catch (error) {
-      console.error("Error toggling favorite:", error);
-      toast.error("Error al actualizar favorito");
-      // Revertir
-      setPantryItems(prevItems =>
-        prevItems.map(item =>
-          item.id === itemId ? { ...item, is_favorite: currentState } : item
-        )
-      );
-    }
-  }, [pantryItems]); // Depender de pantryItems para tener el currentState correcto
+    },
+    [pantryItems],
+  ); // Depender de pantryItems para tener el currentState correcto
 
   const handleEnterSelectionMode = useCallback(() => {
     setIsSelectionMode(true);
@@ -156,7 +158,7 @@ export function PantryPage() {
   }, []);
 
   const handleSelectAllItems = useCallback(() => {
-    setSelectedItems(new Set(pantryItems.map(item => item.id)));
+    setSelectedItems(new Set(pantryItems.map((item) => item.id)));
   }, [pantryItems]);
 
   const handleDeselectAllItems = useCallback(() => {
@@ -171,8 +173,8 @@ export function PantryPage() {
       await loadData();
       handleCancelSelection();
     } catch (err) {
-      console.error("Error deleting items:", err);
-      toast.error("Error al eliminar los items seleccionados");
+      console.error('Error deleting items:', err);
+      toast.error('Error al eliminar los items seleccionados');
     }
   };
 
@@ -193,32 +195,35 @@ export function PantryPage() {
 
     // 1. Filtrar por categoría o favoritos
     if (filters.categoryId === 'favorites') {
-      filtered = filtered.filter(item => item.is_favorite);
+      filtered = filtered.filter((item) => item.is_favorite);
     } else if (filters.categoryId && filters.categoryId !== 'all') {
-      filtered = filtered.filter(item => item.category_id === filters.categoryId);
+      filtered = filtered.filter((item) => item.category_id === filters.categoryId);
     }
 
     // 2. Filtrar por término de búsqueda
     if (filters.searchTerm) {
       const searchLower = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(item =>
-        item.ingredient?.name?.toLowerCase().includes(searchLower) ?? false
+      filtered = filtered.filter(
+        (item) => item.ingredient?.name?.toLowerCase().includes(searchLower) ?? false,
       );
     }
 
     // 3. Agrupar por categoría
-    const groupedByCategory = filtered.reduce((acc, item) => {
-      const category = categories.find(c => c.id === item.category_id) || null;
-      const groupKey = category?.id || 'uncategorized'; // Usar ID o 'uncategorized'
+    const groupedByCategory = filtered.reduce(
+      (acc, item) => {
+        const category = categories.find((c) => c.id === item.category_id) || null;
+        const groupKey = category?.id || 'uncategorized'; // Usar ID o 'uncategorized'
 
-      if (!acc[groupKey]) {
-        // Crear grupo si no existe
-        acc[groupKey] = { category, items: [] };
-      }
-      acc[groupKey].items.push(item);
+        if (!acc[groupKey]) {
+          // Crear grupo si no existe
+          acc[groupKey] = { category, items: [] };
+        }
+        acc[groupKey].items.push(item);
 
-      return acc;
-    }, {} as Record<string, { category: Category | null; items: PantryItem[] }>);
+        return acc;
+      },
+      {} as Record<string, { category: Category | null; items: PantryItem[] }>,
+    );
 
     // 4. Convertir a array y ordenar categorías
     return Object.values(groupedByCategory).sort((a, b) => {

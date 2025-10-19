@@ -31,7 +31,7 @@ async function loadKeywords(): Promise<void> {
       .from('category_keywords')
       .select('keyword, category_id, priority');
 
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+    const { data, error } = (await Promise.race([queryPromise, timeoutPromise])) as any;
 
     if (error) throw error;
     if (!data?.length) throw new Error('No keywords found');
@@ -47,10 +47,10 @@ async function loadKeywords(): Promise<void> {
 
     console.log('[categoryInference] Loaded keywords:', {
       total: keywordCache.size,
-      examples: ['pollo', 'carne', 'pescado'].map(word => ({
+      examples: ['pollo', 'carne', 'pescado'].map((word) => ({
         word,
-        matches: keywordCache.get(word)?.map(m => m.categoryId)
-      }))
+        matches: keywordCache.get(word)?.map((m) => m.categoryId),
+      })),
     });
 
     keywordsLoaded = true;
@@ -73,7 +73,8 @@ export async function inferCategory(itemName: string): Promise<string | null> {
     if (!keywordsLoaded) return null;
   }
 
-  const words = itemName.toLowerCase()
+  const words = itemName
+    .toLowerCase()
     .replace(/(es|s)$/, '')
     .split(/\s+/)
     .filter(Boolean);
@@ -143,7 +144,10 @@ export async function initializeCategories(): Promise<void> {
     await loadKeywords();
     console.log('[categoryInference] Category system initialized successfully');
   } catch (error) {
-    console.error('[categoryInference] Category system initialization failed, continuing without it:', error);
+    console.error(
+      '[categoryInference] Category system initialization failed, continuing without it:',
+      error,
+    );
     // Don't throw error - allow app to continue without category system
     keywordsLoaded = false;
   }

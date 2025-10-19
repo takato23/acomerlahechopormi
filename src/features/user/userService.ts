@@ -11,7 +11,7 @@ const MAX_ALLERGIES_LENGTH = 500;
  * Nombre del bucket de Supabase Storage utilizado para los avatares.
  * @constant {string}
  */
-const AVATAR_BUCKET = 'avatars'; 
+const AVATAR_BUCKET = 'avatars';
 
 /**
  * Obtiene el perfil completo del usuario autenticado actualmente.
@@ -46,14 +46,17 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select(
-        'id, username, dietary_preference, allergies_restrictions, avatar_url, difficulty_preference, max_prep_time, gemini_api_key, excluded_ingredients, available_equipment'
+        'id, username, dietary_preference, allergies_restrictions, avatar_url, difficulty_preference, max_prep_time, gemini_api_key, excluded_ingredients, available_equipment',
       )
       .eq('id', userId)
       .single();
 
     if (profileError) {
       if (profileError.code !== 'PGRST116') {
-        console.warn(`Error fetching profile for user ${userId} (but not PGRST116):`, profileError.message);
+        console.warn(
+          `Error fetching profile for user ${userId} (but not PGRST116):`,
+          profileError.message,
+        );
       }
     }
 
@@ -104,7 +107,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 // Ajustamos la firma para ser más flexible y permitir actualizar otros campos como avatar_url
 export async function updateUserProfile(
   userId: string,
-  profileData: Partial<Omit<UserProfile, 'id' | 'email'>>
+  profileData: Partial<Omit<UserProfile, 'id' | 'email'>>,
 ): Promise<boolean> {
   if (!userId) {
     console.error('updateUserProfile called without userId');
@@ -170,15 +173,17 @@ export async function updateUserProfile(
     }
 
     if (profileData.excluded_ingredients !== undefined) {
-      sanitizedData.excluded_ingredients = profileData.excluded_ingredients
-        ?.map((value) => value.trim())
-        .filter((value) => value.length > 0) ?? [];
+      sanitizedData.excluded_ingredients =
+        profileData.excluded_ingredients
+          ?.map((value) => value.trim())
+          .filter((value) => value.length > 0) ?? [];
     }
 
     if (profileData.available_equipment !== undefined) {
-      sanitizedData.available_equipment = profileData.available_equipment
-        ?.map((value) => value.trim())
-        .filter((value) => value.length > 0) ?? [];
+      sanitizedData.available_equipment =
+        profileData.available_equipment
+          ?.map((value) => value.trim())
+          .filter((value) => value.length > 0) ?? [];
     }
 
     if (profileData.avatar_url !== undefined) {
@@ -190,7 +195,9 @@ export async function updateUserProfile(
     }
 
     if (Object.keys(sanitizedData).length === 0) {
-      console.warn(`updateUserProfile called for user ${userId} but nothing remained after sanitization.`);
+      console.warn(
+        `updateUserProfile called for user ${userId} but nothing remained after sanitization.`,
+      );
       return true;
     }
 
@@ -226,21 +233,24 @@ export async function updateUserProfile(
  */
 export async function uploadAvatar(file: File): Promise<string | null> {
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       throw new Error('Usuario no autenticado.');
     }
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`; 
+    const filePath = `${fileName}`;
 
     // Subir archivo
     const { error: uploadError } = await supabase.storage
       .from(AVATAR_BUCKET)
       .upload(filePath, file, {
-        cacheControl: '3600', 
-        upsert: true, 
+        cacheControl: '3600',
+        upsert: true,
       });
 
     if (uploadError) {
@@ -249,17 +259,15 @@ export async function uploadAvatar(file: File): Promise<string | null> {
     }
 
     // Obtener URL pública
-     const { data: urlData } = supabase.storage
-      .from(AVATAR_BUCKET)
-      .getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(filePath);
 
     if (!urlData?.publicUrl) {
-       console.error('Could not get public URL for uploaded avatar');
-       // Considerar eliminar el archivo subido si no se obtiene URL
-       // await supabase.storage.from(AVATAR_BUCKET).remove([filePath]); 
-       throw new Error('No se pudo obtener la URL pública del avatar.');
+      console.error('Could not get public URL for uploaded avatar');
+      // Considerar eliminar el archivo subido si no se obtiene URL
+      // await supabase.storage.from(AVATAR_BUCKET).remove([filePath]);
+      throw new Error('No se pudo obtener la URL pública del avatar.');
     }
-    
+
     const publicUrl = urlData.publicUrl;
 
     // Actualizar perfil
@@ -275,10 +283,9 @@ export async function uploadAvatar(file: File): Promise<string | null> {
 
     console.log('Avatar uploaded and profile updated:', publicUrl);
     return publicUrl;
-
   } catch (error) {
     console.error('Error in uploadAvatar process:', error);
     // Devolver null para indicar fallo al llamador
-    return null; 
+    return null;
   }
 }

@@ -89,24 +89,23 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  const register = useCallback(async (
-    email: string,
-    password: string,
-    metadata: Record<string, unknown> = {}
-  ) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/reset-password`,
-        data: metadata,
-      },
-    });
+  const register = useCallback(
+    async (email: string, password: string, metadata: Record<string, unknown> = {}) => {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/reset-password`,
+          data: metadata,
+        },
+      });
 
-    if (error) {
-      throw new Error(error.message);
-    }
-  }, []);
+      if (error) {
+        throw new Error(error.message);
+      }
+    },
+    [],
+  );
 
   const sendPasswordReset = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -163,7 +162,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       sendPasswordReset,
       updatePassword,
       refreshProfile,
-    ]
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

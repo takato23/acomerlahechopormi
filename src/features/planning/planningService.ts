@@ -153,10 +153,7 @@ async function resolveMealPlanForMeal(
   );
 }
 
-async function attachEntriesToPlan(
-  planId: string,
-  entryIds: string[],
-): Promise<void> {
+async function attachEntriesToPlan(planId: string, entryIds: string[]): Promise<void> {
   if (entryIds.length === 0) return;
 
   const { error } = await supabase
@@ -174,7 +171,10 @@ export async function getMealPlanWithEntries(
   endDate: string,
 ): Promise<MealPlanWithEntries> {
   console.log(`[planningService] Loading board between ${startDate} and ${endDate}`);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     console.error('[planningService] Authentication error:', authError);
     throw new Error('Usuario no autenticado');
@@ -201,12 +201,12 @@ export async function getMealPlanWithEntries(
 
   const safeEntries = entries ?? [];
   const missingPlanIds = safeEntries
-    .filter(entry => !entry.meal_plan_id)
-    .map(entry => entry.id);
+    .filter((entry) => !entry.meal_plan_id)
+    .map((entry) => entry.id);
 
   if (missingPlanIds.length > 0) {
     await attachEntriesToPlan(mealPlan.id, missingPlanIds);
-    safeEntries.forEach(entry => {
+    safeEntries.forEach((entry) => {
       if (!entry.meal_plan_id) {
         entry.meal_plan_id = mealPlan.id;
       }
@@ -215,7 +215,7 @@ export async function getMealPlanWithEntries(
 
   return {
     plan: mealPlan,
-    meals: safeEntries.map(entry => mapMealEntry(entry, mealPlan.id)),
+    meals: safeEntries.map((entry) => mapMealEntry(entry, mealPlan.id)),
   };
 }
 
@@ -236,7 +236,10 @@ export async function upsertPlannedMeal(
   mealPlanId?: string | null,
 ): Promise<PlannedMeal | null> {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error('[planningService] Authentication error:', userError);
       return null;
@@ -278,7 +281,10 @@ export async function upsertPlannedMeal(
 
 export async function deletePlannedMeal(mealId: string): Promise<boolean> {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error('[planningService] Authentication error:', userError);
       return false;
@@ -302,9 +308,15 @@ export async function deletePlannedMeal(mealId: string): Promise<boolean> {
   }
 }
 
-export async function deletePlannedMealsInRange(startDate: string, endDate: string): Promise<boolean> {
+export async function deletePlannedMealsInRange(
+  startDate: string,
+  endDate: string,
+): Promise<boolean> {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error('[planningService] Authentication error:', userError);
       return false;
@@ -335,7 +347,10 @@ export async function getMealPlanHistory(
   limit = 6,
   excludeRange?: { startDate: string; endDate: string },
 ): Promise<MealPlanSummary[]> {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     console.error('[planningService] Authentication error:', authError);
     throw new Error('Usuario no autenticado');
@@ -343,7 +358,9 @@ export async function getMealPlanHistory(
 
   const { data, error } = await supabase
     .from('meal_plans')
-    .select('id, user_id, start_date, end_date, name, created_at, updated_at, meal_plan_entries(count)')
+    .select(
+      'id, user_id, start_date, end_date, name, created_at, updated_at, meal_plan_entries(count)',
+    )
     .eq('user_id', user.id)
     .order('start_date', { ascending: false })
     .limit(limit);
@@ -357,14 +374,14 @@ export async function getMealPlanHistory(
   const normalizedExcludeEnd = excludeRange ? normalizeDate(excludeRange.endDate) : null;
 
   return (data ?? [])
-    .filter(plan => {
+    .filter((plan) => {
       if (!excludeRange) return true;
       return !(
         normalizeDate(plan.start_date) === normalizedExcludeStart &&
         normalizeDate(plan.end_date) === normalizedExcludeEnd
       );
     })
-    .map(plan => ({
+    .map((plan) => ({
       id: plan.id,
       user_id: plan.user_id,
       start_date: plan.start_date,
@@ -381,7 +398,10 @@ export async function duplicateMealPlanToRange(
   targetStartDate: string,
   targetEndDate: string,
 ): Promise<PlannedMeal[]> {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     console.error('[planningService] Authentication error:', authError);
     throw new Error('Usuario no autenticado');
@@ -427,7 +447,7 @@ export async function duplicateMealPlanToRange(
     parseDate(sourcePlan.start_date),
   );
 
-  const entriesToInsert = sourceEntries.map(entry => ({
+  const entriesToInsert = sourceEntries.map((entry) => ({
     user_id: user.id,
     meal_plan_id: targetPlan.id,
     meal_type: entry.meal_type,
@@ -449,5 +469,5 @@ export async function duplicateMealPlanToRange(
     throw new Error('No se pudo duplicar la planificación seleccionada.');
   }
 
-  return (insertedEntries ?? []).map(entry => mapMealEntry(entry, targetPlan.id));
+  return (insertedEntries ?? []).map((entry) => mapMealEntry(entry, targetPlan.id));
 }

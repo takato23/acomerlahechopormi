@@ -54,18 +54,20 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     if (!trimmedInput) return;
 
     setIsLoading(true);
-       console.log(`[UnifiedPantryInput] Attempting to parse: "${trimmedInput}"`);
+    console.log(`[UnifiedPantryInput] Attempting to parse: "${trimmedInput}"`);
     setTimeout(() => {
       const result = parsePantryInput(trimmedInput);
-       console.log('[UnifiedPantryInput] parsePantryInput result (manual):', result);
+      console.log('[UnifiedPantryInput] parsePantryInput result (manual):', result);
       setIsLoading(false);
 
       if (result.success) {
-        console.log("Parsed Data:", result.data, "Fallback:", result.usedFallback);
+        console.log('Parsed Data:', result.data, 'Fallback:', result.usedFallback);
         setParseResultForPreview(result);
-        toast.info(`Parseado: ${result.data.quantity ?? '?'} ${result.data.unit ?? ''} ${result.data.ingredientName}`);
+        toast.info(
+          `Parseado: ${result.data.quantity ?? '?'} ${result.data.unit ?? ''} ${result.data.ingredientName}`,
+        );
       } else {
-        console.error("Parse Error:", result.error);
+        console.error('Parse Error:', result.error);
         setParseResultForPreview(null);
         let errorMessage = 'No se pudo entender la entrada.';
         if (result.error === 'empty_input') {
@@ -91,7 +93,10 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     }
   };
 
-  const handleConfirmAdd = async (itemDataFromPreview: CreatePantryItemData, addAnother: boolean) => {
+  const handleConfirmAdd = async (
+    itemDataFromPreview: CreatePantryItemData,
+    addAnother: boolean,
+  ) => {
     if (mode === 'modal') {
       try {
         onEditRequest?.(itemDataFromPreview);
@@ -107,7 +112,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     }
 
     if (!user) {
-      toast.error("Error: Usuario no autenticado.");
+      toast.error('Error: Usuario no autenticado.');
       return;
     }
 
@@ -115,7 +120,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     try {
       const itemDataWithUser: CreatePantryItemData = {
         ...itemDataFromPreview,
-        user_id: user.id
+        user_id: user.id,
       };
 
       await addPantryItem(itemDataWithUser);
@@ -124,12 +129,13 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
       setInputValue('');
       onItemAdded();
     } catch (error) {
-      console.error("Error adding item from unified input:", error);
-      const errorMessage = (error instanceof Error && error.message)
-         ? error.message
-         : (typeof error === 'object' && error !== null && 'message' in error)
-         ? String(error.message)
-         : "Error al añadir el ítem.";
+      console.error('Error adding item from unified input:', error);
+      const errorMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Error al añadir el ítem.';
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -142,7 +148,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
       setInputValue('');
       onEditRequest(itemData);
     } else {
-      toast.info("La edición detallada no está habilitada aquí.");
+      toast.info('La edición detallada no está habilitada aquí.');
     }
   };
 
@@ -154,10 +160,10 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
     if (!text || isLoading || parseResultForPreview || isProcessingVoice) {
       return;
     }
-     if (!user) {
-       toast.error("Error: Usuario no autenticado para procesar voz.");
-       return;
-     }
+    if (!user) {
+      toast.error('Error: Usuario no autenticado para procesar voz.');
+      return;
+    }
 
     try {
       setIsProcessingVoice(true);
@@ -180,7 +186,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
             console.log(`[UnifiedPantryInput] Suggested category: ${suggestedCategoryId}`);
             finalCategoryId = suggestedCategoryId; // Asignar la categoría sugerida
           } else {
-             console.log('[UnifiedPantryInput] No category suggestion found.');
+            console.log('[UnifiedPantryInput] No category suggestion found.');
           }
         } catch (suggestionError) {
           console.error('[UnifiedPantryInput] Error suggesting category:', suggestionError);
@@ -193,36 +199,36 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
           quantity: parsedData.quantity ?? 1,
           unit: parsedData.unit,
           category_id: finalCategoryId,
-          user_id: user.id
+          user_id: user.id,
         };
 
         // 3. Llamar a addPantryItem directamente
         setIsLoading(true);
         try {
-           await addPantryItem(itemToAdd);
-           toast.success(`"${itemToAdd.ingredient_name}" añadido por voz!`);
-           setParseResultForPreview(null);
-           setInputValue('');
-           onItemAdded();
+          await addPantryItem(itemToAdd);
+          toast.success(`"${itemToAdd.ingredient_name}" añadido por voz!`);
+          setParseResultForPreview(null);
+          setInputValue('');
+          onItemAdded();
         } catch (addError) {
-           console.error("Error adding voice item directly:", addError);
-           const errorMessage = (addError instanceof Error && addError.message) 
-             ? addError.message 
-             : (typeof addError === 'object' && addError !== null && 'message' in addError) 
-             ? String(addError.message)
-             : "Error al añadir el ítem por voz.";
-           toast.error(errorMessage);
+          console.error('Error adding voice item directly:', addError);
+          const errorMessage =
+            addError instanceof Error && addError.message
+              ? addError.message
+              : typeof addError === 'object' && addError !== null && 'message' in addError
+                ? String(addError.message)
+                : 'Error al añadir el ítem por voz.';
+          toast.error(errorMessage);
         } finally {
-           setIsLoading(false);
+          setIsLoading(false);
         }
-
       } else {
-        console.error("Voice Parse Error:", result.error);
+        console.error('Voice Parse Error:', result.error);
         toast.error(`No se entendió: "${text}". Intenta de nuevo o edita manualmente.`);
       }
     } catch (error) {
-      console.error("Error processing voice input:", error);
-      toast.error("Error al procesar la entrada de voz");
+      console.error('Error processing voice input:', error);
+      toast.error('Error al procesar la entrada de voz');
     } finally {
       setIsProcessingVoice(false);
     }
@@ -242,24 +248,27 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
             }
           }}
           onKeyDown={handleKeyDown}
-          disabled={isLoading || (isProcessingVoice)}
+          disabled={isLoading || isProcessingVoice}
           readOnly={isProcessingVoice}
           className="h-10 flex-grow"
         />
-        
-        <Suspense fallback={<Button variant="outline" size="icon" disabled className="h-10 w-10"><Spinner size="sm" /></Button>}>
-          <BarcodeScanner
-            isLoading={isLoading}
-            onBarcodeDetected={handleBarcodeDetected}
-          />
+
+        <Suspense
+          fallback={
+            <Button variant="outline" size="icon" disabled className="h-10 w-10">
+              <Spinner size="sm" />
+            </Button>
+          }
+        >
+          <BarcodeScanner isLoading={isLoading} onBarcodeDetected={handleBarcodeDetected} />
         </Suspense>
 
         {/* <Suspense fallback={<Button variant="outline" size="icon" disabled className="h-10 w-10"><Spinner size="sm" /></Button>}> */}
-          <VoiceInput
-            isLoading={isLoading}
-            isProcessingVoice={isProcessingVoice}
-            onTranscriptReceived={handleVoiceTranscript}
-          />
+        <VoiceInput
+          isLoading={isLoading}
+          isProcessingVoice={isProcessingVoice}
+          onTranscriptReceived={handleVoiceTranscript}
+        />
         {/* </Suspense> */}
 
         <Button
@@ -268,11 +277,7 @@ const UnifiedPantryInput: React.FC<UnifiedPantryInputProps> = ({
           className="h-10"
           aria-label="Añadir ítem manualmente"
         >
-          {isLoading && !isProcessingVoice ? (
-            <Spinner size="sm" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
+          {isLoading && !isProcessingVoice ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />}
         </Button>
       </div>
 

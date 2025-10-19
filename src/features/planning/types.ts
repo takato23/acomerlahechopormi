@@ -67,8 +67,8 @@ export interface MealAlternativeRequestContext {
 }
 
 // Representa una alternativa sugerida
-export type MealAlternative = 
-  | { type: 'recipe'; id: string; title: string } 
+export type MealAlternative =
+  | { type: 'recipe'; id: string; title: string }
   | { type: 'custom'; text: string };
 
 // --- Tipos para Plantillas de Planificación ---

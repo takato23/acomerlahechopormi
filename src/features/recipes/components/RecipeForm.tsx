@@ -70,14 +70,14 @@ export interface RecipeFormProps {
 }
 
 const sanitizeIngredients = (ingredients: RecipeFormSchema['ingredients']) =>
-  ingredients.map(ing => ({
+  ingredients.map((ing) => ({
     name: ing.name.trim(),
     quantity: normalizeQuantity(ing.quantity ?? null),
     unit: normalizeUnit(ing.unit),
   }));
 
 const sanitizeInstructions = (instructions: RecipeFormSchema['instructions']) =>
-  instructions.map(step => step.trim()).filter(Boolean);
+  instructions.map((step) => step.trim()).filter(Boolean);
 
 const buildDefaultFormValues = (defaults?: RecipeFormProps['defaultValues']): RecipeFormSchema => {
   const ingredientDefaults: IngredientInput[] =
@@ -88,17 +88,16 @@ const buildDefaultFormValues = (defaults?: RecipeFormProps['defaultValues']): Re
   return {
     title: defaults?.title ?? '',
     description: defaults?.description ?? '',
-    ingredients: ingredientDefaults.map(ing => ({
+    ingredients: ingredientDefaults.map((ing) => ({
       name: ing.name ?? '',
-      quantity: typeof ing.quantity === 'number' && !Number.isNaN(ing.quantity)
-        ? String(ing.quantity)
-        : (ing.quantity as string | null) ?? '',
+      quantity:
+        typeof ing.quantity === 'number' && !Number.isNaN(ing.quantity)
+          ? String(ing.quantity)
+          : ((ing.quantity as string | null) ?? ''),
       unit: ing.unit ?? '',
     })),
     instructions:
-      defaults?.instructions && defaults.instructions.length > 0
-        ? defaults.instructions
-        : [''],
+      defaults?.instructions && defaults.instructions.length > 0 ? defaults.instructions : [''],
     prep_time_minutes:
       defaults?.prep_time_minutes != null && !Number.isNaN(defaults.prep_time_minutes)
         ? String(defaults.prep_time_minutes)
@@ -150,9 +149,9 @@ export const RecipeForm = ({
     const tagList = values.tags
       ? values.tags
           .split(',')
-          .map(tag => tag.trim())
+          .map((tag) => tag.trim())
           .filter(Boolean)
-      : defaultValues?.tags ?? [];
+      : (defaultValues?.tags ?? []);
 
     const sanitized: RecipeFormSubmit = {
       title: values.title.trim(),
@@ -179,14 +178,24 @@ export const RecipeForm = ({
           <label className="text-sm font-medium text-muted-foreground" htmlFor="title">
             Título
           </label>
-          <Input id="title" placeholder="Ej. Pasta con pesto" disabled={isSubmitting} {...register('title')} />
+          <Input
+            id="title"
+            placeholder="Ej. Pasta con pesto"
+            disabled={isSubmitting}
+            {...register('title')}
+          />
           {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-muted-foreground" htmlFor="tags">
             Etiquetas (separadas por comas)
           </label>
-          <Input id="tags" placeholder="rápida, vegetariana" disabled={isSubmitting} {...register('tags')} />
+          <Input
+            id="tags"
+            placeholder="rápida, vegetariana"
+            disabled={isSubmitting}
+            {...register('tags')}
+          />
           {errors.tags && <p className="text-sm text-destructive">{errors.tags.message}</p>}
         </div>
         <div className="space-y-2">
@@ -217,7 +226,13 @@ export const RecipeForm = ({
           <label className="text-sm font-medium text-muted-foreground" htmlFor="servings">
             Porciones
           </label>
-          <Input id="servings" type="number" min={1} disabled={isSubmitting} {...register('servings')} />
+          <Input
+            id="servings"
+            type="number"
+            min={1}
+            disabled={isSubmitting}
+            {...register('servings')}
+          />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-muted-foreground" htmlFor="importUrl">
@@ -235,7 +250,9 @@ export const RecipeForm = ({
               Próximamente
             </Button>
           </div>
-          {errors.importUrl && <p className="text-sm text-destructive">{errors.importUrl.message}</p>}
+          {errors.importUrl && (
+            <p className="text-sm text-destructive">{errors.importUrl.message}</p>
+          )}
         </div>
       </div>
 
@@ -272,9 +289,15 @@ export const RecipeForm = ({
           </Button>
         </div>
         {ingredientArray.fields.map((field, index) => (
-          <div key={field.id} className="grid gap-3 rounded-md border p-4 md:grid-cols-[2fr_1fr_1fr_auto]">
+          <div
+            key={field.id}
+            className="grid gap-3 rounded-md border p-4 md:grid-cols-[2fr_1fr_1fr_auto]"
+          >
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor={`ingredient-name-${index}`}>
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor={`ingredient-name-${index}`}
+              >
                 Nombre
               </label>
               <Input
@@ -284,11 +307,16 @@ export const RecipeForm = ({
                 {...register(`ingredients.${index}.name` as const)}
               />
               {errors.ingredients?.[index]?.name && (
-                <p className="text-sm text-destructive">{errors.ingredients[index]?.name?.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.ingredients[index]?.name?.message}
+                </p>
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor={`ingredient-quantity-${index}`}>
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor={`ingredient-quantity-${index}`}
+              >
                 Cantidad
               </label>
               <Input
@@ -299,7 +327,10 @@ export const RecipeForm = ({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor={`ingredient-unit-${index}`}>
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor={`ingredient-unit-${index}`}
+              >
                 Unidad
               </label>
               <Input
@@ -323,9 +354,7 @@ export const RecipeForm = ({
             </div>
           </div>
         ))}
-        {ingredientRootError && (
-          <p className="text-sm text-destructive">{ingredientRootError}</p>
-        )}
+        {ingredientRootError && <p className="text-sm text-destructive">{ingredientRootError}</p>}
       </div>
 
       <div className="space-y-4">

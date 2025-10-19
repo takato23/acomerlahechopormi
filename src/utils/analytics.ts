@@ -11,7 +11,8 @@ declare global {
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST ?? 'https://app.posthog.com';
-const ANALYTICS_DISABLED = (import.meta.env.VITE_ANALYTICS_DISABLED ?? '').toString().toLowerCase() === 'true';
+const ANALYTICS_DISABLED =
+  (import.meta.env.VITE_ANALYTICS_DISABLED ?? '').toString().toLowerCase() === 'true';
 
 let initialized = false;
 let client: AnalyticsClient | null = null;
@@ -40,13 +41,16 @@ const setupGlobalHandlers = () => {
 
   window.addEventListener('unhandledrejection', (event) => {
     captureEvent('promise_rejection', {
-      reason: event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown'),
+      reason:
+        event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown'),
     });
   });
 
   if ('performance' in window) {
     window.addEventListener('load', () => {
-      const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+      const navigation = performance.getEntriesByType('navigation')[0] as
+        | PerformanceNavigationTiming
+        | undefined;
       const paint = performance.getEntriesByType('paint') as PerformanceEntry[];
 
       if (navigation) {

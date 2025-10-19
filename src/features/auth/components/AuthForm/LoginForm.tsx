@@ -78,9 +78,7 @@ export function LoginForm() {
           disabled={isSubmitting}
           {...register('email')}
         />
-        {errors.email ? (
-          <p className="text-sm text-destructive">{errors.email.message}</p>
-        ) : null}
+        {errors.email ? <p className="text-sm text-destructive">{errors.email.message}</p> : null}
       </div>
 
       <div className="space-y-2">

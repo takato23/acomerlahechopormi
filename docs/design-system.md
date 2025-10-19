@@ -8,13 +8,13 @@ Los tokens están centralizados en [`design-tokens.js`](../design-tokens.js) y e
 
 ### Espaciados
 
-| Token Tailwind            | Variable CSS                    | Uso recomendado                          |
-|---------------------------|---------------------------------|------------------------------------------|
-| `page-inline`             | `--spacing-page-inline`         | Sangría horizontal general del layout    |
-| `page-block`              | `--spacing-page-block`          | Separación vertical entre áreas de página|
-| `section-sm`              | `--spacing-section-sm`          | Gaps compactos dentro de tarjetas        |
-| `section`                 | `--spacing-section`             | Distancia estándar entre bloques         |
-| `section-lg`              | `--spacing-section-lg`          | Secciones destacadas o bloques amplios   |
+| Token Tailwind | Variable CSS            | Uso recomendado                           |
+| -------------- | ----------------------- | ----------------------------------------- |
+| `page-inline`  | `--spacing-page-inline` | Sangría horizontal general del layout     |
+| `page-block`   | `--spacing-page-block`  | Separación vertical entre áreas de página |
+| `section-sm`   | `--spacing-section-sm`  | Gaps compactos dentro de tarjetas         |
+| `section`      | `--spacing-section`     | Distancia estándar entre bloques          |
+| `section-lg`   | `--spacing-section-lg`  | Secciones destacadas o bloques amplios    |
 
 ### Colores semánticos
 

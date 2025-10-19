@@ -9,7 +9,7 @@ import {
   FileDown,
   FileText,
   ListPlus,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -46,23 +46,23 @@ const ShoppingListToolbar: React.FC<ShoppingListToolbarProps> = ({
 }) => {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  const pendingCount = useMemo(() => items.filter(item => !item.is_checked).length, [items]);
-  const purchasedCount = useMemo(() => items.filter(item => item.is_checked).length, [items]);
+  const pendingCount = useMemo(() => items.filter((item) => !item.is_checked).length, [items]);
+  const purchasedCount = useMemo(() => items.filter((item) => item.is_checked).length, [items]);
 
   const handleExportCsv = useCallback(() => {
     if (!items.length) return;
 
     const headers = ['Ingrediente', 'Cantidad', 'Unidad', 'Categoría', 'Notas', 'Comprado'];
-    const rows = items.map(item => [
+    const rows = items.map((item) => [
       escapeForCsv(item.ingredient_name ?? ''),
       escapeForCsv(item.quantity ?? ''),
       escapeForCsv(item.unit ?? ''),
       escapeForCsv(item.category ?? ''),
       escapeForCsv(item.notes ?? ''),
-      escapeForCsv(item.is_checked ? 'Sí' : 'No')
+      escapeForCsv(item.is_checked ? 'Sí' : 'No'),
     ]);
 
-    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
 
@@ -97,7 +97,9 @@ const ShoppingListToolbar: React.FC<ShoppingListToolbarProps> = ({
         }
 
         const baseLine = `${index + 1}. ${item.ingredient_name || 'Ítem sin nombre'}`;
-        const quantityLine = item.quantity ? ` - ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : '';
+        const quantityLine = item.quantity
+          ? ` - ${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
+          : '';
         const categoryLine = item.category ? ` [${item.category}]` : '';
         const purchasedLine = item.is_checked ? ' ✓' : '';
 
@@ -122,7 +124,9 @@ const ShoppingListToolbar: React.FC<ShoppingListToolbarProps> = ({
   const hasPurchased = purchasedCount > 0;
 
   return (
-    <div className={cn('flex flex-col gap-3 rounded-lg border bg-card/60 p-4 shadow-sm', className)}>
+    <div
+      className={cn('flex flex-col gap-3 rounded-lg border bg-card/60 p-4 shadow-sm', className)}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -137,11 +141,7 @@ const ShoppingListToolbar: React.FC<ShoppingListToolbarProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {onGeneratePlanning && (
-            <Button
-              onClick={() => onGeneratePlanning()}
-              disabled={isGenerating}
-              className="gap-2"
-            >
+            <Button onClick={() => onGeneratePlanning()} disabled={isGenerating} className="gap-2">
               {isGenerating ? <SpinnerIcon /> : <Sparkles className="h-4 w-4" />}
               Generar con planificación
             </Button>
@@ -201,13 +201,14 @@ const ShoppingListToolbar: React.FC<ShoppingListToolbarProps> = ({
 };
 
 const SpinnerIcon: React.FC = () => (
-  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    className="h-4 w-4 animate-spin"
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path
-      className="opacity-75"
-      fill="currentColor"
-      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-    />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
   </svg>
 );
 

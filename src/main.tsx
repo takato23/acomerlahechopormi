@@ -1,6 +1,6 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import AuthProvider from './features/auth/AuthContext'; // Ruta relativa
@@ -26,7 +26,9 @@ initializeAnalytics();
 // Componente Root que se renderiza dentro de BrowserRouter
 function Root() {
   return (
-    <QueryClientProvider client={queryClient}> {/* Envolver con React Query Provider */}
+    <QueryClientProvider client={queryClient}>
+      {' '}
+      {/* Envolver con React Query Provider */}
       <AuthProvider>
         <SettingsProvider>
           <App />
@@ -44,4 +46,4 @@ createRoot(document.getElementById('root')!).render(
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
-)
+);

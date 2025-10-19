@@ -32,7 +32,9 @@ export const Compact: Story = {
     icon: <Settings className="h-5 w-5" />,
     actions: (
       <div className="flex gap-section-sm">
-        <Button variant="outline" size="sm">Cancelar</Button>
+        <Button variant="outline" size="sm">
+          Cancelar
+        </Button>
         <Button size="sm">Guardar</Button>
       </div>
     ),
